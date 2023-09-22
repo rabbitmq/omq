@@ -76,7 +76,7 @@ func Publisher(cfg config.Config, n int) {
 	for i := 1; i <= cfg.PublishCount; i++ {
 		utils.UpdatePayload(cfg.UseMillis, &msg)
 		timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "stomp"}))
-		err = conn.Send(queue, "", msg, stomp.SendOpt.Receipt)
+		err = conn.Send(queue, "", msg, stomp.SendOpt.Receipt, stomp.SendOpt.Header("persistent", "true"))
 		timer.ObserveDuration()
 		if err != nil {
 			log.Error("message sending failure", "protocol", "STOMP", "publisherId", n, "error", err)
@@ -101,7 +101,7 @@ func Consumer(cfg config.Config, subscribed chan bool, n int) {
 	}
 
 	topic := fmt.Sprintf("/topic/%s-%d", cfg.QueueNamePrefix, ((n-1)%cfg.QueueCount)+1)
-	sub, err := conn.Subscribe(topic, stomp.AckAuto)
+	sub, err := conn.Subscribe(topic, stomp.AckClient)
 	if err != nil {
 		log.Error("subscription failed", "protocol", "STOMP", "consumerId", n, "queue", topic, "error", err.Error())
 		return
@@ -119,7 +119,14 @@ func Consumer(cfg config.Config, subscribed chan bool, n int) {
 			return
 		}
 		m.Observe(utils.CalculateEndToEndLatency(&msg.Body))
-		log.Debug("message received", "protocol", "stomp", "subscriberId", n, "destination", topic, "size", len(msg.Body))
+		log.Debug("message received", "protocol", "stomp", "subscriberId", n, "destination", topic, "size", len(msg.Body), "ack required", msg.ShouldAck())
+
+		err = conn.Ack(msg)
+		if err != nil {
+			log.Error("message NOT acknowledged", "protocol", "stomp", "subscriberId", n, "destination", topic)
+
+		}
+
 		metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "stomp"}).Inc()
 	}
 

@@ -143,7 +143,7 @@ func Consumer(cfg config.Config, subscribed chan bool, n int) {
 
 		err = receiver.AcceptMessage(context.TODO(), msg)
 		if err != nil {
-			return
+			log.Error("message NOT accepted", "protocol", "amqp-1.0", "subscriberId", n, "terminus", queue, "deliveryTag", msg.DeliveryTag)
 		}
 		metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
 		log.Debug("message accepted", "protocol", "amqp-1.0", "subscriberId", n, "terminus", queue, "deliveryTag", msg.DeliveryTag)
