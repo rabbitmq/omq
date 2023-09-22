@@ -9,7 +9,8 @@ import (
 
 func WaitBetweenMessages(rate int) {
 	if rate > 0 {
-		time.Sleep(time.Duration(1/rate) * time.Second)
+		t := time.Duration(1000/float64(rate)) * time.Millisecond
+		time.Sleep(t)
 	}
 }
 
