@@ -35,7 +35,10 @@ func RootCmd() *cobra.Command {
 	amqp = &cobra.Command{
 		Use: "amqp",
 		PreRun: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintf(os.Stderr, "DEBUG: will start AMQP 1.0 client group\n")
+			if cfg.Size < 12 {
+				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
+				os.Exit(1)
+			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			amqp10_client.Start(cfg)
@@ -61,7 +64,6 @@ func RootCmd() *cobra.Command {
 				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
 				os.Exit(1)
 			}
-			_, _ = fmt.Fprintf(os.Stderr, "DEBUG: will start a STOMP client group\n")
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			stomp_client.Start(cfg)
@@ -86,7 +88,6 @@ func RootCmd() *cobra.Command {
 				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
 				os.Exit(1)
 			}
-			_, _ = fmt.Fprintf(os.Stderr, "DEBUG: will start a mqtt client group\n")
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			mqtt_client.Start(cfg)
