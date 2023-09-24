@@ -31,81 +31,62 @@ func Execute() {
 func RootCmd() *cobra.Command {
 	var cfg config.Config
 
-	// omq amqp ...
 	amqp = &cobra.Command{
-		Use: "amqp",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			if cfg.Size < 12 {
-				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
-				os.Exit(1)
-			}
-		},
+		Use:     "amqp-amqp",
+		Aliases: []string{"amqp"},
 		Run: func(cmd *cobra.Command, args []string) {
 			amqp10_client.Start(cfg)
 		},
-	}
-	amqp.Flags().StringVarP(&cfg.AmqpUrl, "url", "H", "amqp://localhost:5672", "The address of the AMQP 1.0 server")
-	amqp.Flags().IntVarP(&cfg.Publishers, "publishers", "x", 1, "The number of AMQP 1.0 publishers to start")
-	amqp.Flags().IntVarP(&cfg.Consumers, "consumers", "y", 1, "The number of AMQP 1.0 consumers to start")
-	amqp.Flags().IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt, "The number of messages to send per publisher (default=MaxInt)")
-	amqp.Flags().IntVarP(&cfg.ConsumeCount, "cmessages", "D", math.MaxInt, "The number of messages to send per publisher (default=MaxInt)")
-	amqp.Flags().StringVarP(&cfg.QueueNamePrefix, "queue-pattern", "q", "omq", "The queue name prefix")
-	amqp.Flags().IntVarP(&cfg.QueueCount, "queue-count", "n", 1, "The number of queues to use")
-	amqp.Flags().IntVarP(&cfg.Size, "size", "s", 12, "Message size in bytes")
-	amqp.Flags().IntVarP(&cfg.Rate, "rate", "r", 0, "Messages per second (0 = unlimited)")
-	amqp.Flags().DurationVarP(&cfg.Duration, "duration", "z", 0, "Duration (eg. 10s, 5m, 2h)")
-	amqp.Flags().BoolVarP(&cfg.UseMillis, "use-millis", "m", false, "Use milliseconds for timestamps")
-
-	// omq stomp ...
-	stomp = &cobra.Command{
-		Use: "stomp",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			if cfg.Size < 12 {
 				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
 				os.Exit(1)
 			}
 		},
+	}
+
+	stomp = &cobra.Command{
+		Use:     "stomp-stomp",
+		Aliases: []string{"stomp"},
 		Run: func(cmd *cobra.Command, args []string) {
 			stomp_client.Start(cfg)
 		},
-	}
-	stomp.Flags().StringVarP(&cfg.StompUrl, "url", "H", "localhost:61613", "The affress of the STOMP server")
-	stomp.Flags().IntVarP(&cfg.Publishers, "publishers", "x", 1, "The number of STOMP publishers to start")
-	stomp.Flags().IntVarP(&cfg.Consumers, "consumers", "y", 1, "The number of STOMP consumers to start")
-	stomp.Flags().IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt, "The number of messages to send per publisher (default=MazInt)")
-	stomp.Flags().IntVarP(&cfg.ConsumeCount, "cmessages", "D", math.MaxInt, "The number of messages to send per publisher (default=MaxInt)")
-	stomp.Flags().StringVarP(&cfg.QueueNamePrefix, "queue-pattern", "q", "omq", "The queue name prefix")
-	stomp.Flags().IntVarP(&cfg.QueueCount, "queue-count", "n", 1, "The number of queues to use")
-	stomp.Flags().IntVarP(&cfg.Size, "size", "s", 12, "Message size in bytes")
-	stomp.Flags().IntVarP(&cfg.Rate, "rate", "r", 0, "Messages per second (0 = unlimited)")
-	stomp.Flags().BoolVarP(&cfg.UseMillis, "use-millis", "m", false, "Use milliseconds for timestamps")
-
-	// omq mqtt ...
-	mqtt = &cobra.Command{
-		Use: "mqtt",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			if cfg.Size < 12 {
 				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
 				os.Exit(1)
 			}
 		},
+	}
+
+	mqtt = &cobra.Command{
+		Use:     "mqtt-mqtt",
+		Aliases: []string{"mqtt"},
 		Run: func(cmd *cobra.Command, args []string) {
 			mqtt_client.Start(cfg)
 		},
+		PreRun: func(cmd *cobra.Command, args []string) {
+			if cfg.Size < 12 {
+				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
+				os.Exit(1)
+			}
+		},
 	}
-	mqtt.Flags().StringVarP(&cfg.MqttUrl, "url", "H", "localhost:1883", "The affress of the MQTT server")
-	mqtt.Flags().IntVarP(&cfg.Publishers, "publishers", "x", 1, "The number of MQTT publishers to start")
-	mqtt.Flags().IntVarP(&cfg.Consumers, "consumers", "y", 1, "The number of MQTT consumers to start")
-	mqtt.Flags().IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt, "The number of messages to send per publisher (default=MaxInt)")
-	mqtt.Flags().IntVarP(&cfg.ConsumeCount, "cmessages", "D", math.MaxInt, "The number of messages to send per publisher (default=MaxInt)")
-	mqtt.Flags().StringVarP(&cfg.QueueNamePrefix, "queue-pattern", "q", "omq", "The queue name prefix")
-	mqtt.Flags().IntVarP(&cfg.QueueCount, "queue-count", "n", 1, "The number of queues to use")
-	mqtt.Flags().IntVarP(&cfg.Size, "size", "s", 12, "Message size in bytes")
-	mqtt.Flags().IntVarP(&cfg.Rate, "rate", "r", 0, "Messages per second (0 = unlimited)")
-	mqtt.Flags().DurationVarP(&cfg.Duration, "duration", "z", 0, "Duration (eg. 10s, 5m, 2h)")
-	mqtt.Flags().BoolVarP(&cfg.UseMillis, "use-millis", "m", false, "Use milliseconds for timestamps")
 
 	var rootCmd = &cobra.Command{Use: "omq"}
+	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUrl, "publisher-url", "", "localhost", "URL for the publisher to connect to")
+	rootCmd.PersistentFlags().StringVarP(&cfg.ConsumerUrl, "consumer-url", "", "localhost", "URL for the consumer to connect to")
+	rootCmd.PersistentFlags().IntVarP(&cfg.Publishers, "publishers", "x", 1, "The number of publishers to start")
+	rootCmd.PersistentFlags().IntVarP(&cfg.Consumers, "consumers", "y", 1, "The number of consumers to start")
+	rootCmd.PersistentFlags().IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt, "The number of messages to send per publisher (default=MaxInt)")
+	rootCmd.PersistentFlags().IntVarP(&cfg.ConsumeCount, "cmessages", "D", math.MaxInt, "The number of messages to send per publisher (default=MaxInt)")
+	rootCmd.PersistentFlags().StringVarP(&cfg.QueueNamePrefix, "queue-pattern", "q", "omq", "The queue name prefix")
+	rootCmd.PersistentFlags().IntVarP(&cfg.QueueCount, "queue-count", "n", 1, "The number of queues to use")
+	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message size in bytes")
+	rootCmd.PersistentFlags().IntVarP(&cfg.Rate, "rate", "r", 0, "Messages per second (0 = unlimited)")
+	rootCmd.PersistentFlags().DurationVarP(&cfg.Duration, "duration", "z", 0, "Duration (eg. 10s, 5m, 2h)")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.UseMillis, "use-millis", "m", false, "Use milliseconds for timestamps")
+
 	rootCmd.AddCommand(amqp)
 	rootCmd.AddCommand(stomp)
 	rootCmd.AddCommand(mqtt)
