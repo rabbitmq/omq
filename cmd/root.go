@@ -74,8 +74,6 @@ func RootCmd() *cobra.Command {
 	}
 
 	var rootCmd = &cobra.Command{Use: "omq"}
-	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUrl, "publisher-url", "", "localhost", "URL for the publisher to connect to")
-	rootCmd.PersistentFlags().StringVarP(&cfg.ConsumerUrl, "consumer-url", "", "localhost", "URL for the consumer to connect to")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Publishers, "publishers", "x", 1, "The number of publishers to start")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Consumers, "consumers", "y", 1, "The number of consumers to start")
 	rootCmd.PersistentFlags().IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt, "The number of messages to send per publisher (default=MaxInt)")
@@ -83,7 +81,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringVarP(&cfg.QueueNamePrefix, "queue-pattern", "q", "omq", "The queue name prefix")
 	rootCmd.PersistentFlags().IntVarP(&cfg.QueueCount, "queue-count", "n", 1, "The number of queues to use")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message size in bytes")
-	rootCmd.PersistentFlags().IntVarP(&cfg.Rate, "rate", "r", 0, "Messages per second (0 = unlimited)")
+	rootCmd.PersistentFlags().IntVarP(&cfg.Rate, "rate", "r", -1, "Messages per second (0 = unlimited)")
 	rootCmd.PersistentFlags().DurationVarP(&cfg.Duration, "duration", "z", 0, "Duration (eg. 10s, 5m, 2h)")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.UseMillis, "use-millis", "m", false, "Use milliseconds for timestamps")
 
