@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"math"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -112,6 +114,24 @@ func RootCmd() *cobra.Command {
 			}
 			setUris(&cfg, cmd.Use)
 		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			resp, err := http.Get("http://localhost:8080/metrics")
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				log.Error("Error getting metrics", "error", err)
+				return
+			}
+
+			println("RESULTS")
+			metrics := strings.Split(string(body), "\n")
+			for _, metric := range metrics {
+				if strings.HasPrefix(metric, "omq_") {
+
+					fmt.Println(metric)
+				}
+			}
+		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
 	rootCmd.PersistentFlags().StringVarP(&cfg.ConsumerUri, "consumer-uri", "", "", "URI for consuming")
@@ -151,7 +171,7 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 				defer wg.Done()
 				c, err := common.NewConsumer(consumerProto, cfg, n)
 				if err != nil {
-					log.Error("Error creating publisher: ", err)
+					log.Error("Error creating publisher: ", "error", err)
 					os.Exit(1)
 				}
 				c.Start(subscribed)
