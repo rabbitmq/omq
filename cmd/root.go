@@ -7,10 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rabbitmq/omq/pkg/amqp10_client"
+	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
-	"github.com/rabbitmq/omq/pkg/mqtt_client"
-	"github.com/rabbitmq/omq/pkg/stomp_client"
+	"github.com/rabbitmq/omq/pkg/log"
 
 	"github.com/spf13/cobra"
 )
@@ -43,21 +42,21 @@ func RootCmd() *cobra.Command {
 		Use:     "amqp-amqp",
 		Aliases: []string{"amqp"},
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, amqp10_client.Publisher, amqp10_client.Consumer)
+			start(cfg, common.AMQP, common.AMQP)
 		},
 	}
 
 	amqp_stomp = &cobra.Command{
 		Use: "amqp-stomp",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, amqp10_client.Publisher, stomp_client.Consumer)
+			start(cfg, common.AMQP, common.STOMP)
 		},
 	}
 
 	amqp_mqtt = &cobra.Command{
 		Use: "amqp-mqtt",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, amqp10_client.Publisher, mqtt_client.Consumer)
+			start(cfg, common.AMQP, common.MQTT)
 		},
 	}
 
@@ -65,21 +64,21 @@ func RootCmd() *cobra.Command {
 		Use:     "stomp-stomp",
 		Aliases: []string{"stomp"},
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, stomp_client.Publisher, stomp_client.Consumer)
+			start(cfg, common.STOMP, common.STOMP)
 		},
 	}
 
 	stomp_amqp = &cobra.Command{
 		Use: "stomp-amqp",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, stomp_client.Publisher, amqp10_client.Consumer)
+			start(cfg, common.STOMP, common.AMQP)
 		},
 	}
 
 	stomp_mqtt = &cobra.Command{
 		Use: "stomp-mqtt",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, stomp_client.Publisher, mqtt_client.Consumer)
+			start(cfg, common.STOMP, common.MQTT)
 		},
 	}
 
@@ -87,21 +86,21 @@ func RootCmd() *cobra.Command {
 		Use:     "mqtt-mqtt",
 		Aliases: []string{"mqtt"},
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, mqtt_client.Publisher, mqtt_client.Consumer)
+			start(cfg, common.MQTT, common.MQTT)
 		},
 	}
 
 	mqtt_amqp = &cobra.Command{
 		Use: "mqtt-amqp",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, mqtt_client.Publisher, amqp10_client.Consumer)
+			start(cfg, common.MQTT, common.AMQP)
 		},
 	}
 
 	mqtt_stomp = &cobra.Command{
 		Use: "mqtt-stomp",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, mqtt_client.Publisher, stomp_client.Consumer)
+			start(cfg, common.MQTT, common.STOMP)
 		},
 	}
 
@@ -140,7 +139,7 @@ func RootCmd() *cobra.Command {
 	return rootCmd
 }
 
-func start(cfg config.Config, publisherFunc func(config.Config, int), consumerFunc func(config.Config, chan bool, int)) {
+func start(cfg config.Config, publisherProto common.Protocol, consumerProto common.Protocol) {
 	var wg sync.WaitGroup
 
 	if cfg.Consumers > 0 {
@@ -150,7 +149,12 @@ func start(cfg config.Config, publisherFunc func(config.Config, int), consumerFu
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				consumerFunc(cfg, subscribed, n)
+				c, err := common.NewConsumer(consumerProto, cfg, n)
+				if err != nil {
+					log.Error("Error creating publisher: ", err)
+					os.Exit(1)
+				}
+				c.Start(subscribed)
 			}()
 
 			// wait until we know the receiver has subscribed
@@ -164,7 +168,12 @@ func start(cfg config.Config, publisherFunc func(config.Config, int), consumerFu
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				publisherFunc(cfg, n)
+				p, err := common.NewPublisher(publisherProto, cfg, n)
+				if err != nil {
+					log.Error("Error creating publisher: ", err)
+					os.Exit(1)
+				}
+				p.Start()
 			}()
 		}
 	}
