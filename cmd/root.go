@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
+	"sync"
 
 	"github.com/rabbitmq/omq/pkg/amqp10_client"
 	"github.com/rabbitmq/omq/pkg/config"
@@ -14,10 +16,16 @@ import (
 )
 
 var (
-	amqp    = &cobra.Command{}
-	stomp   = &cobra.Command{}
-	mqtt    = &cobra.Command{}
-	rootCmd = &cobra.Command{}
+	amqp_amqp   = &cobra.Command{}
+	amqp_stomp  = &cobra.Command{}
+	amqp_mqtt   = &cobra.Command{}
+	stomp_stomp = &cobra.Command{}
+	stomp_amqp  = &cobra.Command{}
+	stomp_mqtt  = &cobra.Command{}
+	mqtt_mqtt   = &cobra.Command{}
+	mqtt_amqp   = &cobra.Command{}
+	mqtt_stomp  = &cobra.Command{}
+	rootCmd     = &cobra.Command{}
 )
 
 func Execute() {
@@ -31,49 +39,83 @@ func Execute() {
 func RootCmd() *cobra.Command {
 	var cfg config.Config
 
-	amqp = &cobra.Command{
+	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",
 		Aliases: []string{"amqp"},
 		Run: func(cmd *cobra.Command, args []string) {
-			amqp10_client.Start(cfg)
-		},
-		PreRun: func(cmd *cobra.Command, args []string) {
-			if cfg.Size < 12 {
-				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
-				os.Exit(1)
-			}
+			start(cfg, amqp10_client.Publisher, amqp10_client.Consumer)
 		},
 	}
 
-	stomp = &cobra.Command{
+	amqp_stomp = &cobra.Command{
+		Use: "amqp-stomp",
+		Run: func(cmd *cobra.Command, args []string) {
+			start(cfg, amqp10_client.Publisher, stomp_client.Consumer)
+		},
+	}
+
+	amqp_mqtt = &cobra.Command{
+		Use: "amqp-mqtt",
+		Run: func(cmd *cobra.Command, args []string) {
+			start(cfg, amqp10_client.Publisher, mqtt_client.Consumer)
+		},
+	}
+
+	stomp_stomp = &cobra.Command{
 		Use:     "stomp-stomp",
 		Aliases: []string{"stomp"},
 		Run: func(cmd *cobra.Command, args []string) {
-			stomp_client.Start(cfg)
-		},
-		PreRun: func(cmd *cobra.Command, args []string) {
-			if cfg.Size < 12 {
-				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
-				os.Exit(1)
-			}
+			start(cfg, stomp_client.Publisher, stomp_client.Consumer)
 		},
 	}
 
-	mqtt = &cobra.Command{
+	stomp_amqp = &cobra.Command{
+		Use: "stomp-amqp",
+		Run: func(cmd *cobra.Command, args []string) {
+			start(cfg, stomp_client.Publisher, amqp10_client.Consumer)
+		},
+	}
+
+	stomp_mqtt = &cobra.Command{
+		Use: "stomp-mqtt",
+		Run: func(cmd *cobra.Command, args []string) {
+			start(cfg, stomp_client.Publisher, mqtt_client.Consumer)
+		},
+	}
+
+	mqtt_mqtt = &cobra.Command{
 		Use:     "mqtt-mqtt",
 		Aliases: []string{"mqtt"},
 		Run: func(cmd *cobra.Command, args []string) {
-			mqtt_client.Start(cfg)
+			start(cfg, mqtt_client.Publisher, mqtt_client.Consumer)
 		},
-		PreRun: func(cmd *cobra.Command, args []string) {
+	}
+
+	mqtt_amqp = &cobra.Command{
+		Use: "mqtt-amqp",
+		Run: func(cmd *cobra.Command, args []string) {
+			start(cfg, mqtt_client.Publisher, amqp10_client.Consumer)
+		},
+	}
+
+	mqtt_stomp = &cobra.Command{
+		Use: "mqtt-stomp",
+		Run: func(cmd *cobra.Command, args []string) {
+			start(cfg, mqtt_client.Publisher, stomp_client.Consumer)
+		},
+	}
+
+	var rootCmd = &cobra.Command{Use: "omq",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cfg.Size < 12 {
 				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
 				os.Exit(1)
 			}
+			setUris(&cfg, cmd.Use)
 		},
 	}
-
-	var rootCmd = &cobra.Command{Use: "omq"}
+	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
+	rootCmd.PersistentFlags().StringVarP(&cfg.ConsumerUri, "consumer-uri", "", "", "URI for consuming")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Publishers, "publishers", "x", 1, "The number of publishers to start")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Consumers, "consumers", "y", 1, "The number of consumers to start")
 	rootCmd.PersistentFlags().IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt, "The number of messages to send per publisher (default=MaxInt)")
@@ -85,9 +127,71 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().DurationVarP(&cfg.Duration, "duration", "z", 0, "Duration (eg. 10s, 5m, 2h)")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.UseMillis, "use-millis", "m", false, "Use milliseconds for timestamps")
 
-	rootCmd.AddCommand(amqp)
-	rootCmd.AddCommand(stomp)
-	rootCmd.AddCommand(mqtt)
+	rootCmd.AddCommand(amqp_amqp)
+	rootCmd.AddCommand(amqp_stomp)
+	rootCmd.AddCommand(amqp_mqtt)
+	rootCmd.AddCommand(stomp_stomp)
+	rootCmd.AddCommand(stomp_amqp)
+	rootCmd.AddCommand(stomp_mqtt)
+	rootCmd.AddCommand(mqtt_mqtt)
+	rootCmd.AddCommand(mqtt_amqp)
+	rootCmd.AddCommand(mqtt_stomp)
 
 	return rootCmd
+}
+
+func start(cfg config.Config, publisherFunc func(config.Config, int), consumerFunc func(config.Config, chan bool, int)) {
+	var wg sync.WaitGroup
+
+	if cfg.Consumers > 0 {
+		for i := 1; i <= cfg.Consumers; i++ {
+			subscribed := make(chan bool)
+			n := i
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				consumerFunc(cfg, subscribed, n)
+			}()
+
+			// wait until we know the receiver has subscribed
+			<-subscribed
+		}
+	}
+
+	if cfg.Publishers > 0 {
+		for i := 1; i <= cfg.Publishers; i++ {
+			n := i
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				publisherFunc(cfg, n)
+			}()
+		}
+	}
+
+	wg.Wait()
+}
+
+func setUris(cfg *config.Config, command string) {
+	if cfg.PublisherUri == "" {
+		println("setting publisher uri to ", defaultUri(strings.Split(command, "-")[0]))
+		(*cfg).PublisherUri = defaultUri(strings.Split(command, "-")[0])
+	}
+	if cfg.ConsumerUri == "" {
+		println("setting consumer uri to ", defaultUri(strings.Split(command, "-")[1]))
+		(*cfg).ConsumerUri = defaultUri(strings.Split(command, "-")[1])
+	}
+}
+
+func defaultUri(proto string) string {
+	var uri = "localhost"
+	switch proto {
+	case "amqp":
+		uri = "amqp://localhost"
+	case "stomp":
+		uri = "localhost:61613"
+	case "mqtt":
+		uri = "localhost:1883"
+	}
+	return uri
 }

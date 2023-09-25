@@ -3,7 +3,6 @@ package mqtt_client
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -16,38 +15,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func Start(cfg config.Config) {
-	var wg sync.WaitGroup
-
-	if cfg.Consumers > 0 {
-		for i := 1; i <= cfg.Consumers; i++ {
-			subscribed := make(chan bool)
-			n := i
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				Consumer(cfg, subscribed, n)
-			}()
-
-			// wait until we know the receiver has subscribed
-			<-subscribed
-		}
-	}
-
-	if cfg.Publishers > 0 {
-		for i := 1; i <= cfg.Publishers; i++ {
-			n := i
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				Publisher(cfg, n)
-			}()
-		}
-	}
-
-	wg.Wait()
-}
-
 func Publisher(cfg config.Config, n int) {
 	var token mqtt.Token
 
@@ -57,20 +24,20 @@ func Publisher(cfg config.Config, n int) {
 
 	// open connection
 	opts := mqtt.NewClientOptions().
-		AddBroker(cfg.MqttUrl).
+		AddBroker(cfg.PublisherUri).
 		SetUsername("guest").
 		SetPassword("guest").
 		SetClientID(fmt.Sprintf("omq-pub-%d", n)).
 		SetAutoReconnect(true).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			log.Info("connection lost", "protocol", "mqtt", "publisherId", n)
+			log.Info("connection lost", "protocol", "MQTT", "publisherId", n)
 		}).
 		SetProtocolVersion(4)
 
 	c := mqtt.NewClient(opts)
 	token = c.Connect()
 	token.Wait()
-	log.Info("publisher started", "protocol", "mqtt", "publisherId", n)
+	log.Info("publisher started", "protocol", "MQTT", "publisherId", n)
 
 	topic := fmt.Sprintf("%s-%d", cfg.QueueNamePrefix, ((n-1)%cfg.QueueCount)+1)
 
@@ -85,14 +52,14 @@ func Publisher(cfg config.Config, n int) {
 		token.Wait()
 		timer.ObserveDuration()
 		if token.Error() != nil {
-			log.Error("message sending failure", "protocol", "mqtt", "publisherId", n, "error", token.Error())
+			log.Error("message sending failure", "protocol", "MQTT", "publisherId", n, "error", token.Error())
 		}
-		log.Debug("message sent", "protocol", "mqtt", "publisherId", n)
+		log.Debug("message sent", "protocol", "MQTT", "publisherId", n)
 		metrics.MessagesPublished.With(prometheus.Labels{"protocol": "mqtt"}).Inc()
 		utils.WaitBetweenMessages(cfg.Rate)
 	}
 
-	log.Debug("publisher stopped", "protocol", "mqtt", "publisherId", n)
+	log.Debug("publisher stopped", "protocol", "MQTT", "publisherId", n)
 }
 
 func Consumer(cfg config.Config, subscribed chan bool, n int) {
@@ -102,14 +69,14 @@ func Consumer(cfg config.Config, subscribed chan bool, n int) {
 
 	// open connection
 	opts := mqtt.NewClientOptions().
-		AddBroker(cfg.MqttUrl).
+		AddBroker(cfg.ConsumerUri).
 		SetUsername("guest").
 		SetPassword("guest").
 		SetClientID(fmt.Sprintf("omq-sub-%d", n)).
 		SetAutoReconnect(true).
 		SetCleanSession(false).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			log.Info("connection lost", "protocol", "mqtt", "consumerId", n)
+			log.Info("connection lost", "protocol", "MQTT", "consumerId", n)
 		}).
 		SetProtocolVersion(4)
 
@@ -117,7 +84,6 @@ func Consumer(cfg config.Config, subscribed chan bool, n int) {
 	c := mqtt.NewClient(opts)
 	token = c.Connect()
 	token.Wait()
-	log.Info("consumer started", "protocol", "mqtt", "publisherId", n)
 
 	topic := fmt.Sprintf("%s-%d", cfg.QueueNamePrefix, ((n-1)%cfg.QueueCount)+1)
 
@@ -130,15 +96,16 @@ func Consumer(cfg config.Config, subscribed chan bool, n int) {
 		payload := msg.Payload()
 		m.Observe(utils.CalculateEndToEndLatency(&payload))
 		msgsReceived++
-		log.Debug("message received", "protocol", "mqtt", "subscriberId", n, "terminus", topic, "size", len(payload))
+		log.Debug("message received", "protocol", "MQTT", "subscriberId", n, "terminus", topic, "size", len(payload))
 	}
 
 	close(subscribed)
 	token = c.Subscribe(topic, 1, handler)
 	token.Wait()
 	if token.Error() != nil {
-		log.Error("failed to subscribe", "protocol", "mqtt", "publisherId", n, "error", token.Error())
+		log.Error("failed to subscribe", "protocol", "MQTT", "publisherId", n, "error", token.Error())
 	}
+	log.Info("consumer started", "protocol", "MQTT", "publisherId", n, "topic", topic)
 
 	for {
 		time.Sleep(1 * time.Second)
@@ -146,5 +113,5 @@ func Consumer(cfg config.Config, subscribed chan bool, n int) {
 			break
 		}
 	}
-	log.Debug("consumer finished", "protocol", "mqtt", "publisherId", n)
+	log.Debug("consumer finished", "protocol", "MQTT", "publisherId", n)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -17,45 +16,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func Start(cfg config.Config) {
-	var wg sync.WaitGroup
-
-	if cfg.Consumers > 0 {
-		for i := 1; i <= cfg.Consumers; i++ {
-			subscribed := make(chan bool)
-			n := i
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				Consumer(cfg, subscribed, n)
-			}()
-
-			// wait until we know the receiver has subscribed
-			<-subscribed
-		}
-	}
-
-	if cfg.Publishers > 0 {
-		for i := 1; i <= cfg.Publishers; i++ {
-			n := i
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				Publisher(cfg, n)
-			}()
-		}
-	}
-
-	wg.Wait()
-}
-
 func Publisher(cfg config.Config, n int) {
 	// sleep random interval to avoid all publishers publishing at the same time
 	s := rand.Intn(cfg.Publishers)
 	time.Sleep(time.Duration(s) * time.Millisecond)
 
 	// open connection
-	conn, err := amqp.Dial(context.TODO(), cfg.AmqpUrl, nil)
+	conn, err := amqp.Dial(context.TODO(), cfg.PublisherUri, nil)
 	if err != nil {
 		log.Error("publisher connection failed", "protocol", "amqp-1.0", "publisherId", n, "error", err.Error())
 		return
@@ -92,6 +59,7 @@ func Publisher(cfg config.Config, n int) {
 			return
 		}
 		metrics.MessagesPublished.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
+		log.Error("message sent", "protocol", "amqp-1.0", "publisherId", n)
 		utils.WaitBetweenMessages(cfg.Rate)
 	}
 
@@ -100,7 +68,7 @@ func Publisher(cfg config.Config, n int) {
 
 func Consumer(cfg config.Config, subscribed chan bool, n int) {
 	// open connection
-	conn, err := amqp.Dial(context.TODO(), cfg.AmqpUrl, nil)
+	conn, err := amqp.Dial(context.TODO(), cfg.ConsumerUri, nil)
 	if err != nil {
 		log.Error("consumer failed to connect", "protocol", "amqp-1.0", "consumerId", n, "error", err.Error())
 		return

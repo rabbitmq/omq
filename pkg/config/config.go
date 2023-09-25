@@ -3,9 +3,8 @@ package config
 import "time"
 
 type Config struct {
-	AmqpUrl         string
-	StompUrl        string
-	MqttUrl         string
+	PublisherUri    string
+	ConsumerUri     string
 	Publishers      int
 	Consumers       int
 	PublishCount    int

@@ -3,7 +3,6 @@ package stomp_client
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -21,45 +20,12 @@ var options []func(*stomp.Conn) error = []func(*stomp.Conn) error{
 	stomp.ConnOpt.Host("/"),
 }
 
-func Start(cfg config.Config) {
-
-	var wg sync.WaitGroup
-
-	if cfg.Consumers > 0 {
-		for i := 1; i <= cfg.Consumers; i++ {
-			subscribed := make(chan bool)
-			n := i
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				Consumer(cfg, subscribed, n)
-			}()
-
-			// wait until we know the receiver has subscribed
-			<-subscribed
-		}
-	}
-
-	if cfg.Publishers > 0 {
-		for i := 1; i <= cfg.Publishers; i++ {
-			n := i
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				Publisher(cfg, n)
-			}()
-		}
-	}
-
-	wg.Wait()
-}
-
 func Publisher(cfg config.Config, n int) {
 	// sleep random interval to avoid all publishers publishing at exactly the same time
 	s := rand.Intn(cfg.Publishers)
 	time.Sleep(time.Duration(s) * time.Millisecond)
 
-	conn, err := stomp.Dial("tcp", cfg.StompUrl, options...)
+	conn, err := stomp.Dial("tcp", cfg.PublisherUri, options...)
 	if err != nil {
 		log.Error("publisher connection failed", "protocol", "STOMP", "publisherId", n, "error", err.Error())
 		return
@@ -93,7 +59,7 @@ func Publisher(cfg config.Config, n int) {
 }
 
 func Consumer(cfg config.Config, subscribed chan bool, n int) {
-	conn, err := stomp.Dial("tcp", cfg.StompUrl, options...)
+	conn, err := stomp.Dial("tcp", cfg.ConsumerUri, options...)
 
 	if err != nil {
 		log.Error("consumer connection failed", "protocol", "STOMP", "consumerId", n, "error", err.Error())
