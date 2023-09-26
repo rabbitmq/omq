@@ -1,9 +1,28 @@
 package config
 
-import "time"
+import (
+	"time"
+
+	"github.com/thediveo/enumflag/v2"
+)
+
+type AmqpDurabilityMode enumflag.Flag
+
+const (
+	None AmqpDurabilityMode = iota
+	Configuration
+	UnsettledState
+)
+
+var AmqpDurabilityModes = map[AmqpDurabilityMode][]string{
+	None:           {"none"},
+	Configuration:  {"configuration"},
+	UnsettledState: {"unsettled-state"},
+}
 
 type AmqpOptions struct {
 	ConsumerCredits int
+	Durability      AmqpDurabilityMode
 }
 
 type Config struct {

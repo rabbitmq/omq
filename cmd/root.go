@@ -15,6 +15,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 
 	"github.com/spf13/cobra"
+	"github.com/thediveo/enumflag/v2"
 )
 
 var (
@@ -51,6 +52,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	amqp_amqp.Flags().IntVarP(&cfg.Amqp.ConsumerCredits, "amqp-consumer-credits", "", 1, "AMQP 1.0 consumer credits")
+	amqp_amqp.Flags().VarP(enumflag.New(&cfg.Amqp.Durability, "amqp-durability", config.AmqpDurabilityModes, enumflag.EnumCaseInsensitive), "amqp-durability", "", "AMQP 1.0 durability mode")
 
 	amqp_stomp = &cobra.Command{
 		Use: "amqp-stomp",
