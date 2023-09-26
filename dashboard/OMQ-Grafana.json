@@ -342,8 +342,8 @@
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
@@ -384,6 +384,6 @@
   "timezone": "",
   "title": "OMQ",
   "uid": "cb51b55e-fa9c-4d9d-b9ce-910b7e596a6f",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
