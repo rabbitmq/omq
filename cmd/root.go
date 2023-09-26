@@ -12,6 +12,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
+	"github.com/rabbitmq/omq/pkg/metrics"
 
 	"github.com/spf13/cobra"
 )
@@ -28,6 +29,8 @@ var (
 	mqtt_stomp  = &cobra.Command{}
 	rootCmd     = &cobra.Command{}
 )
+
+var metricsServer *metrics.MetricsServer
 
 func Execute() {
 	rootCmd := RootCmd()
@@ -113,24 +116,30 @@ func RootCmd() *cobra.Command {
 				os.Exit(1)
 			}
 			setUris(&cfg, cmd.Use)
+			metricsServer = metrics.NewMetricsServer()
+			metricsServer.Start()
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			resp, err := http.Get("http://localhost:8080/metrics")
-			defer resp.Body.Close()
-			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				log.Error("Error getting metrics", "error", err)
 				return
 			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				log.Error("Error reading metrics", "error", err)
+				return
+			}
 
-			println("RESULTS")
+			fmt.Println(" *********** RESULTS *********** ")
 			metrics := strings.Split(string(body), "\n")
 			for _, metric := range metrics {
 				if strings.HasPrefix(metric, "omq_") {
-
 					fmt.Println(metric)
 				}
 			}
+			metricsServer.Stop()
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")

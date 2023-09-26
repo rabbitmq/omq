@@ -1,15 +1,18 @@
 package metrics
 
 import (
+	"context"
 	"net/http"
-	"os"
-
-	"github.com/rabbitmq/omq/pkg/log"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rabbitmq/omq/pkg/log"
 )
+
+type MetricsServer struct {
+	httpServer *http.Server
+}
 
 var (
 	MessagesPublished = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -46,11 +49,23 @@ var (
 	)
 )
 
-func Start() {
-	http.Handle("/metrics", promhttp.Handler())
-	err := http.ListenAndServe("127.0.0.1:8080", nil)
-	if err != nil {
-		log.Error("Prometheus metrics failed to start", "error", err.Error())
-		os.Exit(1)
+func NewMetricsServer() *MetricsServer {
+	return &MetricsServer{
+		httpServer: &http.Server{
+			Addr:    "127.0.0.1:8080",
+			Handler: promhttp.Handler(),
+		},
 	}
+}
+
+func (m MetricsServer) Start() {
+	go func() {
+		log.Debug("Starting Prometheus metrics server")
+		_ = m.httpServer.ListenAndServe()
+	}()
+}
+
+func (m MetricsServer) Stop() {
+	m.httpServer.Shutdown(context.TODO())
+	log.Debug("Prometheus metrics stopped")
 }
