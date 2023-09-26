@@ -185,7 +185,7 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 				defer wg.Done()
 				c, err := common.NewConsumer(consumerProto, cfg, n)
 				if err != nil {
-					log.Error("Error creating publisher: ", "error", err)
+					log.Error("Error creating consumer: ", "error", err)
 					os.Exit(1)
 				}
 				c.Start(subscribed)
@@ -204,7 +204,7 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 				defer wg.Done()
 				p, err := common.NewPublisher(publisherProto, cfg, n)
 				if err != nil {
-					log.Error("Error creating publisher: ", err)
+					log.Error("Error creating publisher: ", "error", err)
 					os.Exit(1)
 				}
 				p.Start()
