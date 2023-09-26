@@ -2,6 +2,10 @@ package config
 
 import "time"
 
+type AmqpOptions struct {
+	ConsumerCredits int
+}
+
 type Config struct {
 	PublisherUri    string
 	ConsumerUri     string
@@ -15,4 +19,5 @@ type Config struct {
 	Rate            int
 	Duration        time.Duration
 	UseMillis       bool
+	Amqp            AmqpOptions
 }

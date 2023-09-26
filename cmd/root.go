@@ -50,6 +50,7 @@ func RootCmd() *cobra.Command {
 			start(cfg, common.AMQP, common.AMQP)
 		},
 	}
+	amqp_amqp.Flags().IntVarP(&cfg.Amqp.ConsumerCredits, "amqp-consumer-credits", "", 1, "AMQP 1.0 consumer credits")
 
 	amqp_stomp = &cobra.Command{
 		Use: "amqp-stomp",
@@ -79,6 +80,7 @@ func RootCmd() *cobra.Command {
 			start(cfg, common.STOMP, common.AMQP)
 		},
 	}
+	stomp_amqp.Flags().IntVarP(&cfg.Amqp.ConsumerCredits, "amqp-consumer-credits", "", 1, "AMQP 1.0 consumer credits")
 
 	stomp_mqtt = &cobra.Command{
 		Use: "stomp-mqtt",
@@ -101,6 +103,7 @@ func RootCmd() *cobra.Command {
 			start(cfg, common.MQTT, common.AMQP)
 		},
 	}
+	mqtt_amqp.Flags().IntVarP(&cfg.Amqp.ConsumerCredits, "amqp-consumer-credits", "", 1, "AMQP 1.0 consumer credits")
 
 	mqtt_stomp = &cobra.Command{
 		Use: "mqtt-stomp",

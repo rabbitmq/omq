@@ -49,7 +49,7 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 }
 
 func (c Amqp10Consumer) Start(subscribed chan bool) {
-	receiver, err := c.Session.NewReceiver(context.TODO(), c.Topic, &amqp.ReceiverOptions{Durability: amqp.DurabilityUnsettledState})
+	receiver, err := c.Session.NewReceiver(context.TODO(), c.Topic, &amqp.ReceiverOptions{Durability: amqp.DurabilityUnsettledState, Credit: int32(c.Config.Amqp.ConsumerCredits)})
 	if err != nil {
 		log.Error("consumer failed to create a receiver", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
 		return
