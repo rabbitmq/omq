@@ -30,6 +30,10 @@ func UpdatePayload(useMillis bool, payload *[]byte) *[]byte {
 }
 
 func CalculateEndToEndLatency(payload *[]byte) float64 {
+	if len(*payload) < 12 {
+		// message sent without latency tracking
+		return 0
+	}
 	timeSent := binary.BigEndian.Uint64((*payload)[4:])
 	now := uint64(time.Now().UnixNano())
 	latency := now - timeSent
