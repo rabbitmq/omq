@@ -2,7 +2,13 @@ package metrics
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -60,8 +66,21 @@ func NewMetricsServer() *MetricsServer {
 
 func (m MetricsServer) Start() {
 	go func() {
-		log.Debug("Starting Prometheus metrics server")
-		_ = m.httpServer.ListenAndServe()
+		for {
+			log.Debug("Starting Prometheus metrics server", "address", m.httpServer.Addr)
+			err := m.httpServer.ListenAndServe()
+			if errors.Is(err, syscall.EADDRINUSE) {
+				port, err := strconv.Atoi(strings.Split(m.httpServer.Addr, ":")[1])
+				if err != nil {
+					log.Error("Can't start Prometheus metrics, will try again in 1 second")
+					time.Sleep(1 * time.Second)
+				} else {
+					m.httpServer.Addr = "127.0.0.1:" + fmt.Sprint(port+1)
+					log.Info("Prometheus metrics: port already in use, trying the next one", "port", m.httpServer.Addr)
+				}
+
+			}
+		}
 	}()
 }
 
