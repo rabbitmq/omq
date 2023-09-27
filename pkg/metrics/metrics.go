@@ -79,6 +79,8 @@ func (m MetricsServer) Start() {
 					log.Info("Prometheus metrics: port already in use, trying the next one", "port", m.httpServer.Addr)
 				}
 
+			} else if errors.Is(err, http.ErrServerClosed) {
+				break
 			}
 		}
 	}()
