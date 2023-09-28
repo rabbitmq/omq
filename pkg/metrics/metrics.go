@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -89,4 +90,27 @@ func (m MetricsServer) Start() {
 func (m MetricsServer) Stop() {
 	m.httpServer.Shutdown(context.TODO())
 	log.Debug("Prometheus metrics stopped")
+}
+
+func PrintMetrics() {
+	resp, err := http.Get("http://localhost:8080/metrics")
+	if err != nil {
+		log.Error("Error getting metrics", "error", err)
+		return
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Error("Error reading metrics", "error", err)
+		return
+	}
+
+	fmt.Println(" *********** RESULTS *********** ")
+	metrics := strings.Split(string(body), "\n")
+	for _, metric := range metrics {
+		if strings.HasPrefix(metric, "omq_") {
+			fmt.Println(metric)
+		}
+	}
+
 }

@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"math"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -125,25 +123,7 @@ func RootCmd() *cobra.Command {
 			metricsServer.Start()
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			resp, err := http.Get("http://localhost:8080/metrics")
-			if err != nil {
-				log.Error("Error getting metrics", "error", err)
-				return
-			}
-			defer resp.Body.Close()
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				log.Error("Error reading metrics", "error", err)
-				return
-			}
-
-			fmt.Println(" *********** RESULTS *********** ")
-			metrics := strings.Split(string(body), "\n")
-			for _, metric := range metrics {
-				if strings.HasPrefix(metric, "omq_") {
-					fmt.Println(metric)
-				}
-			}
+			metrics.PrintMetrics()
 			metricsServer.Stop()
 		},
 	}
