@@ -20,6 +20,7 @@ type MqttPublisher struct {
 	Connection mqtt.Client
 	Topic      string
 	Config     config.Config
+	msg        []byte
 }
 
 func NewPublisher(cfg config.Config, n int) *MqttPublisher {
@@ -54,8 +55,10 @@ func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 
 func (p MqttPublisher) Start() {
 	// sleep random interval to avoid all publishers publishing at the same time
-	s := rand.Intn(p.Config.Publishers)
+	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
+
+	p.msg = utils.MessageBody(p.Config)
 
 	if p.Config.Rate == -1 {
 		p.StartFullSpeed()
@@ -65,20 +68,9 @@ func (p MqttPublisher) Start() {
 }
 
 func (p MqttPublisher) StartFullSpeed() {
-	msg := utils.MessageBody(p.Config)
 	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
 	for i := 1; i <= p.Config.PublishCount; i++ {
-		utils.UpdatePayload(p.Config.UseMillis, &msg)
-		timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "mqtt"}))
-		token := p.Connection.Publish(p.Topic, 1, false, msg)
-		token.Wait()
-		timer.ObserveDuration()
-		if token.Error() != nil {
-			log.Error("message sending failure", "protocol", "MQTT", "publisherId", p.Id, "error", token.Error())
-		}
-		log.Debug("message sent", "protocol", "MQTT", "publisherId", p.Id)
-		metrics.MessagesPublished.With(prometheus.Labels{"protocol": "mqtt"}).Inc()
-		utils.WaitBetweenMessages(p.Config.Rate)
+		p.Send()
 	}
 
 	log.Debug("publisher stopped", "protocol", "MQTT", "publisherId", p.Id)
@@ -86,4 +78,38 @@ func (p MqttPublisher) StartFullSpeed() {
 
 func (p MqttPublisher) StartRateLimited() {
 	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
+	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
+	done := make(chan bool)
+
+	msgsSent := 0
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case _ = <-ticker.C:
+				p.Send()
+				msgsSent++
+			}
+		}
+	}()
+	for {
+		time.Sleep(1 * time.Second)
+		if msgsSent >= p.Config.PublishCount {
+			break
+		}
+	}
+}
+
+func (p MqttPublisher) Send() {
+	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
+	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "mqtt"}))
+	token := p.Connection.Publish(p.Topic, 1, false, p.msg)
+	token.Wait()
+	timer.ObserveDuration()
+	if token.Error() != nil {
+		log.Error("message sending failure", "protocol", "MQTT", "publisherId", p.Id, "error", token.Error())
+	}
+	log.Debug("message sent", "protocol", "MQTT", "publisherId", p.Id)
+	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "mqtt"}).Inc()
 }

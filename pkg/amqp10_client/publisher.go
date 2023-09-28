@@ -21,6 +21,7 @@ type Amqp10Publisher struct {
 	Sender *amqp.Sender
 	Topic  string
 	Config config.Config
+	msg    []byte
 }
 
 func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
@@ -56,8 +57,10 @@ func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 
 func (p Amqp10Publisher) Start() {
 	// sleep random interval to avoid all publishers publishing at the same time
-	s := rand.Intn(p.Config.Publishers)
+	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
+
+	p.msg = utils.MessageBody(p.Config)
 
 	if p.Config.Rate == -1 {
 		p.StartFullSpeed()
@@ -69,20 +72,8 @@ func (p Amqp10Publisher) Start() {
 func (p Amqp10Publisher) StartFullSpeed() {
 	log.Info("publisher started", "protocol", "AMQP-1.0", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
 
-	msg := utils.MessageBody(p.Config)
-
 	for i := 1; i <= p.Config.PublishCount; i++ {
-		utils.UpdatePayload(p.Config.UseMillis, &msg)
-		timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "amqp-1.0"}))
-		err := p.Sender.Send(context.TODO(), amqp.NewMessage(msg), nil)
-		timer.ObserveDuration()
-		if err != nil {
-			log.Error("message sending failure", "protocol", "amqp-1.0", "publisherId", p.Id, "error", err.Error())
-			return
-		}
-		metrics.MessagesPublished.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
-		log.Debug("message sent", "protocol", "amqp-1.0", "publisherId", p.Id)
-		utils.WaitBetweenMessages(p.Config.Rate)
+		p.Send()
 	}
 
 	log.Debug("publisher stopped", "protocol", "amqp-1.0", "publisherId", p.Id)
@@ -90,4 +81,38 @@ func (p Amqp10Publisher) StartFullSpeed() {
 
 func (p Amqp10Publisher) StartRateLimited() {
 	log.Info("publisher started", "protocol", "AMQP-1.0", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
+	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
+	done := make(chan bool)
+
+	msgsSent := 0
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case _ = <-ticker.C:
+				p.Send()
+				msgsSent++
+			}
+		}
+	}()
+	for {
+		time.Sleep(1 * time.Second)
+		if msgsSent >= p.Config.PublishCount {
+			break
+		}
+	}
+}
+
+func (p Amqp10Publisher) Send() {
+	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
+	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "amqp-1.0"}))
+	err := p.Sender.Send(context.TODO(), amqp.NewMessage(p.msg), nil)
+	timer.ObserveDuration()
+	if err != nil {
+		log.Error("message sending failure", "protocol", "amqp-1.0", "publisherId", p.Id, "error", err.Error())
+		return
+	}
+	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
+	log.Debug("message sent", "protocol", "amqp-1.0", "publisherId", p.Id)
 }

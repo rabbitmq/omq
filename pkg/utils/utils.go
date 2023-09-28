@@ -7,13 +7,6 @@ import (
 	config "github.com/rabbitmq/omq/pkg/config"
 )
 
-func WaitBetweenMessages(rate int) {
-	if rate > 0 {
-		t := time.Duration(1000/float64(rate)) * time.Millisecond
-		time.Sleep(t)
-	}
-}
-
 func MessageBody(cfg config.Config) []byte {
 	b := make([]byte, cfg.Size)
 	binary.BigEndian.PutUint32(b[0:], uint32(1234)) // currently unused, for compatibility with perf-test

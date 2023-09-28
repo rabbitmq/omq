@@ -25,6 +25,7 @@ type StompPublisher struct {
 	Connection *stomp.Conn
 	Topic      string
 	Config     config.Config
+	msg        []byte
 }
 
 func NewPublisher(cfg config.Config, id int) *StompPublisher {
@@ -51,8 +52,10 @@ func NewPublisher(cfg config.Config, id int) *StompPublisher {
 
 func (p StompPublisher) Start() {
 	// sleep random interval to avoid all publishers publishing at the same time
-	s := rand.Intn(p.Config.Publishers)
+	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
+
+	p.msg = utils.MessageBody(p.Config)
 
 	if p.Config.Rate == -1 {
 		p.StartFullSpeed()
@@ -64,21 +67,8 @@ func (p StompPublisher) Start() {
 func (p StompPublisher) StartFullSpeed() {
 	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
 
-	msg := utils.MessageBody(p.Config)
-
 	for i := 1; i <= p.Config.PublishCount; i++ {
-		utils.UpdatePayload(p.Config.UseMillis, &msg)
-		timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "stomp"}))
-		err := p.Connection.Send(p.Topic, "", msg, stomp.SendOpt.Receipt, stomp.SendOpt.Header("persistent", "true"))
-		timer.ObserveDuration()
-		if err != nil {
-			log.Error("message sending failure", "protocol", "STOMP", "publisherId", p.Id, "error", err)
-			return
-		}
-		log.Debug("message sent", "protocol", "STOMP", "publisherId", p.Id, "destination", p.Topic)
-
-		metrics.MessagesPublished.With(prometheus.Labels{"protocol": "stomp"}).Inc()
-		utils.WaitBetweenMessages(p.Config.Rate)
+		p.Send()
 	}
 
 	log.Debug("publisher finished", "publisherId", p.Id)
@@ -86,4 +76,39 @@ func (p StompPublisher) StartFullSpeed() {
 
 func (p StompPublisher) StartRateLimited() {
 	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
+	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
+	done := make(chan bool)
+
+	msgsSent := 0
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case _ = <-ticker.C:
+				p.Send()
+				msgsSent++
+			}
+		}
+	}()
+	for {
+		time.Sleep(1 * time.Second)
+		if msgsSent >= p.Config.PublishCount {
+			break
+		}
+	}
+}
+
+func (p StompPublisher) Send() {
+	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
+	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "stomp"}))
+	err := p.Connection.Send(p.Topic, "", p.msg, stomp.SendOpt.Receipt, stomp.SendOpt.Header("persistent", "true"))
+	timer.ObserveDuration()
+	if err != nil {
+		log.Error("message sending failure", "protocol", "STOMP", "publisherId", p.Id, "error", err)
+		return
+	}
+	log.Debug("message sent", "protocol", "STOMP", "publisherId", p.Id, "destination", p.Topic)
+
+	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "stomp"}).Inc()
 }
