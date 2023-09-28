@@ -10,6 +10,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
+	"github.com/rabbitmq/omq/pkg/version"
 
 	"github.com/spf13/cobra"
 	"github.com/thediveo/enumflag/v2"
@@ -25,6 +26,7 @@ var (
 	mqtt_mqtt   = &cobra.Command{}
 	mqtt_amqp   = &cobra.Command{}
 	mqtt_stomp  = &cobra.Command{}
+	versionCmd  = &cobra.Command{}
 	rootCmd     = &cobra.Command{}
 )
 
@@ -109,6 +111,13 @@ func RootCmd() *cobra.Command {
 		},
 	}
 
+	versionCmd = &cobra.Command{
+		Use: "version",
+		Run: func(cmd *cobra.Command, args []string) {
+			version.Print()
+		},
+	}
+
 	var rootCmd = &cobra.Command{Use: "omq",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cfg.Size < 12 {
@@ -140,6 +149,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.AddCommand(mqtt_mqtt)
 	rootCmd.AddCommand(mqtt_amqp)
 	rootCmd.AddCommand(mqtt_stomp)
+	rootCmd.AddCommand(versionCmd)
 
 	return rootCmd
 }
@@ -187,6 +197,9 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 }
 
 func setUris(cfg *config.Config, command string) {
+	if command == "version" {
+		return
+	}
 	if cfg.PublisherUri == "" {
 		println("setting publisher uri to ", defaultUri(strings.Split(command, "-")[0]))
 		(*cfg).PublisherUri = defaultUri(strings.Split(command, "-")[0])

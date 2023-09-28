@@ -112,6 +112,7 @@ func (m MetricsServer) PrintMetrics() {
 		return
 	}
 	defer resp.Body.Close()
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error("Error reading metrics", "error", err)
