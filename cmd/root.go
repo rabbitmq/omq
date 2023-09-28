@@ -161,7 +161,7 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 	if cfg.Duration > 0 {
 		go func() {
 			time.Sleep(cfg.Duration)
-			syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+			_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 		}()
 	}
 
