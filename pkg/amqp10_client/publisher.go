@@ -12,7 +12,7 @@ import (
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 
-	amqp "github.com/Azure/go-amqp"
+	"github.com/Azure/go-amqp"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -84,7 +84,7 @@ func (p Amqp10Publisher) StartRateLimited() {
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
 	done := make(chan bool)
 
-	msgsSent := 0
+	msgSent := 0
 	go func() {
 		for {
 			select {
@@ -92,13 +92,13 @@ func (p Amqp10Publisher) StartRateLimited() {
 				return
 			case _ = <-ticker.C:
 				p.Send()
-				msgsSent++
+				msgSent++
 			}
 		}
 	}()
 	for {
 		time.Sleep(1 * time.Second)
-		if msgsSent >= p.Config.PublishCount {
+		if msgSent >= p.Config.PublishCount {
 			break
 		}
 	}
