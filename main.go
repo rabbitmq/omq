@@ -9,8 +9,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 )
 
-var metricsServer *metrics.MetricsServer
-
 func main() {
 	metricsServer := metrics.GetMetricsServer()
 	metricsServer.Start()
