@@ -32,6 +32,8 @@ jobs:
         ports:
           - 15672:15672
           - 5672:5672
+          - 1883:1883
+          - 61613:61613
 
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +44,9 @@ jobs:
 
       - name: Wait for node to start booting
         run: sleep 15
+
+      - name: Configure broker
+        run: OMQ_RABBITMQCTL=DOCKER:${{job.services.rabbitmq.id}} bin/ci/before_build.sh
 
       - name: Run go test
         run: go test ./...
