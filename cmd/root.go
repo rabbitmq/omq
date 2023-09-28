@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
@@ -155,6 +157,13 @@ func RootCmd() *cobra.Command {
 
 func start(cfg config.Config, publisherProto common.Protocol, consumerProto common.Protocol) {
 	var wg sync.WaitGroup
+
+	if cfg.Duration > 0 {
+		go func() {
+			time.Sleep(cfg.Duration)
+			syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		}()
+	}
 
 	if cfg.Consumers > 0 {
 		for i := 1; i <= cfg.Consumers; i++ {
