@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -19,7 +19,12 @@ import (
 
 type MetricsServer struct {
 	httpServer *http.Server
+	running    bool
 }
+
+var lock = &sync.Mutex{}
+
+var metricsServer *MetricsServer
 
 var (
 	MessagesPublished = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -56,32 +61,39 @@ var (
 	)
 )
 
-func NewMetricsServer() *MetricsServer {
-	return &MetricsServer{
-		httpServer: &http.Server{
-			Addr:    "127.0.0.1:8080",
-			Handler: promhttp.Handler(),
-		},
+func GetMetricsServer() *MetricsServer {
+	lock.Lock()
+	defer lock.Unlock()
+	if metricsServer == nil {
+		metricsServer =
+			&MetricsServer{
+				httpServer: &http.Server{
+					Addr:    "127.0.0.1:8080",
+					Handler: promhttp.Handler(),
+				},
+			}
 	}
+
+	return metricsServer
 }
 
 func (m MetricsServer) Start() {
+	if m.running {
+		return
+	}
+
 	go func() {
 		for {
+			defer func() {
+				m.running = false
+			}()
 			log.Debug("Starting Prometheus metrics server", "address", m.httpServer.Addr)
+			m.running = true
 			err := m.httpServer.ListenAndServe()
 			if errors.Is(err, syscall.EADDRINUSE) {
-				port, err := strconv.Atoi(strings.Split(m.httpServer.Addr, ":")[1])
-				if err != nil {
-					log.Error("Can't start Prometheus metrics, will try again in 1 second")
-					time.Sleep(1 * time.Second)
-				} else {
-					m.httpServer.Addr = "127.0.0.1:" + fmt.Sprint(port+1)
-					log.Info("Prometheus metrics: port already in use, trying the next one", "port", m.httpServer.Addr)
-				}
-
-			} else if errors.Is(err, http.ErrServerClosed) {
-				break
+				port, _ := strconv.Atoi(strings.Split(m.httpServer.Addr, ":")[1])
+				m.httpServer.Addr = "127.0.0.1:" + fmt.Sprint(port+1)
+				log.Info("Prometheus metrics: port already in use, trying the next one", "port", m.httpServer.Addr)
 			}
 		}
 	}()
@@ -92,8 +104,9 @@ func (m MetricsServer) Stop() {
 	log.Debug("Prometheus metrics stopped")
 }
 
-func PrintMetrics() {
-	resp, err := http.Get("http://localhost:8080/metrics")
+func (m MetricsServer) PrintMetrics() {
+	endpoint := fmt.Sprintf("http://%s/metrics", m.httpServer.Addr)
+	resp, err := http.Get(endpoint)
 	if err != nil {
 		log.Error("Error getting metrics", "error", err)
 		return

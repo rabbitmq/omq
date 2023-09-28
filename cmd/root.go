@@ -10,7 +10,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
-	"github.com/rabbitmq/omq/pkg/metrics"
 
 	"github.com/spf13/cobra"
 	"github.com/thediveo/enumflag/v2"
@@ -28,8 +27,6 @@ var (
 	mqtt_stomp  = &cobra.Command{}
 	rootCmd     = &cobra.Command{}
 )
-
-var metricsServer *metrics.MetricsServer
 
 func Execute() {
 	rootCmd := RootCmd()
@@ -119,12 +116,6 @@ func RootCmd() *cobra.Command {
 				os.Exit(1)
 			}
 			setUris(&cfg, cmd.Use)
-			metricsServer = metrics.NewMetricsServer()
-			metricsServer.Start()
-		},
-		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			metrics.PrintMetrics()
-			metricsServer.Stop()
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
