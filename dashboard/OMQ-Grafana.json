@@ -68,6 +68,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisSoftMin": 0,
             "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 0,
@@ -369,7 +370,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "",
+  "refresh": "5s",
   "schemaVersion": 38,
   "style": "dark",
   "tags": [],
@@ -384,6 +385,6 @@
   "timezone": "",
   "title": "OMQ",
   "uid": "cb51b55e-fa9c-4d9d-b9ce-910b7e596a6f",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }
