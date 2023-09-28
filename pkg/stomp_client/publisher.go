@@ -85,7 +85,7 @@ func (p StompPublisher) StartRateLimited() {
 			select {
 			case <-done:
 				return
-			case _ = <-ticker.C:
+			case <-ticker.C:
 				p.Send()
 				msgsSent++
 			}

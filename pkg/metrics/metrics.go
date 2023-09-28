@@ -84,9 +84,9 @@ func (m MetricsServer) Start() {
 
 	go func() {
 		for {
-			defer func() {
+			m.httpServer.RegisterOnShutdown(func() {
 				m.running = false
-			}()
+			})
 			log.Debug("Starting Prometheus metrics server", "address", m.httpServer.Addr)
 			m.running = true
 			err := m.httpServer.ListenAndServe()
@@ -100,7 +100,7 @@ func (m MetricsServer) Start() {
 }
 
 func (m MetricsServer) Stop() {
-	m.httpServer.Shutdown(context.TODO())
+	_ = m.httpServer.Shutdown(context.TODO())
 	log.Debug("Prometheus metrics stopped")
 }
 

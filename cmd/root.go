@@ -27,7 +27,6 @@ var (
 	mqtt_amqp   = &cobra.Command{}
 	mqtt_stomp  = &cobra.Command{}
 	versionCmd  = &cobra.Command{}
-	rootCmd     = &cobra.Command{}
 )
 
 func Execute() {

@@ -90,7 +90,7 @@ func (p Amqp10Publisher) StartRateLimited() {
 			select {
 			case <-done:
 				return
-			case _ = <-ticker.C:
+			case <-ticker.C:
 				p.Send()
 				msgSent++
 			}
