@@ -22,6 +22,7 @@ builds:
       - darwin
 
 archives:
+  - format: binary
   - files:
       - none*
     # this name template makes the OS and Arch compatible with the results of `uname`.
