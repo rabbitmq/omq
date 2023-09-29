@@ -2,13 +2,13 @@ package amqp10_client
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
+	"github.com/rabbitmq/omq/pkg/topic"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 
@@ -39,7 +39,7 @@ func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 		return nil
 	}
 
-	topic := calculateTopic(cfg, n)
+	topic := topic.CalculateTopic(cfg, n)
 	sender, err := session.NewSender(context.TODO(), topic, &amqp.SenderOptions{
 		Durability: amqp.DurabilityUnsettledState})
 	if err != nil {
@@ -115,12 +115,4 @@ func (p Amqp10Publisher) Send() {
 	}
 	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
 	log.Debug("message sent", "protocol", "amqp-1.0", "publisherId", p.Id)
-}
-
-func calculateTopic(cfg config.Config, id int) string {
-	topic := cfg.QueueNamePrefix
-	if cfg.QueueCount > 1 {
-		topic = topic + "-" + fmt.Sprint(((id-1)%cfg.QueueCount)+1)
-	}
-	return topic
 }

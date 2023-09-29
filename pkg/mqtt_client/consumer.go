@@ -7,6 +7,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
+	"github.com/rabbitmq/omq/pkg/topic"
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
@@ -39,7 +40,7 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 	token = c.Connect()
 	token.Wait()
 
-	topic := fmt.Sprintf("%s-%d", cfg.QueueNamePrefix, ((id-1)%cfg.QueueCount)+1)
+	topic := topic.CalculateTopic(cfg, id)
 
 	return &MqttConsumer{
 		Id:         id,

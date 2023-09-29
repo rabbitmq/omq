@@ -6,6 +6,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
+	"github.com/rabbitmq/omq/pkg/topic"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 
@@ -36,7 +37,7 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 	}
 
 	// calculate what queue to subscribe to
-	topic := calculateTopic(cfg, id)
+	topic := topic.CalculateTopic(cfg, id)
 
 	return &Amqp10Consumer{
 		Id:      id,

@@ -1,13 +1,13 @@
 package stomp_client
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
+	"github.com/rabbitmq/omq/pkg/topic"
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/go-stomp/stomp/v3"
@@ -40,7 +40,7 @@ func NewPublisher(cfg config.Config, id int) *StompPublisher {
 	}
 	log.Info("publisher connected", "protocol", "STOMP", "publisherId", id)
 
-	topic := fmt.Sprintf("/exchange/amq.topic/%s-%d", cfg.QueueNamePrefix, ((id-1)%cfg.QueueCount)+1)
+	topic := topic.CalculateTopic(cfg, id)
 
 	return &StompPublisher{
 		Id:         id,

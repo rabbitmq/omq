@@ -1,11 +1,10 @@
 package stomp_client
 
 import (
-	"fmt"
-
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
+	"github.com/rabbitmq/omq/pkg/topic"
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/go-stomp/stomp/v3"
@@ -33,7 +32,7 @@ func NewConsumer(cfg config.Config, id int) *StompConsumer {
 		return nil
 	}
 
-	topic := fmt.Sprintf("/topic/%s-%d", cfg.QueueNamePrefix, ((id-1)%cfg.QueueCount)+1)
+	topic := topic.CalculateTopic(cfg, id)
 
 	return &StompConsumer{
 		Id:         id,

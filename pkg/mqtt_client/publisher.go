@@ -8,6 +8,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
+	"github.com/rabbitmq/omq/pkg/topic"
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
@@ -42,7 +43,8 @@ func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 	token = connection.Connect()
 	token.Wait()
 
-	topic := fmt.Sprintf("%s-%d", cfg.QueueNamePrefix, ((n-1)%cfg.QueueCount)+1)
+	// topic := fmt.Sprintf("%s-%d", cfg.QueueNamePrefix, ((n-1)%cfg.QueueCount)+1)
+	topic := topic.CalculateTopic(cfg, n)
 
 	return &MqttPublisher{
 		Id:         n,
