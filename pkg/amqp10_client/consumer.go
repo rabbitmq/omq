@@ -2,7 +2,6 @@ package amqp10_client
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
@@ -37,7 +36,7 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 	}
 
 	// calculate what queue to subscribe to
-	topic := fmt.Sprintf("/queue/%s-%d", cfg.QueueNamePrefix, ((id-1)%cfg.QueueCount)+1)
+	topic := calculateTopic(cfg, id)
 
 	return &Amqp10Consumer{
 		Id:      id,

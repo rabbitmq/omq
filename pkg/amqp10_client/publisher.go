@@ -39,7 +39,7 @@ func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 		return nil
 	}
 
-	topic := fmt.Sprintf("/queue/%s-%d", cfg.QueueNamePrefix, ((n-1)%cfg.QueueCount)+1)
+	topic := calculateTopic(cfg, n)
 	sender, err := session.NewSender(context.TODO(), topic, &amqp.SenderOptions{
 		Durability: amqp.DurabilityUnsettledState})
 	if err != nil {
@@ -115,4 +115,12 @@ func (p Amqp10Publisher) Send() {
 	}
 	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
 	log.Debug("message sent", "protocol", "amqp-1.0", "publisherId", p.Id)
+}
+
+func calculateTopic(cfg config.Config, id int) string {
+	topic := cfg.QueueNamePrefix
+	if cfg.QueueCount > 1 {
+		topic = topic + "-" + fmt.Sprint(((id-1)%cfg.QueueCount)+1)
+	}
+	return topic
 }
