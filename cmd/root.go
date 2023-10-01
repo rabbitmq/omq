@@ -41,6 +41,7 @@ func Execute() {
 
 func RootCmd() *cobra.Command {
 	var cfg config.Config
+	cfg.Amqp.Durability = config.Configuration
 
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",
