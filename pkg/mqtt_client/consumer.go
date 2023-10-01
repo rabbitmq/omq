@@ -60,7 +60,7 @@ func (c MqttConsumer) Start(subscribed chan bool) {
 		payload := msg.Payload()
 		m.Observe(utils.CalculateEndToEndLatency(&payload))
 		msgsReceived++
-		log.Debug("message received", "protocol", "MQTT", "subscriberc.Id", c.Id, "terminus", c.Topic, "size", len(payload))
+		log.Debug("message received", "protocol", "MQTT", "subscriberc.Id", c.Id, "topic", c.Topic, "size", len(payload))
 	}
 
 	close(subscribed)
