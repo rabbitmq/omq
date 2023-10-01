@@ -7,8 +7,8 @@ import (
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
-	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/rabbitmq/omq/pkg/topic"
+	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 
@@ -39,9 +39,19 @@ func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 		return nil
 	}
 
+	var durability amqp.Durability
+	switch cfg.Amqp.Durability {
+	case config.None:
+		durability = amqp.DurabilityNone
+	case config.Configuration:
+		durability = amqp.DurabilityConfiguration
+	case config.UnsettledState:
+		durability = amqp.DurabilityUnsettledState
+	}
+
 	topic := topic.CalculateTopic(cfg, n)
 	sender, err := session.NewSender(context.TODO(), topic, &amqp.SenderOptions{
-		Durability: amqp.DurabilityUnsettledState})
+		TargetDurability: durability})
 	if err != nil {
 		log.Error("publisher failed to create a sender", "protocol", "amqp-1.0", "publisherId", n, "error", err.Error())
 		return nil

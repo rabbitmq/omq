@@ -5,8 +5,8 @@ import (
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
-	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/rabbitmq/omq/pkg/topic"
+	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 
@@ -58,7 +58,7 @@ func (c Amqp10Consumer) Start(subscribed chan bool) {
 	case config.UnsettledState:
 		durability = amqp.DurabilityUnsettledState
 	}
-	receiver, err := c.Session.NewReceiver(context.TODO(), c.Topic, &amqp.ReceiverOptions{Durability: durability, Credit: int32(c.Config.Amqp.ConsumerCredits)})
+	receiver, err := c.Session.NewReceiver(context.TODO(), c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.Amqp.ConsumerCredits)})
 	if err != nil {
 		log.Error("consumer failed to create a receiver", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
 		return
