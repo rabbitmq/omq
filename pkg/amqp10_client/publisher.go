@@ -40,7 +40,7 @@ func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 	}
 
 	var durability amqp.Durability
-	switch cfg.Amqp.Durability {
+	switch cfg.QueueDurability {
 	case config.None:
 		durability = amqp.DurabilityNone
 	case config.Configuration:

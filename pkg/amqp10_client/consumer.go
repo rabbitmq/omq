@@ -50,7 +50,7 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 
 func (c Amqp10Consumer) Start(subscribed chan bool) {
 	var durability amqp.Durability
-	switch c.Config.Amqp.Durability {
+	switch c.Config.QueueDurability {
 	case config.None:
 		durability = amqp.DurabilityNone
 	case config.Configuration:

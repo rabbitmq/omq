@@ -40,8 +40,7 @@ func Execute() {
 }
 
 func RootCmd() *cobra.Command {
-	var cfg config.Config
-	cfg.Amqp.Durability = config.Configuration
+	cfg := config.NewConfig()
 
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",
@@ -51,7 +50,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	amqp_amqp.Flags().IntVarP(&cfg.Amqp.ConsumerCredits, "amqp-consumer-credits", "", 1, "AMQP 1.0 consumer credits")
-	amqp_amqp.Flags().VarP(enumflag.New(&cfg.Amqp.Durability, "amqp-durability", config.AmqpDurabilityModes, enumflag.EnumCaseInsensitive), "amqp-durability", "", "AMQP 1.0 durability mode")
+	amqp_amqp.Flags().VarP(enumflag.New(&cfg.QueueDurability, "queue-durability", config.AmqpDurabilityModes, enumflag.EnumCaseInsensitive), "queue-durability", "", "Queue durability (default: configuration - the queue definition is durable)")
 
 	amqp_stomp = &cobra.Command{
 		Use: "amqp-stomp",

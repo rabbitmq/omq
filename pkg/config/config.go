@@ -22,7 +22,6 @@ var AmqpDurabilityModes = map[AmqpDurabilityMode][]string{
 
 type AmqpOptions struct {
 	ConsumerCredits int
-	Durability      AmqpDurabilityMode
 }
 
 type Config struct {
@@ -38,5 +37,12 @@ type Config struct {
 	Rate            int
 	Duration        time.Duration
 	UseMillis       bool
+	QueueDurability      AmqpDurabilityMode
 	Amqp            AmqpOptions
+}
+
+func NewConfig() Config {
+	return Config{
+		QueueDurability: Configuration,
+	}
 }
