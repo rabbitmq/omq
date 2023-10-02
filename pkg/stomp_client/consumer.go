@@ -32,7 +32,7 @@ func NewConsumer(cfg config.Config, id int) *StompConsumer {
 		return nil
 	}
 
-	topic := topic.CalculateTopic(cfg, id)
+	topic := topic.CalculateTopic(cfg.ConsumeFrom, id)
 
 	return &StompConsumer{
 		Id:         id,

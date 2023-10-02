@@ -49,7 +49,7 @@ func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 		durability = amqp.DurabilityUnsettledState
 	}
 
-	topic := topic.CalculateTopic(cfg, n)
+	topic := topic.CalculateTopic(cfg.PublishTo, n)
 	sender, err := session.NewSender(context.TODO(), topic, &amqp.SenderOptions{
 		TargetDurability: durability})
 	if err != nil {

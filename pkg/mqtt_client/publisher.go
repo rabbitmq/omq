@@ -45,7 +45,7 @@ func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 	token = connection.Connect()
 	token.Wait()
 
-	topic := topic.CalculateTopic(cfg, n)
+	topic := topic.CalculateTopic(cfg.PublishTo, n)
 	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix
 	// since MQTT has no concept of exchanges, we need to remove it
 	// this should get more flexible in the future

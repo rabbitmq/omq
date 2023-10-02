@@ -40,7 +40,7 @@ func NewPublisher(cfg config.Config, id int) *StompPublisher {
 	}
 	log.Info("publisher connected", "protocol", "STOMP", "publisherId", id)
 
-	topic := topic.CalculateTopic(cfg, id)
+	topic := topic.CalculateTopic(cfg.PublishTo, id)
 
 	return &StompPublisher{
 		Id:         id,

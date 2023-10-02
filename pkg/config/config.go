@@ -36,8 +36,8 @@ type Config struct {
 	Consumers       int
 	PublishCount    int
 	ConsumeCount    int
-	QueueNamePrefix string
-	QueueCount      int
+	PublishTo       string
+	ConsumeFrom     string
 	Size            int
 	Rate            int
 	Duration        time.Duration

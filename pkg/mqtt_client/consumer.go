@@ -41,7 +41,7 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 	token = c.Connect()
 	token.Wait()
 
-	topic := topic.CalculateTopic(cfg, id)
+	topic := topic.CalculateTopic(cfg.ConsumeFrom, id)
 	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
 	topic = strings.TrimPrefix(topic, "/topic/")
 

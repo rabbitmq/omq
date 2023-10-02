@@ -36,8 +36,7 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 		return nil
 	}
 
-	// calculate what queue to subscribe to
-	topic := topic.CalculateTopic(cfg, id)
+	topic := topic.CalculateTopic(cfg.ConsumeFrom, id)
 
 	return &Amqp10Consumer{
 		Id:      id,
