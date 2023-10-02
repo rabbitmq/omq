@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rabbitmq/omq/pkg/metrics"
@@ -52,7 +53,7 @@ func TestPublishConsume(t *testing.T) {
 			consumeProtoLabel = tc.consume
 		}
 		rootCmd := RootCmd()
-		args := []string{tc.publish + "-" + tc.consume, "-z", "3s", "-C", "1", "-D", "1", "-q", tc.publish + tc.consume}
+		args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-q", tc.publish + tc.consume}
 		rootCmd.SetArgs(args)
 		fmt.Println("Running test: omq", strings.Join(args, " "))
 		publishedBefore := testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel))
@@ -61,7 +62,12 @@ func TestPublishConsume(t *testing.T) {
 		err := rootCmd.Execute()
 
 		assert.Nil(t, err)
-		assert.Equal(t, publishedBefore+1, testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel)))
-		assert.Equal(t, consumedBefore+1, testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel)))
+		assert.Eventually(t, func() bool {
+			return testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel)) == publishedBefore+1
+
+		}, 10*time.Second, 100*time.Millisecond)
+		assert.Eventually(t, func() bool {
+			return testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel)) == consumedBefore+1
+		}, 10*time.Second, 100*time.Millisecond)
 	}
 }
