@@ -37,7 +37,7 @@ type Config struct {
 	Rate            int
 	Duration        time.Duration
 	UseMillis       bool
-	QueueDurability      AmqpDurabilityMode
+	QueueDurability AmqpDurabilityMode
 	Amqp            AmqpOptions
 }
 

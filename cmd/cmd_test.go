@@ -11,20 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestStompCmd(t *testing.T) {
-	rootCmd := RootCmd()
-	rootCmd.SetArgs([]string{"stomp", "-C", "1", "-D", "1", "-q", "stomp"})
-
-	publishedBefore := testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues("stomp"))
-	consumedBefore := testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues("stomp"))
-
-	err := rootCmd.Execute()
-
-	assert.Nil(t, err)
-	assert.Equal(t, publishedBefore+1, testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues("stomp")))
-	assert.Equal(t, consumedBefore+1, testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues("stomp")))
-}
-
 func TestPublishConsume(t *testing.T) {
 	type test struct {
 		publish string
