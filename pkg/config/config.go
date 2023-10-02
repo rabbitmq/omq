@@ -24,6 +24,10 @@ type AmqpOptions struct {
 	ConsumerCredits int
 }
 
+type MqttOptions struct {
+	QoS int
+}
+
 type Config struct {
 	PublisherUri    string
 	ConsumerUri     string
@@ -39,6 +43,7 @@ type Config struct {
 	UseMillis       bool
 	QueueDurability AmqpDurabilityMode
 	Amqp            AmqpOptions
+	Mqtt            MqttOptions
 }
 
 func NewConfig() Config {

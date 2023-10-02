@@ -66,7 +66,7 @@ func (c MqttConsumer) Start(subscribed chan bool) {
 	}
 
 	close(subscribed)
-	token := c.Connection.Subscribe(c.Topic, 1, handler)
+	token := c.Connection.Subscribe(c.Topic, byte(c.Config.Mqtt.QoS), handler)
 	token.Wait()
 	if token.Error() != nil {
 		log.Error("failed to subscribe", "protocol", "MQTT", "publisherc.Id", c.Id, "error", token.Error())

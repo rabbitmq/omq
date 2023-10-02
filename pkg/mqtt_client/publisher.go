@@ -108,7 +108,7 @@ func (p MqttPublisher) StartRateLimited() {
 func (p MqttPublisher) Send() {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "mqtt"}))
-	token := p.Connection.Publish(p.Topic, 1, false, p.msg)
+	token := p.Connection.Publish(p.Topic, byte(p.Config.Mqtt.QoS), false, p.msg)
 	token.Wait()
 	timer.ObserveDuration()
 	if token.Error() != nil {

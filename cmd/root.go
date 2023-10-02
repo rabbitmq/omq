@@ -64,6 +64,7 @@ func RootCmd() *cobra.Command {
 			start(cfg, common.AMQP, common.MQTT)
 		},
 	}
+	amqp_mqtt.Flags().IntVarP(&cfg.Mqtt.QoS, "mqtt-qos", "", 1, "MQTT QoS level (0, 1 or 2, default=1)")
 
 	stomp_stomp = &cobra.Command{
 		Use:     "stomp-stomp",
@@ -87,6 +88,7 @@ func RootCmd() *cobra.Command {
 			start(cfg, common.STOMP, common.MQTT)
 		},
 	}
+	stomp_mqtt.Flags().IntVarP(&cfg.Mqtt.QoS, "mqtt-qos", "", 1, "MQTT QoS level (0, 1 or 2, default=1)")
 
 	mqtt_mqtt = &cobra.Command{
 		Use:     "mqtt-mqtt",
@@ -95,6 +97,7 @@ func RootCmd() *cobra.Command {
 			start(cfg, common.MQTT, common.MQTT)
 		},
 	}
+	mqtt_mqtt.Flags().IntVarP(&cfg.Mqtt.QoS, "mqtt-qos", "", 1, "MQTT QoS level (0, 1 or 2, default=1)")
 
 	mqtt_amqp = &cobra.Command{
 		Use: "mqtt-amqp",
@@ -103,6 +106,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	mqtt_amqp.Flags().IntVarP(&cfg.Amqp.ConsumerCredits, "amqp-consumer-credits", "", 1, "AMQP 1.0 consumer credits")
+	mqtt_amqp.Flags().IntVarP(&cfg.Mqtt.QoS, "mqtt-qos", "", 1, "MQTT QoS level (0, 1 or 2, default=1)")
 
 	mqtt_stomp = &cobra.Command{
 		Use: "mqtt-stomp",
@@ -110,6 +114,7 @@ func RootCmd() *cobra.Command {
 			start(cfg, common.MQTT, common.STOMP)
 		},
 	}
+	mqtt_stomp.Flags().IntVarP(&cfg.Mqtt.QoS, "mqtt-qos", "", 1, "MQTT QoS level (0, 1 or 2, default=1)")
 
 	versionCmd = &cobra.Command{
 		Use: "version",
