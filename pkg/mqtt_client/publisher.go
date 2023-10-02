@@ -3,6 +3,7 @@ package mqtt_client
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -45,6 +46,7 @@ func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 
 	// topic := fmt.Sprintf("%s-%d", cfg.QueueNamePrefix, ((n-1)%cfg.QueueCount)+1)
 	topic := topic.CalculateTopic(cfg, n)
+	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
 
 	return &MqttPublisher{
 		Id:         n,

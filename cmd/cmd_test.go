@@ -20,10 +20,13 @@ func TestPublishConsume(t *testing.T) {
 	tests := []test{
 		{publish: "stomp", consume: "stomp"},
 		{publish: "stomp", consume: "amqp"},
+		{publish: "stomp", consume: "mqtt"},
 		{publish: "amqp", consume: "amqp"},
 		{publish: "amqp", consume: "stomp"},
+		{publish: "amqp", consume: "mqtt"},
 		{publish: "mqtt", consume: "mqtt"},
-		// TODO MQTT->amqp/stomp
+		{publish: "mqtt", consume: "stomp"},
+		{publish: "mqtt", consume: "amqp"},
 	}
 
 	for _, tc := range tests {
@@ -39,7 +42,7 @@ func TestPublishConsume(t *testing.T) {
 			consumeProtoLabel = tc.consume
 		}
 		rootCmd := RootCmd()
-		args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-q", tc.publish + tc.consume}
+		args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-q", "/exchange/amq.topic/" + tc.publish + tc.consume}
 		rootCmd.SetArgs(args)
 		fmt.Println("Running test: omq", strings.Join(args, " "))
 		publishedBefore := testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel))

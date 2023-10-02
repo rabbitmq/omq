@@ -2,6 +2,7 @@ package mqtt_client
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -41,6 +42,7 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 	token.Wait()
 
 	topic := topic.CalculateTopic(cfg, id)
+	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
 
 	return &MqttConsumer{
 		Id:         id,
