@@ -35,6 +35,7 @@ func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 		SetPassword("guest").
 		SetClientID(fmt.Sprintf("omq-pub-%d", n)).
 		SetAutoReconnect(true).
+		SetCleanSession(cfg.MqttPublisher.CleanSession).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
 			log.Info("connection lost", "protocol", "MQTT", "publisherId", n)
 		}).
@@ -44,9 +45,12 @@ func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 	token = connection.Connect()
 	token.Wait()
 
-	// topic := fmt.Sprintf("%s-%d", cfg.QueueNamePrefix, ((n-1)%cfg.QueueCount)+1)
 	topic := topic.CalculateTopic(cfg, n)
+	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix
+	// since MQTT has no concept of exchanges, we need to remove it
+	// this should get more flexible in the future
 	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
+	topic = strings.TrimPrefix(topic, "/topic/")
 
 	return &MqttPublisher{
 		Id:         n,
@@ -72,6 +76,7 @@ func (p MqttPublisher) Start() {
 }
 
 func (p MqttPublisher) StartFullSpeed() {
+	defer p.Connection.Disconnect(250)
 	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
 	for i := 1; i <= p.Config.PublishCount; i++ {
 		p.Send()
@@ -108,7 +113,7 @@ func (p MqttPublisher) StartRateLimited() {
 func (p MqttPublisher) Send() {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "mqtt"}))
-	token := p.Connection.Publish(p.Topic, byte(p.Config.Mqtt.QoS), false, p.msg)
+	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), false, p.msg)
 	token.Wait()
 	timer.ObserveDuration()
 	if token.Error() != nil {

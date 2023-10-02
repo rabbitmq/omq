@@ -25,7 +25,8 @@ type AmqpOptions struct {
 }
 
 type MqttOptions struct {
-	QoS int
+	QoS          int
+	CleanSession bool
 }
 
 type Config struct {
@@ -43,7 +44,8 @@ type Config struct {
 	UseMillis       bool
 	QueueDurability AmqpDurabilityMode
 	Amqp            AmqpOptions
-	Mqtt            MqttOptions
+	MqttPublisher   MqttOptions
+	MqttConsumer    MqttOptions
 }
 
 func NewConfig() Config {

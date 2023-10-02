@@ -30,7 +30,7 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 		SetPassword("guest").
 		SetClientID(fmt.Sprintf("omq-sub-%d", id)).
 		SetAutoReconnect(true).
-		SetCleanSession(false).
+		SetCleanSession(cfg.MqttConsumer.CleanSession).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
 			log.Info("connection lost", "protocol", "MQTT", "consumerId", id)
 		}).
@@ -43,6 +43,7 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 
 	topic := topic.CalculateTopic(cfg, id)
 	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
+	topic = strings.TrimPrefix(topic, "/topic/")
 
 	return &MqttConsumer{
 		Id:         id,
@@ -66,13 +67,14 @@ func (c MqttConsumer) Start(subscribed chan bool) {
 	}
 
 	close(subscribed)
-	token := c.Connection.Subscribe(c.Topic, byte(c.Config.Mqtt.QoS), handler)
+	token := c.Connection.Subscribe(c.Topic, byte(c.Config.MqttConsumer.QoS), handler)
 	token.Wait()
 	if token.Error() != nil {
 		log.Error("failed to subscribe", "protocol", "MQTT", "publisherc.Id", c.Id, "error", token.Error())
 	}
 	log.Info("consumer started", "protocol", "MQTT", "publisherc.Id", c.Id, "c.Topic", c.Topic)
 
+	defer c.Connection.Disconnect(250)
 	for {
 		time.Sleep(1 * time.Second)
 		if msgsReceived >= c.Config.ConsumeCount {
