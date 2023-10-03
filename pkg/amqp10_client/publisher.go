@@ -70,7 +70,7 @@ func (p Amqp10Publisher) Start() {
 	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
 
-	p.msg = utils.MessageBody(p.Config)
+	p.msg = utils.MessageBody(p.Config.Size)
 
 	if p.Config.Rate == -1 {
 		p.StartFullSpeed()

@@ -3,12 +3,10 @@ package utils
 import (
 	"encoding/binary"
 	"time"
-
-	config "github.com/rabbitmq/omq/pkg/config"
 )
 
-func MessageBody(cfg config.Config) []byte {
-	b := make([]byte, cfg.Size)
+func MessageBody(size int) []byte {
+	b := make([]byte,size)
 	binary.BigEndian.PutUint32(b[0:], uint32(1234)) // currently unused, for compatibility with perf-test
 	return b
 }
@@ -22,14 +20,14 @@ func UpdatePayload(useMillis bool, payload *[]byte) *[]byte {
 	return payload
 }
 
-func CalculateEndToEndLatency(useMs bool, payload *[]byte) float64 {
+func CalculateEndToEndLatency(useMillis bool, payload *[]byte) float64 {
 	if len(*payload) < 12 {
 		// message sent without latency tracking
 		return 0
 	}
 	timeSent := binary.BigEndian.Uint64((*payload)[4:])
 
-	if useMs {
+	if useMillis {
 		// less precise but necessary when a different process publishes and consumes
 		now := uint64(time.Now().UnixMilli())
 		latency := now - timeSent

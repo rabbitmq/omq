@@ -8,6 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rabbitmq/omq/pkg/metrics"
+	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -61,4 +62,24 @@ func TestPublishConsume(t *testing.T) {
 			return testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel)) == consumedBefore+1
 		}, 2*time.Second, 100*time.Millisecond)
 	}
+}
+
+func TestLatencyCalculationNano(t *testing.T) {
+	testMsg := utils.MessageBody(100)
+	utils.UpdatePayload(false, &testMsg)
+	time.Sleep(1 * time.Microsecond)
+	latency := utils.CalculateEndToEndLatency(false, &testMsg)
+	// not very precise but we just care about the order of magnitude
+	assert.Greater(t, latency, 0.000001)
+	assert.Less(t, latency, 0.000100)
+}
+
+func TestLatencyCalculationMillis(t *testing.T) {
+	testMsg := utils.MessageBody(100)
+	utils.UpdatePayload(true, &testMsg)
+	time.Sleep(2 * time.Millisecond)
+	latency := utils.CalculateEndToEndLatency(true, &testMsg)
+	// not very precise but we just care about the order of magnitude
+	assert.Greater(t, latency, 0.001)
+	assert.Less(t, latency, 0.010)
 }
