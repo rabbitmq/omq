@@ -72,6 +72,6 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
   -r, --rate int                            Messages per second (-1 for unlimited; default=-1)
   -s, --size int                            Message payload size in bytes (default 12)
   -m, --use-millis                          Use milliseconds for timestamps (automatically enabled when no publishers or no consumers)
-  -z, --duration duration                   Duration (eg. 10s, 5m, 2h)
+  -z, --time duration                       Run duration (eg. 10s, 5m, 2h)
   -h, --help                                help for omq
 ```
