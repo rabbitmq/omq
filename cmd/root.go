@@ -18,6 +18,7 @@ import (
 	"github.com/thediveo/enumflag/v2"
 )
 
+var cfg config.Config
 var (
 	amqp_amqp   = &cobra.Command{}
 	amqp_stomp  = &cobra.Command{}
@@ -40,7 +41,7 @@ func Execute() {
 }
 
 func RootCmd() *cobra.Command {
-	cfg := config.NewConfig()
+	cfg = config.NewConfig()
 
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",

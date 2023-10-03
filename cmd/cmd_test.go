@@ -83,3 +83,27 @@ func TestLatencyCalculationMillis(t *testing.T) {
 	assert.Greater(t, latency, 0.001)
 	assert.Less(t, latency, 0.010)
 }
+
+func TestAutoUseMillis(t *testing.T) {
+	// by default, use-millis is false
+	args := []string{"amqp", "-C", "1", "-D", "1"}
+	rootCmd := RootCmd()
+	rootCmd.SetArgs(args)
+	_ = rootCmd.Execute()
+	assert.Equal(t, cfg.UseMillis, false)
+
+	// if -x 0, use-millis is true
+	args = []string{"amqp", "-x", "0", "-D", "0"}
+	rootCmd = RootCmd()
+	rootCmd.SetArgs(args)
+	_ = rootCmd.Execute()
+	assert.Equal(t, cfg.UseMillis, true)
+
+	// if -y 0, use-millis is true
+	args = []string{"amqp", "-y", "0", "-C", "0"}
+	rootCmd = RootCmd()
+	rootCmd.SetArgs(args)
+	_ = rootCmd.Execute()
+	assert.Equal(t, cfg.UseMillis, true)
+
+}
