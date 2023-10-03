@@ -29,6 +29,20 @@ and `mqtt` instead of `mqtt-mqtt`.
 go install github.com/rabbitmq/omq@main
 ```
 
+### Terminus/Topic/Queue/Routing Key
+
+Different protocols refer to the targets / sources of messages differently and RabbitMQ handles each protocols differently as well.
+
+`--publish-to` (or `-t`) refers to where to publish the messages - it is passed as-is to the publisher, except for MQTT (see below)
+`--consume-from` (or `-T`) refers to where to consume the messages from - it is passed as-is to the consumer, except for MQTT (see below)
+
+For convenience, if either `--publish-to` or `--consume-from` starts with `/exchange/amq.topic/` or `/topic/`, MQTT publisher/consumer
+will remove that prefix. RabbitMQ only allows using a single topic exchange with MQTT (`amq.topic` by default), so this prefix doesn't make
+much sense. Removing it makes it easier to use the same parameters across protocols - for example unit tests run all protocol combinations
+with `--publish-to /topic/<protocol1><protocol2> --consume-from /topic/<protocol1><protocol2>`, which wouldn't work with MQTT without
+this special handling ("/topic/" would be a part of the topic/binding key).
+
+
 ### Metrics
 
 `omq` exposes Prometheus metrics on port 8080 or the next available port if 8080 is in use (so 8081, 8082 and so on). This makes it easy to run multiple
