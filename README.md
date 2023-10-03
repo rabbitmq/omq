@@ -45,6 +45,8 @@ Sample Prometheus scrape config:
         - localhost:8082
 ```
 
+You can find [a simple dashboard](./dashboard/OMQ-Grafana.json) in this repo.
+
 Additionally, the final values of the metrics are printed when `omq` finishes. A nicer output or TUI will be available at some point.
 
 ### Comaptibility with perf-test
