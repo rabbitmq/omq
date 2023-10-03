@@ -66,6 +66,8 @@ func (p MqttPublisher) Start() {
 	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
 
+	defer p.Connection.Disconnect(250)
+
 	p.msg = utils.MessageBody(p.Config)
 
 	if p.Config.Rate == -1 {
@@ -76,7 +78,6 @@ func (p MqttPublisher) Start() {
 }
 
 func (p MqttPublisher) StartFullSpeed() {
-	defer p.Connection.Disconnect(250)
 	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
 	for i := 1; i <= p.Config.PublishCount; i++ {
 		p.Send()
