@@ -22,13 +22,22 @@ func UpdatePayload(useMillis bool, payload *[]byte) *[]byte {
 	return payload
 }
 
-func CalculateEndToEndLatency(payload *[]byte) float64 {
+func CalculateEndToEndLatency(useMs bool, payload *[]byte) float64 {
 	if len(*payload) < 12 {
 		// message sent without latency tracking
 		return 0
 	}
 	timeSent := binary.BigEndian.Uint64((*payload)[4:])
-	now := uint64(time.Now().UnixNano())
-	latency := now - timeSent
-	return (float64(latency) / 1000000000)
+
+	if useMs {
+		// less precise but necessary when a different process publishes and consumes
+		now := uint64(time.Now().UnixMilli())
+		latency := now - timeSent
+		return (float64(latency) / 1000)
+	} else {
+		// nanoseconds - more precise when the same process publishes and consumes
+		now := uint64(time.Now().UnixNano())
+		latency := now - timeSent
+		return (float64(latency) / 1000000000)
+	}
 }

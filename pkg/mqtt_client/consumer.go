@@ -61,7 +61,7 @@ func (c MqttConsumer) Start(subscribed chan bool) {
 	handler := func(client mqtt.Client, msg mqtt.Message) {
 		metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "mqtt"}).Inc()
 		payload := msg.Payload()
-		m.Observe(utils.CalculateEndToEndLatency(&payload))
+		m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
 		msgsReceived++
 		log.Debug("message received", "protocol", "MQTT", "subscriberc.Id", c.Id, "topic", c.Topic, "size", len(payload))
 	}

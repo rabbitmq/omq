@@ -137,6 +137,11 @@ func RootCmd() *cobra.Command {
 				os.Exit(1)
 			}
 			setUris(&cfg, cmd.Use)
+
+			// nanoseconds shouldn't be used across processes
+			if cfg.Publishers == 0 || cfg.Consumers == 0 {
+				cfg.UseMillis = true
+			}
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")

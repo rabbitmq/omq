@@ -77,7 +77,7 @@ func (c Amqp10Consumer) Start(subscribed chan bool) {
 		}
 
 		payload := msg.GetData()
-		m.Observe(utils.CalculateEndToEndLatency(&payload))
+		m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
 
 		log.Debug("message received", "protocol", "amqp-1.0", "subscriberId", c.Id, "terminus", c.Topic, "size", len(payload))
 

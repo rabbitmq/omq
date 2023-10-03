@@ -64,7 +64,7 @@ func (c StompConsumer) Start(subscribed chan bool) {
 			log.Error("failed to receive a message", "protocol", "STOMP", "subscriberId", c.Id, "c.Topic", c.Topic, "error", msg.Err)
 			return
 		}
-		m.Observe(utils.CalculateEndToEndLatency(&msg.Body))
+		m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &msg.Body))
 		log.Debug("message received", "protocol", "stomp", "subscriberId", c.Id, "destination", c.Topic, "size", len(msg.Body), "ack required", msg.ShouldAck())
 
 		err = c.Connection.Ack(msg)
