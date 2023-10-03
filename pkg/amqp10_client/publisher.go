@@ -116,8 +116,11 @@ func (p Amqp10Publisher) StartRateLimited() {
 
 func (p Amqp10Publisher) Send() {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
+	msg := amqp.NewMessage(p.msg)
+	msg.Header = &amqp.MessageHeader{
+		Durable: p.Config.MessageDurability}
 	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "amqp-1.0"}))
-	err := p.Sender.Send(context.TODO(), amqp.NewMessage(p.msg), nil)
+	err := p.Sender.Send(context.TODO(), msg, nil)
 	timer.ObserveDuration()
 	if err != nil {
 		log.Error("message sending failure", "protocol", "amqp-1.0", "publisherId", p.Id, "error", err.Error())

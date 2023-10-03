@@ -101,8 +101,15 @@ func (p StompPublisher) StartRateLimited() {
 
 func (p StompPublisher) Send() {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
+	var msgDurability string
+	if p.Config.MessageDurability {
+		msgDurability = "true"
+	} else {
+		msgDurability = "false"
+	}
+
 	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "stomp"}))
-	err := p.Connection.Send(p.Topic, "", p.msg, stomp.SendOpt.Receipt, stomp.SendOpt.Header("persistent", "true"))
+	err := p.Connection.Send(p.Topic, "", p.msg, stomp.SendOpt.Receipt, stomp.SendOpt.Header("persistent", msgDurability))
 	timer.ObserveDuration()
 	if err != nil {
 		log.Error("message sending failure", "protocol", "STOMP", "publisherId", p.Id, "error", err)

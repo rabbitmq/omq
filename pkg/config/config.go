@@ -43,6 +43,7 @@ type Config struct {
 	Duration        time.Duration
 	UseMillis       bool
 	QueueDurability AmqpDurabilityMode
+	MessageDurability bool
 	Amqp            AmqpOptions
 	MqttPublisher   MqttOptions
 	MqttConsumer    MqttOptions

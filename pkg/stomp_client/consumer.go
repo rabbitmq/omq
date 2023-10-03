@@ -43,7 +43,13 @@ func NewConsumer(cfg config.Config, id int) *StompConsumer {
 }
 
 func (c StompConsumer) Start(subscribed chan bool) {
-	sub, err := c.Connection.Subscribe(c.Topic, stomp.AckClient)
+	var sub *stomp.Subscription
+	var err error
+	if c.Config.QueueDurability == config.None {
+		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient)
+	} else {
+		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, stomp.SubscribeOpt.Header("durable", "true"), stomp.SubscribeOpt.Header("auto-delete", "false"))
+	}
 	if err != nil {
 		log.Error("subscription failed", "protocol", "STOMP", "consumerId", c.Id, "queue", c.Topic, "error", err.Error())
 		return
