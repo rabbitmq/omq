@@ -22,6 +22,7 @@ var AmqpDurabilityModes = map[AmqpDurabilityMode][]string{
 
 type AmqpOptions struct {
 	ConsumerCredits int
+	Subject string
 }
 
 type MqttOptions struct {
@@ -30,23 +31,23 @@ type MqttOptions struct {
 }
 
 type Config struct {
-	PublisherUri    string
-	ConsumerUri     string
-	Publishers      int
-	Consumers       int
-	PublishCount    int
-	ConsumeCount    int
-	PublishTo       string
-	ConsumeFrom     string
-	Size            int
-	Rate            int
-	Duration        time.Duration
-	UseMillis       bool
-	QueueDurability AmqpDurabilityMode
+	PublisherUri      string
+	ConsumerUri       string
+	Publishers        int
+	Consumers         int
+	PublishCount      int
+	ConsumeCount      int
+	PublishTo         string
+	ConsumeFrom       string
+	Size              int
+	Rate              int
+	Duration          time.Duration
+	UseMillis         bool
+	QueueDurability   AmqpDurabilityMode
 	MessageDurability bool
-	Amqp            AmqpOptions
-	MqttPublisher   MqttOptions
-	MqttConsumer    MqttOptions
+	Amqp              AmqpOptions
+	MqttPublisher     MqttOptions
+	MqttConsumer      MqttOptions
 }
 
 func NewConfig() Config {

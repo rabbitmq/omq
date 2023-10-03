@@ -117,6 +117,9 @@ func (p Amqp10Publisher) StartRateLimited() {
 func (p Amqp10Publisher) Send() {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	msg := amqp.NewMessage(p.msg)
+	if p.Config.Amqp.Subject != "" {
+		msg.Properties = &amqp.MessageProperties{Subject: &p.Config.Amqp.Subject}
+	}
 	msg.Header = &amqp.MessageHeader{
 		Durable: p.Config.MessageDurability}
 	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "amqp-1.0"}))
