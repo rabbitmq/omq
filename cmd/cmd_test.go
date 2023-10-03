@@ -44,7 +44,7 @@ func TestPublishConsume(t *testing.T) {
 		rootCmd := RootCmd()
 
 		topic := "/topic/" + tc.publish + tc.consume
-		args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-q", topic, "-Q", topic}
+		args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-t", topic, "-T", topic}
 		rootCmd.SetArgs(args)
 		fmt.Println("Running test: omq", strings.Join(args, " "))
 		publishedBefore := testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel))
