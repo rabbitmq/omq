@@ -29,10 +29,6 @@ type StompPublisher struct {
 }
 
 func NewPublisher(cfg config.Config, id int) *StompPublisher {
-	// sleep random interval to avoid all publishers publishing at exactly the same time
-	s := rand.Intn(cfg.Publishers)
-	time.Sleep(time.Duration(s) * time.Millisecond)
-
 	conn, err := stomp.Dial("tcp", cfg.PublisherUri, opts...)
 	if err != nil {
 		log.Error("publisher connection failed", "protocol", "STOMP", "publisherId", id, "error", err.Error())
