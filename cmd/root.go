@@ -188,11 +188,15 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-c
-		cancel()
-		println("Received SIGTERM, shutting down...")
-		time.Sleep(500 * time.Millisecond)
-		shutdown()
+		select {
+		case <-c:
+			cancel()
+			println("Received SIGTERM, shutting down...")
+			time.Sleep(500 * time.Millisecond)
+			shutdown()
+		case <-ctx.Done():
+			return
+		}
 	}()
 
 	if cfg.Consumers > 0 {
