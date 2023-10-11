@@ -76,7 +76,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 	log.Info("consumer started", "protocol", "mqtt", "consumerId", c.Id, "c.Topic", c.Topic)
 
 	// TODO: currently we can consume more than ConsumerCount messages
-	for msgsReceived <= c.Config.ConsumeCount {
+	for msgsReceived < c.Config.ConsumeCount {
 		select {
 		case <-ctx.Done():
 			c.Stop("time limit reached")
