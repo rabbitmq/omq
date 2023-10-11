@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/rabbitmq/omq/pkg/amqp10_client"
@@ -10,11 +11,11 @@ import (
 )
 
 type Publisher interface {
-	Start()
+	Start(context.Context)
 }
 
 type Consumer interface {
-	Start(chan bool)
+	Start(context.Context, chan bool)
 }
 
 type Protocol int

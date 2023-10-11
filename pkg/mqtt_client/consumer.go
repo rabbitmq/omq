@@ -1,6 +1,7 @@
 package mqtt_client
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -32,7 +33,7 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 		SetAutoReconnect(true).
 		SetCleanSession(cfg.MqttConsumer.CleanSession).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			log.Info("connection lost", "protocol", "MQTT", "consumerId", id)
+			log.Info("connection lost", "protocol", "mqtt", "consumerId", id)
 		}).
 		SetProtocolVersion(4)
 
@@ -53,7 +54,7 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 	}
 }
 
-func (c MqttConsumer) Start(subscribed chan bool) {
+func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 	m := metrics.EndToEndLatency.With(prometheus.Labels{"protocol": "mqtt"})
 
 	msgsReceived := 0
@@ -63,23 +64,32 @@ func (c MqttConsumer) Start(subscribed chan bool) {
 		payload := msg.Payload()
 		m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
 		msgsReceived++
-		log.Debug("message received", "protocol", "MQTT", "subscriberc.Id", c.Id, "topic", c.Topic, "size", len(payload))
+		log.Debug("message received", "protocol", "mqtt", "consumerId", c.Id, "topic", c.Topic, "size", len(payload))
 	}
 
 	close(subscribed)
 	token := c.Connection.Subscribe(c.Topic, byte(c.Config.MqttConsumer.QoS), handler)
 	token.Wait()
 	if token.Error() != nil {
-		log.Error("failed to subscribe", "protocol", "MQTT", "publisherc.Id", c.Id, "error", token.Error())
+		log.Error("failed to subscribe", "protocol", "mqtt", "consumerId", c.Id, "error", token.Error())
 	}
-	log.Info("consumer started", "protocol", "MQTT", "publisherc.Id", c.Id, "c.Topic", c.Topic)
+	log.Info("consumer started", "protocol", "mqtt", "consumerId", c.Id, "c.Topic", c.Topic)
 
-	defer c.Connection.Disconnect(250)
-	for {
-		time.Sleep(1 * time.Second)
-		if msgsReceived >= c.Config.ConsumeCount {
-			break
+	// TODO: currently we can consume more than ConsumerCount messages
+	for msgsReceived <= c.Config.ConsumeCount {
+		select {
+		case <-ctx.Done():
+			c.Stop("time limit reached")
+			return
+		default:
+			time.Sleep(1 * time.Second)
+
 		}
 	}
-	log.Debug("consumer finished", "protocol", "MQTT", "publisherc.Id", c.Id)
+	c.Stop("message count reached")
+}
+
+func (c MqttConsumer) Stop(reason string) {
+	log.Debug("closing connection", "protocol", "mqtt", "consumerId", c.Id, "reason", reason)
+	c.Connection.Disconnect(250)
 }

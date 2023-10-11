@@ -1,6 +1,7 @@
 package mqtt_client
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -61,7 +62,7 @@ func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 
 }
 
-func (p MqttPublisher) Start() {
+func (p MqttPublisher) Start(ctx context.Context) {
 	// sleep random interval to avoid all publishers publishing at the same time
 	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
@@ -71,42 +72,43 @@ func (p MqttPublisher) Start() {
 	p.msg = utils.MessageBody(p.Config.Size)
 
 	if p.Config.Rate == -1 {
-		p.StartFullSpeed()
+		p.StartFullSpeed(ctx)
 	} else {
-		p.StartRateLimited()
+		p.StartRateLimited(ctx)
 	}
-}
-
-func (p MqttPublisher) StartFullSpeed() {
-	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
-	for i := 1; i <= p.Config.PublishCount; i++ {
-		p.Send()
-	}
-
 	log.Debug("publisher stopped", "protocol", "MQTT", "publisherId", p.Id)
 }
 
-func (p MqttPublisher) StartRateLimited() {
+func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
+	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
+
+	for i := 1; i <= p.Config.PublishCount; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			p.Send()
+		}
+	}
+}
+
+func (p MqttPublisher) StartRateLimited(ctx context.Context) {
 	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
-	done := make(chan bool)
 
-	msgsSent := 0
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				p.Send()
-				msgsSent++
-			}
-		}
-	}()
+	msgSent := 0
 	for {
-		time.Sleep(1 * time.Second)
-		if msgsSent >= p.Config.PublishCount {
-			break
+		select {
+		case <-ctx.Done():
+			p.Stop("time limit reached")
+			return
+		case <-ticker.C:
+			p.Send()
+			msgSent++
+			if msgSent >= p.Config.PublishCount {
+				p.Stop("publish count reached")
+				return
+			}
 		}
 	}
 }
@@ -122,4 +124,9 @@ func (p MqttPublisher) Send() {
 	}
 	log.Debug("message sent", "protocol", "MQTT", "publisherId", p.Id)
 	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "mqtt"}).Inc()
+}
+
+func (p MqttPublisher) Stop(reason string) {
+	log.Debug("closing connection", "protocol", "mqtt", "publisherId", p.Id, "reason", reason)
+	p.Connection.Disconnect(250)
 }

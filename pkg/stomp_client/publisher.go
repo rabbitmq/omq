@@ -1,6 +1,7 @@
 package stomp_client
 
 import (
+	"context"
 	"math/rand"
 	"time"
 
@@ -46,7 +47,7 @@ func NewPublisher(cfg config.Config, id int) *StompPublisher {
 	}
 }
 
-func (p StompPublisher) Start() {
+func (p StompPublisher) Start(ctx context.Context) {
 	// sleep random interval to avoid all publishers publishing at the same time
 	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
@@ -54,43 +55,43 @@ func (p StompPublisher) Start() {
 	p.msg = utils.MessageBody(p.Config.Size)
 
 	if p.Config.Rate == -1 {
-		p.StartFullSpeed()
+		p.StartFullSpeed(ctx)
 	} else {
-		p.StartRateLimited()
+		p.StartRateLimited(ctx)
 	}
 }
 
-func (p StompPublisher) StartFullSpeed() {
+func (p StompPublisher) StartFullSpeed(ctx context.Context) {
 	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
 
 	for i := 1; i <= p.Config.PublishCount; i++ {
-		p.Send()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			p.Send()
+		}
 	}
-
-	log.Debug("publisher finished", "publisherId", p.Id)
+	log.Debug("publisher completed", "protocol", "stomp", "publisherId", p.Id)
 }
 
-func (p StompPublisher) StartRateLimited() {
+func (p StompPublisher) StartRateLimited(ctx context.Context) {
 	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
-	done := make(chan bool)
 
-	msgsSent := 0
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				p.Send()
-				msgsSent++
-			}
-		}
-	}()
+	msgSent := 0
 	for {
-		time.Sleep(1 * time.Second)
-		if msgsSent >= p.Config.PublishCount {
-			break
+		select {
+		case <-ctx.Done():
+			p.Stop("time limit reached")
+			return
+		case <-ticker.C:
+			p.Send()
+			msgSent++
+			if msgSent >= p.Config.PublishCount {
+				p.Stop("publish count reached")
+				return
+			}
 		}
 	}
 }
@@ -114,4 +115,9 @@ func (p StompPublisher) Send() {
 	log.Debug("message sent", "protocol", "STOMP", "publisherId", p.Id, "destination", p.Topic)
 
 	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "stomp"}).Inc()
+}
+
+func (p StompPublisher) Stop(reason string) {
+	log.Debug("closing connection", "protocol", "stomp", "publisherId", p.Id, "reason", reason)
+	_ = p.Connection.Disconnect()
 }

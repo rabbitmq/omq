@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
@@ -12,6 +14,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
+	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/version"
 
 	"github.com/spf13/cobra"
@@ -178,12 +181,19 @@ func RootCmd() *cobra.Command {
 func start(cfg config.Config, publisherProto common.Protocol, consumerProto common.Protocol) {
 	var wg sync.WaitGroup
 
-	if cfg.Duration > 0 {
-		go func() {
-			time.Sleep(cfg.Duration)
-			_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-		}()
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// handle ^C
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		cancel()
+		println("Received SIGTERM, shutting down...")
+		time.Sleep(500 * time.Millisecond)
+		shutdown()
+	}()
 
 	if cfg.Consumers > 0 {
 		for i := 1; i <= cfg.Consumers; i++ {
@@ -197,7 +207,7 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 					log.Error("Error creating consumer: ", "error", err)
 					os.Exit(1)
 				}
-				c.Start(subscribed)
+				c.Start(ctx, subscribed)
 			}()
 
 			// wait until we know the receiver has subscribed
@@ -216,11 +226,16 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 					log.Error("Error creating publisher: ", "error", err)
 					os.Exit(1)
 				}
-				p.Start()
+				p.Start(ctx)
 			}()
 		}
 	}
 
+	if cfg.Duration > 0 {
+		log.Debug("Will stop all consumers and publishers at " + time.Now().Add(cfg.Duration).String())
+		time.AfterFunc(cfg.Duration, func() { cancel() })
+	}
+	log.Info("Waiting for all publishers and consumers to complete")
 	wg.Wait()
 }
 
@@ -249,4 +264,10 @@ func defaultUri(proto string) string {
 		uri = "localhost:1883"
 	}
 	return uri
+}
+
+func shutdown() {
+	metricsServer := metrics.GetMetricsServer()
+	metricsServer.PrintMetrics()
+	os.Exit(1)
 }

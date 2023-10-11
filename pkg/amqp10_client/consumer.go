@@ -15,10 +15,11 @@ import (
 )
 
 type Amqp10Consumer struct {
-	Id      int
-	Session *amqp.Session
-	Topic   string
-	Config  config.Config
+	Id         int
+	Connection *amqp.Conn
+	Session    *amqp.Session
+	Topic      string
+	Config     config.Config
 }
 
 func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
@@ -39,15 +40,16 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 	topic := topic.CalculateTopic(cfg.ConsumeFrom, id)
 
 	return &Amqp10Consumer{
-		Id:      id,
-		Session: session,
-		Topic:   topic,
-		Config:  cfg,
+		Id:         id,
+		Connection: conn,
+		Session:    session,
+		Topic:      topic,
+		Config:     cfg,
 	}
 
 }
 
-func (c Amqp10Consumer) Start(subscribed chan bool) {
+func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	var durability amqp.Durability
 	switch c.Config.QueueDurability {
 	case config.None:
@@ -63,31 +65,44 @@ func (c Amqp10Consumer) Start(subscribed chan bool) {
 		return
 	}
 	close(subscribed)
-	log.Debug("consumer subscribed", "protocol", "amqp-1.0", "subscriberId", c.Id, "terminus", c.Topic, "durability", durability)
+	log.Debug("consumer subscribed", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "durability", durability)
 
 	m := metrics.EndToEndLatency.With(prometheus.Labels{"protocol": "amqp-1.0"})
 
 	log.Info("consumer started", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 
 	for i := 1; i <= c.Config.ConsumeCount; i++ {
-		msg, err := receiver.Receive(context.TODO(), nil)
-		if err != nil {
-			log.Error("failed to receive a message", "protocol", "amqp-1.0", "subscriberId", c.Id, "terminus", c.Topic)
+		// TODO Receive() is blocking, so cancelling the context won't really stop the consumer
+		select {
+		case <-ctx.Done():
+			c.Stop("time limit reached")
 			return
+		default:
+			msg, err := receiver.Receive(context.TODO(), nil)
+			if err != nil {
+				log.Error("failed to receive a message", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
+				return
+			}
+
+			payload := msg.GetData()
+			m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
+
+			log.Debug("message received", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "size", len(payload))
+
+			err = receiver.AcceptMessage(context.TODO(), msg)
+			if err != nil {
+				log.Error("message NOT accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
+			}
+			metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
+			log.Debug("message accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 		}
-
-		payload := msg.GetData()
-		m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
-
-		log.Debug("message received", "protocol", "amqp-1.0", "subscriberId", c.Id, "terminus", c.Topic, "size", len(payload))
-
-		err = receiver.AcceptMessage(context.TODO(), msg)
-		if err != nil {
-			log.Error("message NOT accepted", "protocol", "amqp-1.0", "subscriberId", c.Id, "terminus", c.Topic)
-		}
-		metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
-		log.Debug("message accepted", "protocol", "amqp-1.0", "subscriberId", c.Id, "terminus", c.Topic)
 	}
 
-	log.Debug("consumer finished", "protocol", "amqp-1.0", "subscriberId", c.Id)
+	c.Stop("message count reached")
+	log.Debug("consumer finished", "protocol", "amqp-1.0", "consumerId", c.Id)
+}
+
+func (c Amqp10Consumer) Stop(reason string) {
+	log.Debug("closing connection", "protocol", "amqp-1.0", "consumerId", c.Id, "reason", reason)
+	_ = c.Connection.Close()
 }

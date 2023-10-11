@@ -17,11 +17,12 @@ import (
 )
 
 type Amqp10Publisher struct {
-	Id     int
-	Sender *amqp.Sender
-	Topic  string
-	Config config.Config
-	msg    []byte
+	Id               int
+	Sender           *amqp.Sender
+	Connectionection *amqp.Conn
+	Topic            string
+	Config           config.Config
+	msg              []byte
 }
 
 func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
@@ -49,8 +50,8 @@ func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 		durability = amqp.DurabilityUnsettledState
 	}
 
-	topic := topic.CalculateTopic(cfg.PublishTo, n)
-	sender, err := session.NewSender(context.TODO(), topic, &amqp.SenderOptions{
+	terminus := topic.CalculateTopic(cfg.PublishTo, n)
+	sender, err := session.NewSender(context.TODO(), terminus, &amqp.SenderOptions{
 		TargetDurability: durability})
 	if err != nil {
 		log.Error("publisher failed to create a sender", "protocol", "amqp-1.0", "publisherId", n, "error", err.Error())
@@ -58,14 +59,15 @@ func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 	}
 
 	return &Amqp10Publisher{
-		Id:     n,
-		Sender: sender,
-		Topic:  topic,
-		Config: cfg,
+		Id:               n,
+		Connectionection: conn,
+		Sender:           sender,
+		Topic:            terminus,
+		Config:           cfg,
 	}
 }
 
-func (p Amqp10Publisher) Start() {
+func (p Amqp10Publisher) Start(ctx context.Context) {
 	// sleep random interval to avoid all publishers publishing at the same time
 	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
@@ -73,43 +75,43 @@ func (p Amqp10Publisher) Start() {
 	p.msg = utils.MessageBody(p.Config.Size)
 
 	if p.Config.Rate == -1 {
-		p.StartFullSpeed()
+		p.StartFullSpeed(ctx)
 	} else {
-		p.StartRateLimited()
+		p.StartRateLimited(ctx)
 	}
+	log.Debug("publisher completed", "protocol", "amqp-1.0", "publisherId", p.Id)
 }
 
-func (p Amqp10Publisher) StartFullSpeed() {
+func (p Amqp10Publisher) StartFullSpeed(ctx context.Context) {
 	log.Info("publisher started", "protocol", "AMQP-1.0", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
 
 	for i := 1; i <= p.Config.PublishCount; i++ {
-		p.Send()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			p.Send()
+		}
 	}
-
-	log.Debug("publisher stopped", "protocol", "amqp-1.0", "publisherId", p.Id)
 }
 
-func (p Amqp10Publisher) StartRateLimited() {
+func (p Amqp10Publisher) StartRateLimited(ctx context.Context) {
 	log.Info("publisher started", "protocol", "AMQP-1.0", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
-	done := make(chan bool)
 
 	msgSent := 0
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				p.Send()
-				msgSent++
-			}
-		}
-	}()
 	for {
-		time.Sleep(1 * time.Second)
-		if msgSent >= p.Config.PublishCount {
-			break
+		select {
+		case <-ctx.Done():
+			p.Stop("time limit reached")
+			return
+		case <-ticker.C:
+			p.Send()
+			msgSent++
+			if msgSent >= p.Config.PublishCount {
+				p.Stop("publish count reached")
+				return
+			}
 		}
 	}
 }
@@ -131,4 +133,9 @@ func (p Amqp10Publisher) Send() {
 	}
 	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
 	log.Debug("message sent", "protocol", "amqp-1.0", "publisherId", p.Id)
+}
+
+func (p Amqp10Publisher) Stop(reason string) {
+	log.Debug("closing connection", "protocol", "amqp-1.0", "publisherId", p.Id, "reason", reason)
+	p.Connectionection.Close()
 }
