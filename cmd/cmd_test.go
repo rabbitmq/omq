@@ -31,36 +31,38 @@ func TestPublishConsume(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		var publishProtoLabel, consumeProtoLabel string
-		if tc.publish == "amqp" {
-			publishProtoLabel = "amqp-1.0"
-		} else {
-			publishProtoLabel = tc.publish
-		}
-		if tc.consume == "amqp" {
-			consumeProtoLabel = "amqp-1.0"
-		} else {
-			consumeProtoLabel = tc.consume
-		}
-		rootCmd := RootCmd()
+		t.Run(tc.publish + "-" + tc.consume, func(t *testing.T) {
+			var publishProtoLabel, consumeProtoLabel string
+			if tc.publish == "amqp" {
+				publishProtoLabel = "amqp-1.0"
+			} else {
+				publishProtoLabel = tc.publish
+			}
+			if tc.consume == "amqp" {
+				consumeProtoLabel = "amqp-1.0"
+			} else {
+				consumeProtoLabel = tc.consume
+			}
+			rootCmd := RootCmd()
 
-		topic := "/topic/" + tc.publish + tc.consume
-		args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-t", topic, "-T", topic}
-		rootCmd.SetArgs(args)
-		fmt.Println("Running test: omq", strings.Join(args, " "))
-		publishedBefore := testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel))
-		consumedBefore := testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel))
+			topic := "/topic/" + tc.publish + tc.consume
+			args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-t", topic, "-T", topic}
+			rootCmd.SetArgs(args)
+			fmt.Println("Running test: omq", strings.Join(args, " "))
+			publishedBefore := testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel))
+			consumedBefore := testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel))
 
-		err := rootCmd.Execute()
+			err := rootCmd.Execute()
 
-		assert.Nil(t, err)
-		assert.Eventually(t, func() bool {
-			return testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel)) == publishedBefore+1
+			assert.Nil(t, err)
+			assert.Eventually(t, func() bool {
+				return testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel)) == publishedBefore+1
 
-		}, 2*time.Second, 100*time.Millisecond)
-		assert.Eventually(t, func() bool {
-			return testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel)) == consumedBefore+1
-		}, 2*time.Second, 100*time.Millisecond)
+			}, 2*time.Second, 100*time.Millisecond)
+			assert.Eventually(t, func() bool {
+				return testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel)) == consumedBefore+1
+			}, 2*time.Second, 100*time.Millisecond)
+		})
 	}
 }
 
