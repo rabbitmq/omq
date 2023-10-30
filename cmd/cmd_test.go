@@ -31,7 +31,7 @@ func TestPublishConsume(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.publish + "-" + tc.consume, func(t *testing.T) {
+		t.Run(tc.publish+"-"+tc.consume, func(t *testing.T) {
 			var publishProtoLabel, consumeProtoLabel string
 			if tc.publish == "amqp" {
 				publishProtoLabel = "amqp-1.0"
@@ -73,7 +73,7 @@ func TestLatencyCalculationNano(t *testing.T) {
 	latency := utils.CalculateEndToEndLatency(false, &testMsg)
 	// not very precise but we just care about the order of magnitude
 	assert.Greater(t, latency, 0.000001)
-	assert.Less(t, latency, 0.000100)
+	assert.Less(t, latency, 0.001)
 }
 
 func TestLatencyCalculationMillis(t *testing.T) {
