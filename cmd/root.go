@@ -159,6 +159,8 @@ func RootCmd() *cobra.Command {
 
 			// parse stream offset
 			switch streamOffset {
+			case "":
+				cfg.StreamOffset = nil
 			case "next", "first", "last":
 				cfg.StreamOffset = streamOffset
 			default:
@@ -199,7 +201,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&cfg.Amqp.Subject, "amqp-subject", "", "AMQP 1.0 message subject")
 	rootCmd.PersistentFlags().
 		BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable (default=true)")
-	rootCmd.PersistentFlags().StringVar(&streamOffset, "stream-offset", "next", "Stream consumer offset specification (default=next)")
+	rootCmd.PersistentFlags().StringVar(&streamOffset, "stream-offset", "", "Stream consumer offset specification (default=next)")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)
