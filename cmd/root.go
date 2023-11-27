@@ -158,25 +158,12 @@ func RootCmd() *cobra.Command {
 			}
 
 			// parse stream offset
-			switch streamOffset {
-			case "":
-				cfg.StreamOffset = nil
-			case "next", "first", "last":
-				cfg.StreamOffset = streamOffset
-			default:
-				// check if streamOffset can be parsed as unsigned integer (chunkID)
-				if chunkID, err := strconv.ParseUint(streamOffset, 10, 64); err == nil {
-					cfg.StreamOffset = chunkID
-					break
-				}
-				// check if streamOffset can be parsed as an ISO 8601 timestamp
-				if timestamp, err := iso8601.ParseString(streamOffset); err == nil {
-					cfg.StreamOffset = timestamp
-					break
-				}
-				fmt.Fprintf(os.Stderr, "ERROR: invalid stream offset: %s\n", streamOffset)
+			offset, err := parseStreamOffset(streamOffset)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
 				os.Exit(1)
 			}
+			cfg.StreamOffset = offset
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
@@ -307,6 +294,25 @@ func defaultUri(proto string) string {
 		uri = "localhost:1883"
 	}
 	return uri
+}
+
+func parseStreamOffset(offset string) (any, error) {
+	switch offset {
+	case "":
+		return nil, nil
+	case "next", "first", "last":
+		return offset, nil
+	default:
+		// check if streamOffset can be parsed as unsigned integer (chunkID)
+		if chunkID, err := strconv.ParseUint(offset, 10, 64); err == nil {
+			return chunkID, nil
+		}
+		// check if streamOffset can be parsed as an ISO 8601 timestamp
+		if timestamp, err := iso8601.ParseString(offset); err == nil {
+			return timestamp, nil
+		}
+	}
+	return nil, fmt.Errorf("invalid stream offset: %s", offset)
 }
 
 func shutdown() {
