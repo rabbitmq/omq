@@ -59,11 +59,11 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	case config.UnsettledState:
 		durability = amqp.DurabilityUnsettledState
 	}
-	var filter amqp.LinkFilter
+	var filters []amqp.LinkFilter
 	if c.Config.StreamOffset != nil {
-		filter = amqp.NewLinkFilter("rabbitmq:stream-offset-spec", 0, c.Config.StreamOffset)
+		filters = []amqp.LinkFilter{amqp.NewLinkFilter("rabbitmq:stream-offset-spec", 0, c.Config.StreamOffset)}
 	}
-	receiver, err := c.Session.NewReceiver(context.TODO(), c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.Amqp.ConsumerCredits), Filters: []amqp.LinkFilter{filter}})
+	receiver, err := c.Session.NewReceiver(context.TODO(), c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.Amqp.ConsumerCredits), Filters: filters})
 	if err != nil {
 		log.Error("consumer failed to create a receiver", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
 		return
