@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/version"
 
+	"github.com/relvacode/iso8601"
 	"github.com/spf13/cobra"
 	"github.com/thediveo/enumflag/v2"
 )
@@ -45,6 +47,7 @@ func Execute() {
 
 func RootCmd() *cobra.Command {
 	cfg = config.NewConfig()
+	var streamOffset string
 
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",
@@ -153,6 +156,25 @@ func RootCmd() *cobra.Command {
 			if cfg.Publishers == 0 || cfg.Consumers == 0 {
 				cfg.UseMillis = true
 			}
+
+			// parse stream offset
+			switch streamOffset {
+			case "next", "first", "last":
+				cfg.StreamOffset = streamOffset
+			default:
+				// check if streamOffset can be parsed as unsigned integer (chunkID)
+				if chunkID, err := strconv.ParseUint(streamOffset, 10, 64); err == nil {
+					cfg.StreamOffset = chunkID
+					break
+				}
+				// check if streamOffset can be parsed as an ISO 8601 timestamp
+				if timestamp, err := iso8601.ParseString(streamOffset); err == nil {
+					cfg.StreamOffset = timestamp
+					break
+				}
+				fmt.Fprintf(os.Stderr, "ERROR: invalid stream offset: %s\n", streamOffset)
+				os.Exit(1)
+			}
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
@@ -177,7 +199,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&cfg.Amqp.Subject, "amqp-subject", "", "AMQP 1.0 message subject")
 	rootCmd.PersistentFlags().
 		BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable (default=true)")
-	rootCmd.PersistentFlags().StringVar(&cfg.StreamOffset, "stream-offset", "next", "Stream consumer offset specification (default=next)")
+	rootCmd.PersistentFlags().StringVar(&streamOffset, "stream-offset", "next", "Stream consumer offset specification (default=next)")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)

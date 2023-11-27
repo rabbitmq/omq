@@ -45,7 +45,7 @@ type Config struct {
 	UseMillis         bool
 	QueueDurability   AmqpDurabilityMode
 	MessageDurability bool
-	StreamOffset      string
+	StreamOffset      any
 	Amqp              AmqpOptions
 	MqttPublisher     MqttOptions
 	MqttConsumer      MqttOptions
