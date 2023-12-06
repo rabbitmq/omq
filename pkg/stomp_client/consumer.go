@@ -11,6 +11,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/go-stomp/stomp/v3"
+	"github.com/go-stomp/stomp/v3/frame"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -49,12 +50,9 @@ func NewConsumer(cfg config.Config, id int) *StompConsumer {
 func (c StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 	var sub *stomp.Subscription
 	var err error
-	if c.Config.QueueDurability == config.None {
-		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient)
-	} else {
-		log.Info("subscribing to durable queue", "protocol", "STOMP", "consumerId", c.Id, "queue", c.Topic, "offset", c.Config.StreamOffset, "credits", c.Config.ConsumerCredits)
-		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, stomp.SubscribeOpt.Header("durable", "true"), stomp.SubscribeOpt.Header("auto-delete", "false"), stomp.SubscribeOpt.Header("x-stream-offset", c.Config.StreamOffset), stomp.SubscribeOpt.Header("prefetch-count", strconv.Itoa(c.Config.ConsumerCredits)))
-	}
+
+	log.Info("subscribing to durable queue", "protocol", "STOMP", "consumerId", c.Id, "queue", c.Topic, "offset", c.Config.StreamOffset, "credits", c.Config.ConsumerCredits)
+	sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, buildSubscribeOpts(c.Config)...)
 	if err != nil {
 		log.Error("subscription failed", "protocol", "STOMP", "consumerId", c.Id, "queue", c.Topic, "error", err.Error())
 		return
@@ -96,4 +94,21 @@ func (c StompConsumer) Stop(reason string) {
 	log.Debug("closing connection", "protocol", "stomp", "consumerId", c.Id, "reason", reason)
 	_ = c.Subscription.Unsubscribe()
 	_ = c.Connection.Disconnect()
+}
+
+func buildSubscribeOpts(cfg config.Config) []func(*frame.Frame) error {
+	var subscribeOpts []func(*frame.Frame) error
+
+	subscribeOpts = append(subscribeOpts,
+		stomp.SubscribeOpt.Header("x-stream-offset", cfg.StreamOffset),
+		stomp.SubscribeOpt.Header("prefetch-count", strconv.Itoa(cfg.ConsumerCredits)))
+
+	if cfg.QueueDurability != config.None {
+		subscribeOpts = append(subscribeOpts,
+			stomp.SubscribeOpt.Header("durable", "true"),
+			stomp.SubscribeOpt.Header("auto-delete", "false"),
+		)
+	}
+
+	return subscribeOpts
 }
