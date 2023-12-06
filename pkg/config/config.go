@@ -21,8 +21,7 @@ var AmqpDurabilityModes = map[AmqpDurabilityMode][]string{
 }
 
 type AmqpOptions struct {
-	ConsumerCredits int
-	Subject         string
+	Subject string
 }
 
 type MqttOptions struct {
@@ -39,13 +38,14 @@ type Config struct {
 	ConsumeCount      int
 	PublishTo         string
 	ConsumeFrom       string
+	ConsumerCredits   int
 	Size              int
 	Rate              int
 	Duration          time.Duration
 	UseMillis         bool
 	QueueDurability   AmqpDurabilityMode
 	MessageDurability bool
-	StreamOffset      any
+	StreamOffset      string
 	Amqp              AmqpOptions
 	MqttPublisher     MqttOptions
 	MqttConsumer      MqttOptions

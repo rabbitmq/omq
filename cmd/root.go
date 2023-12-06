@@ -6,7 +6,6 @@ import (
 	"math"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,7 +17,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/version"
 
-	"github.com/relvacode/iso8601"
 	"github.com/spf13/cobra"
 	"github.com/thediveo/enumflag/v2"
 )
@@ -47,7 +45,6 @@ func Execute() {
 
 func RootCmd() *cobra.Command {
 	cfg = config.NewConfig()
-	var streamOffset string
 
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",
@@ -56,7 +53,6 @@ func RootCmd() *cobra.Command {
 			start(cfg, common.AMQP, common.AMQP)
 		},
 	}
-	amqp_amqp.Flags().IntVarP(&cfg.Amqp.ConsumerCredits, "amqp-consumer-credits", "", 1, "AMQP 1.0 consumer credits")
 
 	amqp_stomp = &cobra.Command{
 		Use: "amqp-stomp",
@@ -89,7 +85,6 @@ func RootCmd() *cobra.Command {
 			start(cfg, common.STOMP, common.AMQP)
 		},
 	}
-	stomp_amqp.Flags().IntVar(&cfg.Amqp.ConsumerCredits, "amqp-consumer-credits", 1, "AMQP 1.0 consumer credits")
 
 	stomp_mqtt = &cobra.Command{
 		Use: "stomp-mqtt",
@@ -121,7 +116,6 @@ func RootCmd() *cobra.Command {
 			start(cfg, common.MQTT, common.AMQP)
 		},
 	}
-	mqtt_amqp.Flags().IntVar(&cfg.Amqp.ConsumerCredits, "amqp-consumer-credits", 1, "AMQP 1.0 consumer credits")
 	mqtt_amqp.Flags().IntVar(&cfg.MqttPublisher.QoS, "mqtt-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
 	mqtt_amqp.Flags().
 		BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session (default = true)")
@@ -156,14 +150,6 @@ func RootCmd() *cobra.Command {
 			if cfg.Publishers == 0 || cfg.Consumers == 0 {
 				cfg.UseMillis = true
 			}
-
-			// parse stream offset
-			offset, err := parseStreamOffset(streamOffset)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
-				os.Exit(1)
-			}
-			cfg.StreamOffset = offset
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
@@ -188,7 +174,8 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&cfg.Amqp.Subject, "amqp-subject", "", "AMQP 1.0 message subject")
 	rootCmd.PersistentFlags().
 		BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable (default=true)")
-	rootCmd.PersistentFlags().StringVar(&streamOffset, "stream-offset", "", "Stream consumer offset specification (default=next)")
+	rootCmd.PersistentFlags().StringVar(&cfg.StreamOffset, "stream-offset", "", "Stream consumer offset specification (default=next)")
+	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerCredits, "consumer-credits", 1, "AMQP-1.0 consumer credits / STOMP prefetch count")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)
@@ -294,25 +281,6 @@ func defaultUri(proto string) string {
 		uri = "localhost:1883"
 	}
 	return uri
-}
-
-func parseStreamOffset(offset string) (any, error) {
-	switch offset {
-	case "":
-		return nil, nil
-	case "next", "first", "last":
-		return offset, nil
-	default:
-		// check if streamOffset can be parsed as unsigned integer (chunkID)
-		if chunkID, err := strconv.ParseUint(offset, 10, 64); err == nil {
-			return chunkID, nil
-		}
-		// check if streamOffset can be parsed as an ISO 8601 timestamp
-		if timestamp, err := iso8601.ParseString(offset); err == nil {
-			return timestamp, nil
-		}
-	}
-	return nil, fmt.Errorf("invalid stream offset: %s", offset)
 }
 
 func shutdown() {

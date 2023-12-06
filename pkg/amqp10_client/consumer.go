@@ -2,11 +2,15 @@ package amqp10_client
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strconv"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/topic"
 	"github.com/rabbitmq/omq/pkg/utils"
+	"github.com/relvacode/iso8601"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 
@@ -60,10 +64,16 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 		durability = amqp.DurabilityUnsettledState
 	}
 	var filters []amqp.LinkFilter
-	if c.Config.StreamOffset != nil {
-		filters = []amqp.LinkFilter{amqp.NewLinkFilter("rabbitmq:stream-offset-spec", 0, c.Config.StreamOffset)}
+	if c.Config.StreamOffset != "" {
+		// parse stream offset
+		offset, err := parseStreamOffset(c.Config.StreamOffset)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+			os.Exit(1)
+		}
+		filters = []amqp.LinkFilter{amqp.NewLinkFilter("rabbitmq:stream-offset-spec", 0, offset)}
 	}
-	receiver, err := c.Session.NewReceiver(context.TODO(), c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.Amqp.ConsumerCredits), Filters: filters})
+	receiver, err := c.Session.NewReceiver(context.TODO(), c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Filters: filters})
 	if err != nil {
 		log.Error("consumer failed to create a receiver", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
 		return
@@ -109,4 +119,23 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 func (c Amqp10Consumer) Stop(reason string) {
 	log.Debug("closing connection", "protocol", "amqp-1.0", "consumerId", c.Id, "reason", reason)
 	_ = c.Connection.Close()
+}
+
+func parseStreamOffset(offset string) (any, error) {
+	switch offset {
+	case "":
+		return nil, nil
+	case "next", "first", "last":
+		return offset, nil
+	default:
+		// check if streamOffset can be parsed as unsigned integer (chunkID)
+		if chunkID, err := strconv.ParseUint(offset, 10, 64); err == nil {
+			return chunkID, nil
+		}
+		// check if streamOffset can be parsed as an ISO 8601 timestamp
+		if timestamp, err := iso8601.ParseString(offset); err == nil {
+			return timestamp, nil
+		}
+	}
+	return nil, fmt.Errorf("invalid stream offset: %s", offset)
 }

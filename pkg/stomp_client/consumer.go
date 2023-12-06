@@ -2,6 +2,7 @@ package stomp_client
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
@@ -51,7 +52,8 @@ func (c StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 	if c.Config.QueueDurability == config.None {
 		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient)
 	} else {
-		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, stomp.SubscribeOpt.Header("durable", "true"), stomp.SubscribeOpt.Header("auto-delete", "false"))
+		log.Info("subscribing to durable queue", "protocol", "STOMP", "consumerId", c.Id, "queue", c.Topic, "offset", c.Config.StreamOffset, "credits", c.Config.ConsumerCredits)
+		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, stomp.SubscribeOpt.Header("durable", "true"), stomp.SubscribeOpt.Header("auto-delete", "false"), stomp.SubscribeOpt.Header("x-stream-offset", c.Config.StreamOffset), stomp.SubscribeOpt.Header("prefetch-count", strconv.Itoa(c.Config.ConsumerCredits)))
 	}
 	if err != nil {
 		log.Error("subscription failed", "protocol", "STOMP", "consumerId", c.Id, "queue", c.Topic, "error", err.Error())
