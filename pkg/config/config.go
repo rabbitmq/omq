@@ -30,26 +30,27 @@ type MqttOptions struct {
 }
 
 type Config struct {
-	PublisherUri       string
-	ConsumerUri        string
-	Publishers         int
-	Consumers          int
-	PublishCount       int
-	ConsumeCount       int
-	PublishTo          string
-	ConsumeFrom        string
-	ConsumerCredits    int
-	Size               int
-	Rate               int
-	Duration           time.Duration
-	UseMillis          bool
-	QueueDurability    AmqpDurabilityMode
-	MessageDurability  bool
-	StreamOffset       string
-	StreamFilterValues string
-	Amqp               AmqpOptions
-	MqttPublisher      MqttOptions
-	MqttConsumer       MqttOptions
+	PublisherUri         string
+	ConsumerUri          string
+	Publishers           int
+	Consumers            int
+	PublishCount         int
+	ConsumeCount         int
+	PublishTo            string
+	ConsumeFrom          string
+	ConsumerCredits      int
+	Size                 int
+	Rate                 int
+	Duration             time.Duration
+	UseMillis            bool
+	QueueDurability      AmqpDurabilityMode
+	MessageDurability    bool
+	StreamOffset         string
+	StreamFilterValues   string
+	StreamFilterValueSet string
+	Amqp                 AmqpOptions
+	MqttPublisher        MqttOptions
+	MqttConsumer         MqttOptions
 }
 
 func NewConfig() Config {

@@ -122,6 +122,11 @@ func (p Amqp10Publisher) Send() {
 	if p.Config.Amqp.Subject != "" {
 		msg.Properties = &amqp.MessageProperties{Subject: &p.Config.Amqp.Subject}
 	}
+
+	if p.Config.StreamFilterValueSet != "" {
+		msg.Annotations = amqp.Annotations{"x-stream-filter-value": p.Config.StreamFilterValueSet}
+	}
+
 	msg.Header = &amqp.MessageHeader{
 		Durable: p.Config.MessageDurability}
 	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "amqp-1.0"}))

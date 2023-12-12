@@ -12,6 +12,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/go-stomp/stomp/v3"
+	"github.com/go-stomp/stomp/v3/frame"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -98,15 +99,9 @@ func (p StompPublisher) StartRateLimited(ctx context.Context) {
 
 func (p StompPublisher) Send() {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
-	var msgDurability string
-	if p.Config.MessageDurability {
-		msgDurability = "true"
-	} else {
-		msgDurability = "false"
-	}
 
 	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "stomp"}))
-	err := p.Connection.Send(p.Topic, "", p.msg, stomp.SendOpt.Receipt, stomp.SendOpt.Header("persistent", msgDurability))
+	err := p.Connection.Send(p.Topic, "", p.msg, buildHeaders(p.Config)...)
 	timer.ObserveDuration()
 	if err != nil {
 		log.Error("message sending failure", "protocol", "STOMP", "publisherId", p.Id, "error", err)
@@ -120,4 +115,24 @@ func (p StompPublisher) Send() {
 func (p StompPublisher) Stop(reason string) {
 	log.Debug("closing connection", "protocol", "stomp", "publisherId", p.Id, "reason", reason)
 	_ = p.Connection.Disconnect()
+}
+
+func buildHeaders(cfg config.Config) []func(*frame.Frame) error {
+	var headers []func(*frame.Frame) error
+
+	headers = append(headers, stomp.SendOpt.Receipt)
+
+	var msgDurability string
+	if cfg.MessageDurability {
+		msgDurability = "true"
+	} else {
+		msgDurability = "false"
+	}
+	headers = append(headers, stomp.SendOpt.Header("persistent", msgDurability))
+
+	if cfg.StreamFilterValueSet != "" {
+		headers = append(headers, stomp.SendOpt.Header("x-stream-filter-value", cfg.StreamFilterValueSet))
+	}
+
+	return headers
 }
