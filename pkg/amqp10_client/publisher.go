@@ -3,6 +3,7 @@ package amqp10_client
 import (
 	"context"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -127,8 +128,14 @@ func (p Amqp10Publisher) Send() {
 		msg.Annotations = amqp.Annotations{"x-stream-filter-value": p.Config.StreamFilterValueSet}
 	}
 
-	msg.Header = &amqp.MessageHeader{
-		Durable: p.Config.MessageDurability}
+	msg.Header = &amqp.MessageHeader{}
+	msg.Header.Durable = p.Config.MessageDurability
+	if p.Config.MessagePriority != "" {
+		// already validated in root.go
+		priority, _ := strconv.ParseUint(p.Config.MessagePriority, 10, 8)
+		msg.Header.Priority = uint8(priority)
+	}
+
 	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "amqp-1.0"}))
 	err := p.Sender.Send(context.TODO(), msg, nil)
 	timer.ObserveDuration()

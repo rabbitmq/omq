@@ -129,6 +129,9 @@ func buildHeaders(cfg config.Config) []func(*frame.Frame) error {
 		msgDurability = "false"
 	}
 	headers = append(headers, stomp.SendOpt.Header("persistent", msgDurability))
+	if cfg.MessagePriority != "" {
+		headers = append(headers, stomp.SendOpt.Header("priority", cfg.MessagePriority))
+	}
 
 	if cfg.StreamFilterValueSet != "" {
 		headers = append(headers, stomp.SendOpt.Header("x-stream-filter-value", cfg.StreamFilterValueSet))

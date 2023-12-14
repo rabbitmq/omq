@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -150,6 +151,14 @@ func RootCmd() *cobra.Command {
 			if cfg.Publishers == 0 || cfg.Consumers == 0 {
 				cfg.UseMillis = true
 			}
+
+			if cfg.MessagePriority != "" {
+				_, err := strconv.ParseUint(cfg.MessagePriority, 10, 8)
+				if err != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "ERROR: invalid message priority: %s\n", cfg.MessagePriority)
+					os.Exit(1)
+				}
+			}
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
@@ -174,6 +183,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&cfg.Amqp.Subject, "amqp-subject", "", "AMQP 1.0 message subject")
 	rootCmd.PersistentFlags().
 		BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable (default=true)")
+	rootCmd.PersistentFlags().StringVar(&cfg.MessagePriority, "message-priority", "", "Message priority (0-255, default=unset)")
 	rootCmd.PersistentFlags().StringVar(&cfg.StreamOffset, "stream-offset", "", "Stream consumer offset specification (default=next)")
 	rootCmd.PersistentFlags().StringVar(&cfg.StreamFilterValues, "stream-filter-values", "", "Stream consumer filter")
 	rootCmd.PersistentFlags().StringVar(&cfg.StreamFilterValueSet, "stream-filter-value-set", "", "Stream filter value for publisher")
