@@ -33,3 +33,24 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
+
+dockers:
+- image_templates:
+  - 'mkuratczyk/omq:{{ .Tag }}-amd64'
+  use: buildx
+  build_flag_templates:
+  - "--pull"
+  - "--platform=linux/amd64"
+- image_templates:
+  - 'mkuratczyk/omq:{{ .Tag }}-arm64'
+  use: buildx
+  build_flag_templates:
+  - "--pull"
+  - "--platform=linux/arm64"
+  goarch: arm64
+
+docker_manifests:
+- name_template: 'mkuratczyk/omq:{{ .Tag }}'
+  image_templates:
+  - 'mkuratczyk/omq:{{ .Tag }}-amd64'
+  - 'mkuratczyk/omq:{{ .Tag }}-arm64'
