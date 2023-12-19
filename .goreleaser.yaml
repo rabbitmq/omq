@@ -22,7 +22,7 @@ builds:
       - darwin
     goarch:
     - amd64
-    - arch64
+    - arm64
     ldflags:
       - -s -w -X github.com/rabbitmq/omq/pkg/version.Version={{.Version}} -X github.com/rabbitmq/omq/pkg/version.Commit={{.Commit}} -X github.com/rabbitmq/omq/pkg/version.Date={{.Date}}
 
