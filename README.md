@@ -73,19 +73,24 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
 
 ```
       --amqp-subject string                 AMQP 1.0 message subject
-  -D, --cmessages int                       The number of messages to consume per consumer (default=MaxInt)
+  -D, --cmessages int                       The number of messages to consume per consumer (default=MaxInt) (default 9223372036854775807)
   -T, --consume-from string                 The queue/topic/terminus to consume from (%d will be replaced with the consumer's id) (default "/topic/omq")
+      --consumer-credits int                AMQP-1.0 consumer credits / STOMP prefetch count (default 1)
       --consumer-uri string                 URI for consuming
   -y, --consumers int                       The number of consumers to start (default 1)
+  -h, --help                                help for omq
   -d, --message-durability                  Mark messages as durable (default=true) (default true)
-  -C, --pmessages int                       The number of messages to send per publisher (default=MaxInt)
+      --message-priority string             Message priority (0-255, default=unset)
+  -C, --pmessages int                       The number of messages to send per publisher (default=MaxInt) (default 9223372036854775807)
   -t, --publish-to string                   The topic/terminus to publish to (%d will be replaced with the publisher's id) (default "/topic/omq")
       --publisher-uri string                URI for publishing
   -x, --publishers int                      The number of publishers to start (default 1)
       --queue-durability queue-durability   Queue durability (default: configuration - the queue definition is durable) (default configuration)
-  -r, --rate int                            Messages per second (-1 for unlimited; default=-1)
+  -r, --rate int                            Messages per second (-1 = unlimited; default=-1) (default -1)
   -s, --size int                            Message payload size in bytes (default 12)
-  -m, --use-millis                          Use milliseconds for timestamps (automatically enabled when no publishers or no consumers)
+      --stream-filter-value-set string      Stream filter value for publisher
+      --stream-filter-values string         Stream consumer filter
+      --stream-offset string                Stream consumer offset specification (default=next)
   -z, --time duration                       Run duration (eg. 10s, 5m, 2h)
-  -h, --help                                help for omq
+  -m, --use-millis                          Use milliseconds for timestamps (automatically enabled when no publishers or no consumers)
 ```
