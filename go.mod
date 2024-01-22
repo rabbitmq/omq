@@ -3,7 +3,7 @@ module github.com/rabbitmq/omq
 go 1.21.5
 
 require (
-	github.com/Azure/go-amqp v1.0.3
+	github.com/Azure/go-amqp v1.0.4
 	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/prometheus/client_golang v1.18.0
 	github.com/relvacode/iso8601 v1.3.0
