@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -68,7 +69,7 @@ func GetMetricsServer() *MetricsServer {
 		metricsServer =
 			&MetricsServer{
 				httpServer: &http.Server{
-					Addr:    "127.0.0.1:8080",
+					Addr:    get_metrics_ip() + ":8080",
 					Handler: promhttp.Handler(),
 				},
 			}
@@ -92,7 +93,7 @@ func (m MetricsServer) Start() {
 			err := m.httpServer.ListenAndServe()
 			if errors.Is(err, syscall.EADDRINUSE) {
 				port, _ := strconv.Atoi(strings.Split(m.httpServer.Addr, ":")[1])
-				m.httpServer.Addr = "127.0.0.1:" + fmt.Sprint(port+1)
+				m.httpServer.Addr = get_metrics_ip() + ":" + fmt.Sprint(port+1)
 				log.Info("Prometheus metrics: port already in use, trying the next one", "port", m.httpServer.Addr)
 			}
 		}
@@ -127,4 +128,13 @@ func (m MetricsServer) PrintMetrics() {
 		}
 	}
 
+}
+
+func get_metrics_ip() string {
+	// on macoOS, return 127.0.0.1, otherwise 0.0.0.0
+	if runtime.GOOS == "darwin" {
+		return "127.0.0.1"
+	} else {
+		return "0.0.0.0"
+	}
 }
