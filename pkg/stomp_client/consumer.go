@@ -3,6 +3,7 @@ package stomp_client
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
@@ -72,6 +73,8 @@ func (c StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 			m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &msg.Body))
 			log.Debug("message received", "protocol", "stomp", "consumerId", c.Id, "destination", c.Topic, "size", len(msg.Body), "ack required", msg.ShouldAck())
 
+			log.Debug("consumer latency", "protocol", "stomp", "consumerId", c.Id, "latency", c.Config.ConsumerLatency)
+			time.Sleep(c.Config.ConsumerLatency)
 			err = c.Connection.Ack(msg)
 			if err != nil {
 				log.Error("message NOT acknowledged", "protocol", "stomp", "consumerId", c.Id, "destination", c.Topic)

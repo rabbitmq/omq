@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
@@ -93,6 +94,8 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 
 			log.Debug("message received", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "size", len(payload))
 
+			log.Debug("consumer latency", "protocol", "amqp-1.0", "consumerId", c.Id, "latency", c.Config.ConsumerLatency)
+			time.Sleep(c.Config.ConsumerLatency)
 			err = receiver.AcceptMessage(context.TODO(), msg)
 			if err != nil {
 				log.Error("message NOT accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)

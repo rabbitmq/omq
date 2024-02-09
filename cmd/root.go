@@ -188,6 +188,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&cfg.StreamFilterValues, "stream-filter-values", "", "Stream consumer filter")
 	rootCmd.PersistentFlags().StringVar(&cfg.StreamFilterValueSet, "stream-filter-value-set", "", "Stream filter value for publisher")
 	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerCredits, "consumer-credits", 1, "AMQP-1.0 consumer credits / STOMP prefetch count")
+	rootCmd.PersistentFlags().DurationVarP(&cfg.ConsumerLatency, "consumer-latency", "L", 0*time.Second, "consumer latency (time to accept message)")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)
@@ -258,6 +259,11 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 				p.Start(ctx)
 			}()
 		}
+	}
+
+	if cfg.ConsumerLatency != 0 && consumerProto == common.MQTT {
+		log.Error("Consumer latency is not supported for MQTT consumers")
+		os.Exit(1)
 	}
 
 	if cfg.Duration > 0 {
