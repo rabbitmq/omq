@@ -39,6 +39,7 @@ type Config struct {
 	PublishTo            string
 	ConsumeFrom          string
 	ConsumerCredits      int
+	ConsumerLatency      time.Duration
 	Size                 int
 	Rate                 int
 	Duration             time.Duration
