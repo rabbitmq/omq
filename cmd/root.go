@@ -70,7 +70,7 @@ func RootCmd() *cobra.Command {
 	}
 	amqp_mqtt.Flags().IntVar(&cfg.MqttConsumer.QoS, "mqtt-consumer-qos", 0, "MQTT consumer QoS level (0, 1 or 2; default=0)")
 	amqp_mqtt.Flags().
-		BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true, "MQTT consumer clean session (default = true)")
+		BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true, "MQTT consumer clean session")
 
 	stomp_stomp = &cobra.Command{
 		Use:     "stomp-stomp",
@@ -95,7 +95,7 @@ func RootCmd() *cobra.Command {
 	}
 	stomp_mqtt.Flags().IntVar(&cfg.MqttConsumer.QoS, "mqtt-consumer-qos", 0, "MQTT consumer QoS level (0, 1 or 2; default=0)")
 	stomp_mqtt.Flags().
-		BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true, "MQTT consumer clean session (default = true)")
+		BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true, "MQTT consumer clean session")
 
 	mqtt_mqtt = &cobra.Command{
 		Use:     "mqtt-mqtt",
@@ -107,9 +107,9 @@ func RootCmd() *cobra.Command {
 	mqtt_mqtt.Flags().IntVar(&cfg.MqttPublisher.QoS, "mqtt-publisher-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
 	mqtt_mqtt.Flags().IntVar(&cfg.MqttConsumer.QoS, "mqtt-consumer-qos", 0, "MQTT consumer QoS level (0, 1 or 2; default=0)")
 	mqtt_mqtt.Flags().
-		BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session (default = true)")
+		BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session")
 	mqtt_mqtt.Flags().
-		BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true, "MQTT consumer clean session (default = true)")
+		BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true, "MQTT consumer clean session")
 
 	mqtt_amqp = &cobra.Command{
 		Use: "mqtt-amqp",
@@ -119,7 +119,7 @@ func RootCmd() *cobra.Command {
 	}
 	mqtt_amqp.Flags().IntVar(&cfg.MqttPublisher.QoS, "mqtt-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
 	mqtt_amqp.Flags().
-		BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session (default = true)")
+		BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session")
 
 	mqtt_stomp = &cobra.Command{
 		Use: "mqtt-stomp",
@@ -129,7 +129,7 @@ func RootCmd() *cobra.Command {
 	}
 	mqtt_stomp.Flags().IntVar(&cfg.MqttPublisher.QoS, "mqtt-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
 	mqtt_stomp.Flags().
-		BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session (default = true)")
+		BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session")
 
 	versionCmd = &cobra.Command{
 		Use: "version",
@@ -166,7 +166,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().IntVarP(&cfg.Publishers, "publishers", "x", 1, "The number of publishers to start")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Consumers, "consumers", "y", 1, "The number of consumers to start")
 	rootCmd.PersistentFlags().
-		IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt, "The number of messages to send per publisher (default=MaxInt)")
+		IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt, "The number of messages to send per publisher")
 	rootCmd.PersistentFlags().
 		IntVarP(&cfg.ConsumeCount, "cmessages", "D", math.MaxInt, "The number of messages to consume per consumer (default=MaxInt)")
 	rootCmd.PersistentFlags().
@@ -174,7 +174,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().
 		StringVarP(&cfg.ConsumeFrom, "consume-from", "T", "/topic/omq", "The queue/topic/terminus to consume from (%d will be replaced with the consumer's id)")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message payload size in bytes")
-	rootCmd.PersistentFlags().IntVarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited; default=-1)")
+	rootCmd.PersistentFlags().IntVarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited)")
 	rootCmd.PersistentFlags().DurationVarP(&cfg.Duration, "time", "z", 0, "Run duration (eg. 10s, 5m, 2h)")
 	rootCmd.PersistentFlags().
 		BoolVarP(&cfg.UseMillis, "use-millis", "m", false, "Use milliseconds for timestamps (automatically enabled when no publishers or no consumers)")
@@ -182,7 +182,7 @@ func RootCmd() *cobra.Command {
 		VarP(enumflag.New(&cfg.QueueDurability, "queue-durability", config.AmqpDurabilityModes, enumflag.EnumCaseInsensitive), "queue-durability", "", "Queue durability (default: configuration - the queue definition is durable)")
 	rootCmd.PersistentFlags().StringVar(&cfg.Amqp.Subject, "amqp-subject", "", "AMQP 1.0 message subject")
 	rootCmd.PersistentFlags().
-		BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable (default=true)")
+		BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable")
 	rootCmd.PersistentFlags().StringVar(&cfg.MessagePriority, "message-priority", "", "Message priority (0-255, default=unset)")
 	rootCmd.PersistentFlags().StringVar(&cfg.StreamOffset, "stream-offset", "", "Stream consumer offset specification (default=next)")
 	rootCmd.PersistentFlags().StringVar(&cfg.StreamFilterValues, "stream-filter-values", "", "Stream consumer filter")
