@@ -28,39 +28,44 @@ var lock = &sync.Mutex{}
 var metricsServer *MetricsServer
 
 var (
-	MessagesPublished = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "omq_messages_published_total",
-		Help: "The total number of published messages"},
-		[]string{
-			"protocol",
-		},
-	)
-	MessagesConsumed = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "omq_messages_consumed_total",
-		Help: "The total number of consumed messages"},
-		[]string{
-			"protocol",
-		},
-	)
-	PublishingLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
-		Name:       "omq_publishing_latency_seconds",
-		Help:       "Time from sending a message to receiving a confirmation",
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
-	},
-		[]string{
-			"protocol",
-		},
-	)
-	EndToEndLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
-		Name:       "omq_end_to_end_latency_seconds",
-		Help:       "Time from sending a message to receiving the message",
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
-	},
-		[]string{
-			"protocol",
-		},
-	)
+	MessagesPublished *prometheus.CounterVec
+	MessagesConsumed  *prometheus.CounterVec
+	PublishingLatency *prometheus.SummaryVec
+	EndToEndLatency   *prometheus.SummaryVec
 )
+
+func RegisterMetrics(globalLabels prometheus.Labels) {
+	fmt.Printf("negistering metrics: %v", globalLabels)
+	MessagesPublished = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name:        "omq_messages_published_total",
+		Help:        "The total number of published messages",
+		ConstLabels: globalLabels,
+	}, []string{"protocol"})
+	MessagesConsumed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name:        "omq_messages_consumed_total",
+		Help:        "The total number of consumed messages",
+		ConstLabels: globalLabels,
+	}, []string{"protocol"})
+	PublishingLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
+		Name:        "omq_publishing_latency_seconds",
+		Help:        "Time from sending a message to receiving a confirmation",
+		Objectives:  map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
+		ConstLabels: globalLabels,
+	}, []string{"protocol"})
+	EndToEndLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
+		Name:        "omq_end_to_end_latency_seconds",
+		Help:        "Time from sending a message to receiving the message",
+		Objectives:  map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
+		ConstLabels: globalLabels,
+	}, []string{"protocol"})
+}
+
+func UnregisterMetrics() {
+	prometheus.DefaultRegisterer.Unregister(MessagesPublished)
+	prometheus.DefaultRegisterer.Unregister(MessagesConsumed)
+	prometheus.DefaultRegisterer.Unregister(PublishingLatency)
+	prometheus.DefaultRegisterer.Unregister(EndToEndLatency)
+}
 
 func GetMetricsServer() *MetricsServer {
 	lock.Lock()

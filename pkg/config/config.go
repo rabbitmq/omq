@@ -53,6 +53,7 @@ type Config struct {
 	Amqp                 AmqpOptions
 	MqttPublisher        MqttOptions
 	MqttConsumer         MqttOptions
+	MetricTags           map[string]string
 }
 
 func NewConfig() Config {
