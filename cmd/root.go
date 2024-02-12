@@ -36,6 +36,8 @@ var (
 	versionCmd  = &cobra.Command{}
 )
 
+var metricTags []string
+
 func Execute() {
 	rootCmd := RootCmd()
 	err := rootCmd.Execute()
@@ -159,6 +161,24 @@ func RootCmd() *cobra.Command {
 					os.Exit(1)
 				}
 			}
+
+			// split metric tags into key-value pairs
+			cfg.MetricTags = make(map[string]string)
+			for _, tag := range metricTags {
+				parts := strings.Split(tag, "=")
+				if len(parts) != 2 {
+					_, _ = fmt.Fprintf(os.Stderr, "ERROR: invalid metric tags: %s, use label=value format\n", tag)
+					os.Exit(1)
+				}
+				cfg.MetricTags[parts[0]] = parts[1]
+			}
+			if metricTags != nil {
+				metrics.RegisterMetrics(cfg.MetricTags)
+				metricTags = nil
+			}
+		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			metrics.UnregisterMetrics()
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
@@ -189,6 +209,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&cfg.StreamFilterValueSet, "stream-filter-value-set", "", "Stream filter value for publisher")
 	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerCredits, "consumer-credits", 1, "AMQP-1.0 consumer credits / STOMP prefetch count")
 	rootCmd.PersistentFlags().DurationVarP(&cfg.ConsumerLatency, "consumer-latency", "L", 0*time.Second, "consumer latency (time to accept message)")
+	rootCmd.PersistentFlags().StringSliceVar(&metricTags, "metric-tags", []string{}, "Prometheus label-value pairs, eg. l1=v1,l2=v2")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)

@@ -49,18 +49,16 @@ func TestPublishConsume(t *testing.T) {
 			args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-t", topic, "-T", topic}
 			rootCmd.SetArgs(args)
 			fmt.Println("Running test: omq", strings.Join(args, " "))
-			publishedBefore := testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel))
-			consumedBefore := testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel))
 
 			err := rootCmd.Execute()
-
 			assert.Nil(t, err)
+
 			assert.Eventually(t, func() bool {
-				return testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel)) == publishedBefore+1
+				return assert.Equal(t, 1.0, testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel)))
 
 			}, 2*time.Second, 100*time.Millisecond)
 			assert.Eventually(t, func() bool {
-				return testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel)) == consumedBefore+1
+				return assert.Equal(t, 1.0, testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel)))
 			}, 2*time.Second, 100*time.Millisecond)
 		})
 	}
