@@ -90,20 +90,20 @@ func TestAutoUseMillis(t *testing.T) {
 	rootCmd := RootCmd()
 	rootCmd.SetArgs(args)
 	_ = rootCmd.Execute()
-	assert.Equal(t, cfg.UseMillis, false)
+	assert.Equal(t, false, cfg.UseMillis)
 
 	// if -x 0, use-millis is true
 	args = []string{"amqp", "-x", "0", "-D", "0"}
 	rootCmd = RootCmd()
 	rootCmd.SetArgs(args)
 	_ = rootCmd.Execute()
-	assert.Equal(t, cfg.UseMillis, true)
+	assert.Equal(t, true, cfg.UseMillis)
 
 	// if -y 0, use-millis is true
 	args = []string{"amqp", "-y", "0", "-C", "0"}
 	rootCmd = RootCmd()
 	rootCmd.SetArgs(args)
 	_ = rootCmd.Execute()
-	assert.Equal(t, cfg.UseMillis, true)
+	assert.Equal(t, true, cfg.UseMillis)
 
 }
