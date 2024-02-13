@@ -64,7 +64,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	case config.UnsettledState:
 		durability = amqp.DurabilityUnsettledState
 	}
-	receiver, err := c.Session.NewReceiver(context.TODO(), c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Filters: buildLinkFilters(c.Config)})
+	receiver, err := c.Session.NewReceiver(ctx, c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Filters: buildLinkFilters(c.Config)})
 	if err != nil {
 		log.Error("consumer failed to create a receiver", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
 		return
@@ -77,13 +77,12 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	log.Info("consumer started", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 
 	for i := 1; i <= c.Config.ConsumeCount; i++ {
-		// TODO Receive() is blocking, so cancelling the context won't really stop the consumer
 		select {
 		case <-ctx.Done():
 			c.Stop("time limit reached")
 			return
 		default:
-			msg, err := receiver.Receive(context.TODO(), nil)
+			msg, err := receiver.Receive(ctx, nil)
 			if err != nil {
 				log.Error("failed to receive a message", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 				return
@@ -96,7 +95,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 
 			log.Debug("consumer latency", "protocol", "amqp-1.0", "consumerId", c.Id, "latency", c.Config.ConsumerLatency)
 			time.Sleep(c.Config.ConsumerLatency)
-			err = receiver.AcceptMessage(context.TODO(), msg)
+			err = receiver.AcceptMessage(ctx, msg)
 			if err != nil {
 				log.Error("message NOT accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 			}
