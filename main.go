@@ -23,7 +23,6 @@ func main() {
 	metricsServer.Start()
 
 	cmd.Execute()
-	metricsServer.PrintMetrics()
 
 	if os.Getenv("OMQ_PPROF") == "true" {
 		memFile, err := os.Create("omq-memory.pprof")

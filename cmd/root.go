@@ -178,6 +178,7 @@ func RootCmd() *cobra.Command {
 			}
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			metrics.GetMetricsServer().PrintMetrics()
 			metrics.UnregisterMetrics()
 		},
 	}
