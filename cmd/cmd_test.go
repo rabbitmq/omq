@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/utils"
@@ -60,6 +62,7 @@ func TestPublishConsume(t *testing.T) {
 			assert.Eventually(t, func() bool {
 				return assert.Equal(t, 1.0, testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel)))
 			}, 2*time.Second, 100*time.Millisecond)
+			metrics.Reset()
 		})
 	}
 }
@@ -106,4 +109,55 @@ func TestAutoUseMillis(t *testing.T) {
 	_ = rootCmd.Execute()
 	assert.Equal(t, true, cfg.UseMillis)
 
+}
+
+// benchmarking the latency calculation
+func BenchmarkLatencyCalculation(b *testing.B) {
+	testMsg := utils.MessageBody(1000)
+	utils.UpdatePayload(false, &testMsg)
+
+	for i := 0; i < b.N; i++ {
+		_ = utils.CalculateEndToEndLatency(false, &testMsg)
+	}
+}
+
+// benchmarking the latency calculation
+var metric *prometheus.SummaryVec
+
+func BenchmarkObservingLatency(b *testing.B) {
+	if metric == nil {
+		metric = promauto.NewSummaryVec(prometheus.SummaryOpts{
+			Name:       "benchmaking_latency_seconds",
+			Help:       "Time from sending a message to receiving a confirmation",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
+		}, []string{"protocol"})
+	} else {
+		metric.Reset()
+	}
+
+	testMsg := utils.MessageBody(1000)
+
+	for i := 0; i < b.N; i++ {
+		utils.UpdatePayload(false, &testMsg)
+		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(utils.CalculateEndToEndLatency(false, &testMsg))
+	}
+}
+
+func BenchmarkObservingLatencyMillis(b *testing.B) {
+	if metric == nil {
+		metric = promauto.NewSummaryVec(prometheus.SummaryOpts{
+			Name:       "benchmaking_latency_seconds",
+			Help:       "Time from sending a message to receiving a confirmation",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
+		}, []string{"protocol"})
+	} else {
+		metric.Reset()
+	}
+
+	testMsg := utils.MessageBody(1000)
+
+	for i := 0; i < b.N; i++ {
+		utils.UpdatePayload(true, &testMsg)
+		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(utils.CalculateEndToEndLatency(false, &testMsg))
+	}
 }

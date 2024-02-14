@@ -19,8 +19,7 @@ func main() {
 		_ = pprof.StartCPUProfile(cpuFile)
 	}
 
-	metricsServer := metrics.GetMetricsServer()
-	metricsServer.Start()
+	defer metrics.GetMetricsServer().PrintMetrics()
 
 	cmd.Execute()
 

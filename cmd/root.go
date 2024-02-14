@@ -176,10 +176,11 @@ func RootCmd() *cobra.Command {
 				metrics.RegisterMetrics(cfg.MetricTags)
 				metricTags = nil
 			}
+			metricsServer := metrics.GetMetricsServer()
+			metricsServer.Start()
+
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			metrics.GetMetricsServer().PrintMetrics()
-			metrics.UnregisterMetrics()
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
