@@ -10,7 +10,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/topic"
-	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/relvacode/iso8601"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
