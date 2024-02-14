@@ -35,7 +35,6 @@ var (
 )
 
 func RegisterMetrics(globalLabels prometheus.Labels) {
-	fmt.Printf("negistering metrics: %v", globalLabels)
 	MessagesPublished = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name:        "omq_messages_published_total",
 		Help:        "The total number of published messages",
