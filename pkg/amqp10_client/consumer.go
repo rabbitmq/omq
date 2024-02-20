@@ -28,7 +28,9 @@ type Amqp10Consumer struct {
 
 func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 	// open connection
-	conn, err := amqp.Dial(context.TODO(), cfg.ConsumerUri, nil)
+	conn, err := amqp.Dial(context.TODO(), cfg.ConsumerUri, &amqp.ConnOptions{
+		HostName: amqpVHost(cfg.ConsumerUri),
+	})
 	if err != nil {
 		log.Error("consumer failed to connect", "protocol", "amqp-1.0", "consumerId", id, "error", err.Error())
 		return nil

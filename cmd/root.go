@@ -315,7 +315,7 @@ func defaultUri(proto string) string {
 	uri := "localhost"
 	switch proto {
 	case "amqp":
-		uri = "amqp://localhost"
+		uri = "amqp://localhost/"
 	case "stomp":
 		uri = "localhost:61613"
 	case "mqtt":
