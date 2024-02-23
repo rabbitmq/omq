@@ -29,6 +29,6 @@ func main() {
 			log.Error("can't create omq-memory.pprof", "error", err)
 		}
 		_ = pprof.WriteHeapProfile(memFile)
-		defer memFile.Close()
+		defer func() { _ = memFile.Close() }()
 	}
 }

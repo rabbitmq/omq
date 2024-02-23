@@ -31,24 +31,24 @@ func NewPublisher(protocol Protocol, cfg config.Config, id int) (Publisher, erro
 	case AMQP:
 		p := amqp10_client.NewPublisher(cfg, id)
 		if p == nil {
-			return nil, fmt.Errorf("Failed to create an AMQP-1.0 publisher")
+			return nil, fmt.Errorf("failed to create an AMQP-1.0 publisher")
 		}
 		return p, nil
 	case STOMP:
 		p := stomp_client.NewPublisher(cfg, id)
 		if p == nil {
-			return nil, fmt.Errorf("Failed to create a STOMP publisher")
+			return nil, fmt.Errorf("failed to create a STOMP publisher")
 		}
 		return p, nil
 	case MQTT:
 		p := mqtt_client.NewPublisher(cfg, id)
 		if p == nil {
-			return nil, fmt.Errorf("Failed to create an MQTT publisher")
+			return nil, fmt.Errorf("failed to create an MQTT publisher")
 		}
 		return p, nil
 	}
 
-	return nil, fmt.Errorf("Unknown protocol")
+	return nil, fmt.Errorf("unknown protocol")
 }
 
 func NewConsumer(protocol Protocol, cfg config.Config, id int) (Consumer, error) {
@@ -56,22 +56,22 @@ func NewConsumer(protocol Protocol, cfg config.Config, id int) (Consumer, error)
 	case AMQP:
 		c := amqp10_client.NewConsumer(cfg, id)
 		if c == nil {
-			return nil, fmt.Errorf("Failed to create an AMQP-1.0 consumer")
+			return nil, fmt.Errorf("failed to create an AMQP-1.0 consumer")
 		}
 		return c, nil
 	case STOMP:
 		c := stomp_client.NewConsumer(cfg, id)
 		if c == nil {
-			return nil, fmt.Errorf("Failed to create an AMQP-1.0 consumer")
+			return nil, fmt.Errorf("failed to create an AMQP-1.0 consumer")
 		}
 		return c, nil
 	case MQTT:
 		c := mqtt_client.NewConsumer(cfg, id)
 		if c == nil {
-			return nil, fmt.Errorf("Failed to create an AMQP-1.0 consumer")
+			return nil, fmt.Errorf("failed to create an AMQP-1.0 consumer")
 		}
 		return c, nil
 	}
 
-	return nil, fmt.Errorf("Unknown protocol")
+	return nil, fmt.Errorf("unknown protocol")
 }

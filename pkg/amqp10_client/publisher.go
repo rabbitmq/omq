@@ -150,5 +150,5 @@ func (p Amqp10Publisher) Send() {
 
 func (p Amqp10Publisher) Stop(reason string) {
 	log.Debug("closing connection", "protocol", "amqp-1.0", "publisherId", p.Id, "reason", reason)
-	p.Connectionection.Close()
+	_ = p.Connectionection.Close()
 }
