@@ -10,6 +10,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/topic"
+	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/relvacode/iso8601"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
@@ -73,8 +74,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	close(subscribed)
 	log.Debug("consumer subscribed", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "durability", durability)
 
-	// TODO: disabled due to performance issues
-	// m := metrics.EndToEndLatency.With(prometheus.Labels{"protocol": "amqp-1.0"})
+	m := metrics.EndToEndLatency.With(prometheus.Labels{"protocol": "amqp-1.0"})
 
 	log.Info("consumer started", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 
@@ -91,7 +91,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			}
 
 			payload := msg.GetData()
-			// m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
+			m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
 
 			log.Debug("message received", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "size", len(payload))
 
