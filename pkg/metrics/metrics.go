@@ -121,7 +121,6 @@ func (m MetricsServer) PrintMetrics() {
 	endpoint := fmt.Sprintf("http://%s/metrics", m.httpServer.Addr)
 	resp, err := http.Get(endpoint)
 	if err != nil {
-		log.Error("Error getting metrics", "error", err)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
