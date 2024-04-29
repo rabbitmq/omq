@@ -1,11 +1,11 @@
 ## omq
 
 `omq` is a messaging system client for testing purposes. It currently supports AMQP-1.0, STOMP and MQTT 3.1.
-It is developed mostly for RabbitMQ but might be useful for other broker as well (some tests against ActiveMQ
+It is developed mostly for RabbitMQ but might be useful for other brokers as well (some tests against ActiveMQ
 were performed).
 
 `omq` starts a group of publishers and a group of consumers, in both cases all publishers/consumers are identical,
-except for the target termins/queue/routing key, which may be slightly different. The publishers can use
+except for the target terminus/queue/routing key, which may be slightly different. The publishers can use
 a different protocol than the consumers.
 
 `omq` has subcommands for all protocol combinations. For example:
@@ -31,7 +31,7 @@ go install github.com/rabbitmq/omq@main
 
 ### Terminus/Topic/Queue/Routing Key
 
-Different protocols refer to the targets / sources of messages differently and RabbitMQ handles each protocols differently as well.
+Different protocols refer to the targets / sources of messages differently and RabbitMQ handles each protocol differently as well.
 
 `--publish-to` (or `-t`) refers to where to publish the messages - it is passed as-is to the publisher, except for MQTT (see below)
 `--consume-from` (or `-T`) refers to where to consume the messages from - it is passed as-is to the consumer, except for MQTT (see below)
@@ -45,7 +45,7 @@ this special handling ("/topic/" would be a part of the topic/binding key).
 
 ### Metrics
 
-`omq` exposes Prometheus metrics on port 8080 or the next available port if 8080 is in use (so 8081, 8082 and so on). This makes it easy to run multiple
+`omq` exposes Prometheus metrics on port 8080, or the next available port if 8080 is in use (so 8081, 8082, and so on). This makes it easy to run multiple
 `omq` instances on a single machine - just configure 8080 and the next few ports as Prometheus targets and it'll scrape them whenever metrics are available.
 Sample Prometheus scrape config:
 ```
@@ -63,9 +63,9 @@ You can find [a simple dashboard](./dashboard/OMQ-Grafana.json) in this repo.
 
 Additionally, the final values of the metrics are printed when `omq` finishes. A nicer output or TUI will be available at some point.
 
-### Comaptibility with perf-test
+### Compatibility with perf-test
 
-[perf-test](https://perftest.rabbitmq.com/) is the main testing tool used with RabbitMQ. It has many more options, but only supports AMQP 0.9.1
+[perf-test](https://perftest.rabbitmq.com/) is the main testing tool used with RabbitMQ. It has many more options, but only supports AMQP 0-9-1
 (historically, the main protocol used with RabbitMQ). `omq` uses the same message format for end-to-end latency measurment and therefore
 messages published with perf-test can be consumed by `omq` or vice versa, and the end-to-end latency will be measured.
 
