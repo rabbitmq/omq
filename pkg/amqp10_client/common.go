@@ -8,7 +8,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/log"
 )
 
-func amqpVHost(connectionString string) string {
+func hostAndVHost(connectionString string) (string, string) {
 	uri, err := url.Parse(connectionString)
 	if err != nil {
 		log.Error("failed to parse connection string", "error", err.Error())
@@ -20,5 +20,5 @@ func amqpVHost(connectionString string) string {
 		vhost = strings.TrimPrefix(uri.Path, "/")
 	}
 
-	return "vhost:" + vhost
+	return uri.Hostname(), "vhost:" + vhost
 }

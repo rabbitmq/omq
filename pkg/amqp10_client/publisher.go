@@ -2,6 +2,7 @@ package amqp10_client
 
 import (
 	"context"
+	"crypto/tls"
 	"math/rand"
 	"strconv"
 	"time"
@@ -28,8 +29,11 @@ type Amqp10Publisher struct {
 
 func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 	// open connection
+	hostname, vhost := hostAndVHost(cfg.PublisherUri)
 	conn, err := amqp.Dial(context.TODO(), cfg.PublisherUri, &amqp.ConnOptions{
-		HostName: amqpVHost(cfg.PublisherUri)})
+		HostName: vhost,
+		TLSConfig: &tls.Config{
+			ServerName: hostname}})
 	if err != nil {
 		log.Error("publisher connection failed", "protocol", "amqp-1.0", "publisherId", n, "error", err.Error())
 		return nil
