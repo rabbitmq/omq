@@ -41,7 +41,7 @@ type Config struct {
 	ConsumerCredits      int
 	ConsumerLatency      time.Duration
 	Size                 int
-	Rate                 int
+	Rate                 float32
 	Duration             time.Duration
 	UseMillis            bool
 	QueueDurability      AmqpDurabilityMode

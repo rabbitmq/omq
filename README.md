@@ -88,7 +88,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
       --publisher-uri string                URI for publishing
   -x, --publishers int                      The number of publishers to start (default 1)
       --queue-durability queue-durability   Queue durability (default: configuration - the queue definition is durable) (default configuration)
-  -r, --rate int                            Messages per second (-1 = unlimited) (default -1)
+  -r, --rate float                          Messages per second (-1 = unlimited) (default -1)
   -s, --size int                            Message payload size in bytes (default 12)
       --stream-filter-value-set string      Stream filter value for publisher
       --stream-filter-values string         Stream consumer filter
