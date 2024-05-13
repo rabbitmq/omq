@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/Azure/go-amqp v1.0.5
 	github.com/eclipse/paho.mqtt.golang v1.4.3
-	github.com/prometheus/client_golang v1.19.0
+	github.com/prometheus/client_golang v1.19.1
 	github.com/relvacode/iso8601 v1.4.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
