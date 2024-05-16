@@ -108,10 +108,7 @@ func (p Amqp10Publisher) StartFullSpeed(ctx context.Context) {
 func (p Amqp10Publisher) StartIdle(ctx context.Context) {
 	log.Info("publisher started", "protocol", "AMQP-1.0", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
 
-	select {
-	case <-ctx.Done():
-		return
-	}
+	_ = ctx.Done()
 }
 
 func (p Amqp10Publisher) StartRateLimited(ctx context.Context) {

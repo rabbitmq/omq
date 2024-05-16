@@ -98,10 +98,7 @@ func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
 func (p MqttPublisher) StartIdle(ctx context.Context) {
 	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
 
-	select {
-	case <-ctx.Done():
-		return
-	}
+	_ = ctx.Done()
 }
 
 func (p MqttPublisher) StartRateLimited(ctx context.Context) {
