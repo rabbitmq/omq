@@ -71,9 +71,12 @@ func (p MqttPublisher) Start(ctx context.Context) {
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
-	if p.Config.Rate == -1 {
+	switch p.Config.Rate {
+	case -1:
 		p.StartFullSpeed(ctx)
-	} else {
+	case 0:
+		p.StartIdle(ctx)
+	default:
 		p.StartRateLimited(ctx)
 	}
 	log.Debug("publisher stopped", "protocol", "MQTT", "publisherId", p.Id)
@@ -89,6 +92,15 @@ func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
 		default:
 			p.Send()
 		}
+	}
+}
+
+func (p MqttPublisher) StartIdle(ctx context.Context) {
+	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
+
+	select {
+	case <-ctx.Done():
+		return
 	}
 }
 

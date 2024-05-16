@@ -55,9 +55,12 @@ func (p StompPublisher) Start(ctx context.Context) {
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
-	if p.Config.Rate == -1 {
+	switch p.Config.Rate {
+	case -1:
 		p.StartFullSpeed(ctx)
-	} else {
+	case 0:
+		p.StartIdle(ctx)
+	default:
 		p.StartRateLimited(ctx)
 	}
 }
@@ -74,6 +77,15 @@ func (p StompPublisher) StartFullSpeed(ctx context.Context) {
 		}
 	}
 	log.Debug("publisher completed", "protocol", "stomp", "publisherId", p.Id)
+}
+
+func (p StompPublisher) StartIdle(ctx context.Context) {
+	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
+
+	select {
+	case <-ctx.Done():
+		return
+	}
 }
 
 func (p StompPublisher) StartRateLimited(ctx context.Context) {

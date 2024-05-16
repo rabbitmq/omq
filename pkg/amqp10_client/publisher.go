@@ -80,11 +80,15 @@ func (p Amqp10Publisher) Start(ctx context.Context) {
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
-	if p.Config.Rate == -1 {
+	switch p.Config.Rate {
+	case -1:
 		p.StartFullSpeed(ctx)
-	} else {
+	case 0:
+		p.StartIdle(ctx)
+	default:
 		p.StartRateLimited(ctx)
 	}
+
 	log.Debug("publisher completed", "protocol", "amqp-1.0", "publisherId", p.Id)
 }
 
@@ -98,6 +102,15 @@ func (p Amqp10Publisher) StartFullSpeed(ctx context.Context) {
 		default:
 			p.Send()
 		}
+	}
+}
+
+func (p Amqp10Publisher) StartIdle(ctx context.Context) {
+	log.Info("publisher started", "protocol", "AMQP-1.0", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
+
+	select {
+	case <-ctx.Done():
+		return
 	}
 }
 
