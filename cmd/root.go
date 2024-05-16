@@ -196,7 +196,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().
 		StringVarP(&cfg.ConsumeFrom, "consume-from", "T", "/topic/omq", "The queue/topic/terminus to consume from (%d will be replaced with the consumer's id)")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message payload size in bytes")
-	rootCmd.PersistentFlags().IntVarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited)")
+	rootCmd.PersistentFlags().Float32VarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited)")
 	rootCmd.PersistentFlags().DurationVarP(&cfg.Duration, "time", "z", 0, "Run duration (eg. 10s, 5m, 2h)")
 	rootCmd.PersistentFlags().
 		BoolVarP(&cfg.UseMillis, "use-millis", "m", false, "Use milliseconds for timestamps (automatically enabled when no publishers or no consumers)")
