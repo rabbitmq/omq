@@ -1,6 +1,6 @@
 module github.com/rabbitmq/omq
 
-go 1.22
+go 1.22.0
 
 require (
 	github.com/Azure/go-amqp v1.0.5
