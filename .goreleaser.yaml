@@ -38,7 +38,7 @@ changelog:
       - "^test:"
 
 kos:
-  - repository: mkuratczyk/omq
+  - repository: pivotalrabbitmq/omq
     tags:
     - '{{.Version}}'
     - latest
