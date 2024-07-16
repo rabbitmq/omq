@@ -29,6 +29,8 @@ and `mqtt` instead of `mqtt-mqtt`.
 go install github.com/rabbitmq/omq@main
 ```
 
+An [OCI image](https://hub.docker.com/r/pivotalrabbitmq/omq/tags) is also available: `pivotalrabbitmq/omq`.
+
 ### Terminus/Topic/Queue/Routing Key
 
 Different protocols refer to the targets / sources of messages differently and RabbitMQ handles each protocol differently as well.
