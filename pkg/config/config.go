@@ -50,6 +50,7 @@ type Config struct {
 	StreamOffset         string
 	StreamFilterValues   string
 	StreamFilterValueSet string
+	ConsumerPriority     int32
 	Amqp                 AmqpOptions
 	MqttPublisher        MqttOptions
 	MqttConsumer         MqttOptions

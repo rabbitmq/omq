@@ -69,7 +69,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	case config.UnsettledState:
 		durability = amqp.DurabilityUnsettledState
 	}
-	receiver, err := c.Session.NewReceiver(ctx, c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Filters: buildLinkFilters(c.Config)})
+	receiver, err := c.Session.NewReceiver(ctx, c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Properties: buildLinkProperties(c.Config), Filters: buildLinkFilters(c.Config)})
 	if err != nil {
 		log.Error("consumer failed to create a receiver", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
 		return
@@ -116,6 +116,14 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 func (c Amqp10Consumer) Stop(reason string) {
 	log.Debug("closing connection", "protocol", "amqp-1.0", "consumerId", c.Id, "reason", reason)
 	_ = c.Connection.Close()
+}
+
+func buildLinkProperties(cfg config.Config) map[string]any {
+	props := map[string]any{
+		"rabbitmq:priority": cfg.ConsumerPriority,
+	}
+
+	return props
 }
 
 func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
