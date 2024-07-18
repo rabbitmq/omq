@@ -25,8 +25,8 @@ func TestPublishConsume(t *testing.T) {
 		{publish: "stomp", consume: "stomp", priority: ""},
 		{publish: "stomp", consume: "amqp", priority: "4"},
 		{publish: "stomp", consume: "mqtt", priority: ""},
-		{publish: "amqp", consume: "amqp", priority: "0"},
-		{publish: "amqp", consume: "stomp", priority: "0"},
+		{publish: "amqp", consume: "amqp", priority: "0"},  // https://github.com/Azure/go-amqp/issues/313
+		{publish: "amqp", consume: "stomp", priority: "0"}, // https://github.com/Azure/go-amqp/issues/313
 		{publish: "amqp", consume: "mqtt", priority: ""},
 		{publish: "mqtt", consume: "mqtt", priority: ""},
 		{publish: "mqtt", consume: "stomp", priority: ""},
