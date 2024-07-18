@@ -77,7 +77,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	close(subscribed)
 	log.Debug("consumer subscribed", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "durability", durability)
 
-	m := metrics.EndToEndLatency.With(prometheus.Labels{"protocol": "amqp-1.0"})
+	m := metrics.EndToEndLatency
 
 	log.Info("consumer started", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 
@@ -94,7 +94,8 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			}
 
 			payload := msg.GetData()
-			m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
+			priority := strconv.Itoa(int(msg.Header.Priority))
+			m.With(prometheus.Labels{"protocol": "amqp-1.0"}).Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
 
 			log.Debug("message received", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "size", len(payload))
 
@@ -104,7 +105,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			if err != nil {
 				log.Error("message NOT accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 			}
-			metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
+			metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
 			log.Debug("message accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 		}
 	}

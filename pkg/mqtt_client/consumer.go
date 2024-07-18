@@ -60,7 +60,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 	msgsReceived := 0
 
 	handler := func(client mqtt.Client, msg mqtt.Message) {
-		metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "mqtt"}).Inc()
+		metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "mqtt", "priority": ""}).Inc()
 		payload := msg.Payload()
 		m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
 		msgsReceived++

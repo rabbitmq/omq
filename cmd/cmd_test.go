@@ -16,20 +16,21 @@ import (
 
 func TestPublishConsume(t *testing.T) {
 	type test struct {
-		publish string
-		consume string
+		publish  string
+		consume  string
+		priority string // expected/default message priority
 	}
 
 	tests := []test{
-		{publish: "stomp", consume: "stomp"},
-		{publish: "stomp", consume: "amqp"},
-		{publish: "stomp", consume: "mqtt"},
-		{publish: "amqp", consume: "amqp"},
-		{publish: "amqp", consume: "stomp"},
-		{publish: "amqp", consume: "mqtt"},
-		{publish: "mqtt", consume: "mqtt"},
-		{publish: "mqtt", consume: "stomp"},
-		{publish: "mqtt", consume: "amqp"},
+		{publish: "stomp", consume: "stomp", priority: ""},
+		{publish: "stomp", consume: "amqp", priority: "4"},
+		{publish: "stomp", consume: "mqtt", priority: ""},
+		{publish: "amqp", consume: "amqp", priority: "0"},
+		{publish: "amqp", consume: "stomp", priority: "0"},
+		{publish: "amqp", consume: "mqtt", priority: ""},
+		{publish: "mqtt", consume: "mqtt", priority: ""},
+		{publish: "mqtt", consume: "stomp", priority: ""},
+		{publish: "mqtt", consume: "amqp", priority: "4"},
 	}
 
 	for _, tc := range tests {
@@ -55,12 +56,64 @@ func TestPublishConsume(t *testing.T) {
 			err := rootCmd.Execute()
 			assert.Nil(t, err)
 
+			metrics.GetMetricsServer().PrintMetrics()
+
 			assert.Eventually(t, func() bool {
 				return assert.Equal(t, 1.0, testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel)))
 
 			}, 2*time.Second, 100*time.Millisecond)
 			assert.Eventually(t, func() bool {
-				return assert.Equal(t, 1.0, testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel)))
+				return assert.Equal(t, 1.0, testutil.ToFloat64(metrics.MessagesConsumed.WithLabelValues(consumeProtoLabel, tc.priority)))
+			}, 2*time.Second, 100*time.Millisecond)
+			metrics.Reset()
+		})
+	}
+}
+
+func TestPublishWithPriorities(t *testing.T) {
+	type test struct {
+		publish string
+		consume string
+	}
+
+	tests := []test{
+		// mqtt has no concept of message priority
+		{publish: "stomp", consume: "stomp"},
+		{publish: "stomp", consume: "amqp"},
+		{publish: "amqp", consume: "amqp"},
+		{publish: "amqp", consume: "stomp"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.publish+"-"+tc.consume, func(t *testing.T) {
+			var publishProtoLabel, consumeProtoLabel string
+			if tc.publish == "amqp" {
+				publishProtoLabel = "amqp-1.0"
+			} else {
+				publishProtoLabel = tc.publish
+			}
+			if tc.consume == "amqp" {
+				consumeProtoLabel = "amqp-1.0"
+			} else {
+				consumeProtoLabel = tc.consume
+			}
+			rootCmd := RootCmd()
+
+			topic := "/topic/" + tc.publish + tc.consume
+			args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-t", topic, "-T", topic, "--message-priority", "13"}
+			rootCmd.SetArgs(args)
+			fmt.Println("Running test: omq", strings.Join(args, " "))
+
+			err := rootCmd.Execute()
+			assert.Nil(t, err)
+
+			assert.Eventually(t, func() bool {
+				return assert.Equal(t, 1.0, testutil.ToFloat64(metrics.MessagesPublished.WithLabelValues(publishProtoLabel)))
+
+			}, 2*time.Second, 100*time.Millisecond)
+			assert.Eventually(t, func() bool {
+				consumeCounter, err := metrics.MessagesConsumed.GetMetricWith(prometheus.Labels{"protocol": consumeProtoLabel, "priority": "13"})
+				return err == nil && assert.Equal(t, 1.0, testutil.ToFloat64(consumeCounter))
 			}, 2*time.Second, 100*time.Millisecond)
 			metrics.Reset()
 		})

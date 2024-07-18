@@ -47,7 +47,7 @@ func RegisterMetrics(globalLabels prometheus.Labels) {
 			Name:        "omq_messages_consumed_total",
 			Help:        "The total number of consumed messages",
 			ConstLabels: globalLabels,
-		}, []string{"protocol"})
+		}, []string{"protocol", "priority"})
 	}
 	if PublishingLatency == nil {
 		PublishingLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{

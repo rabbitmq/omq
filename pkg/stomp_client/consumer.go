@@ -80,12 +80,12 @@ func (c StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 				log.Error("message NOT acknowledged", "protocol", "stomp", "consumerId", c.Id, "destination", c.Topic)
 
 			}
+			metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "stomp", "priority": msg.Header.Get("priority")}).Inc()
 		case <-ctx.Done():
 			c.Stop("time limit reached")
 			return
 		}
 
-		metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "stomp"}).Inc()
 	}
 
 	c.Stop("message count reached")
