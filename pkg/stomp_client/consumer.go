@@ -106,6 +106,11 @@ func buildSubscribeOpts(cfg config.Config) []func(*frame.Frame) error {
 		stomp.SubscribeOpt.Header("x-stream-offset", cfg.StreamOffset),
 		stomp.SubscribeOpt.Header("prefetch-count", strconv.Itoa(cfg.ConsumerCredits)))
 
+	if cfg.ConsumerPriority != 0 {
+		subscribeOpts = append(subscribeOpts,
+			stomp.SubscribeOpt.Header("x-priority", strconv.Itoa(int(cfg.ConsumerPriority))))
+	}
+
 	if cfg.QueueDurability != config.None {
 		subscribeOpts = append(subscribeOpts,
 			stomp.SubscribeOpt.Header("durable", "true"),
