@@ -216,3 +216,32 @@ func BenchmarkObservingLatencyMillis(b *testing.B) {
 		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(latency)
 	}
 }
+
+var result time.Time
+
+func BenchmarkFormatTimestamp(b *testing.B) {
+	benchmarks := []struct {
+		name      string
+		useMillis bool
+	}{
+		{"nanoseconds", false},
+		{"milliseconds", true},
+	}
+
+	var r time.Time
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			var timestamp uint64
+			if bm.useMillis {
+				timestamp = uint64(time.Now().UTC().UnixMilli())
+			} else {
+				timestamp = uint64(time.Now().UTC().UnixNano())
+			}
+
+			for i := 0; i < b.N; i++ {
+				r = utils.FormatTimestamp(timestamp)
+			}
+		})
+	}
+	result = r
+}
