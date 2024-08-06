@@ -97,7 +97,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			payload := msg.GetData()
 			priority := strconv.Itoa(int(msg.Header.Priority))
 			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
-			m.With(prometheus.Labels{"protocol": "amqp-1.0"}).Observe(latency)
+			m.With(prometheus.Labels{"protocol": "amqp-1.0"}).Observe(latency.Seconds())
 
 			if timeSent.Before(previousMessageTimeSent) {
 				metrics.MessagesConsumedOutOfOrder.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()

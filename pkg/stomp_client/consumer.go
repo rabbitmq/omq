@@ -75,7 +75,7 @@ func (c StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 			}
 
 			timeSent, latency := utils.CalculateEndToEndLatency(&msg.Body)
-			m.Observe(latency)
+			m.Observe(latency.Seconds())
 
 			priority := msg.Header.Get("priority")
 

@@ -65,7 +65,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 		metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "mqtt", "priority": ""}).Inc()
 		payload := msg.Payload()
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
-		m.Observe(latency)
+		m.Observe(latency.Seconds())
 
 		if timeSent.Before(previousMessageTimeSent) {
 			metrics.MessagesConsumedOutOfOrder.With(prometheus.Labels{"protocol": "mqtt"}).Inc()

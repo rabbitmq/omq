@@ -126,8 +126,8 @@ func TestLatencyCalculationNano(t *testing.T) {
 	time.Sleep(1 * time.Microsecond)
 	_, latency := utils.CalculateEndToEndLatency(&testMsg)
 	// not very precise but we just care about the order of magnitude
-	assert.Greater(t, latency, 0.000001)
-	assert.Less(t, latency, 0.001)
+	assert.Greater(t, latency.Nanoseconds(), 0.000001)
+	assert.Less(t, latency.Nanoseconds(), 0.001)
 }
 
 func TestLatencyCalculationMillis(t *testing.T) {
@@ -193,7 +193,7 @@ func BenchmarkObservingLatency(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		utils.UpdatePayload(false, &testMsg)
 		_, latency := utils.CalculateEndToEndLatency(&testMsg)
-		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(latency)
+		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(latency.Seconds())
 	}
 }
 
