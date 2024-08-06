@@ -124,7 +124,7 @@ func TestLatencyCalculationNano(t *testing.T) {
 	testMsg := utils.MessageBody(100)
 	utils.UpdatePayload(false, &testMsg)
 	time.Sleep(1 * time.Microsecond)
-	latency := utils.CalculateEndToEndLatency(false, &testMsg)
+	_, latency := utils.CalculateEndToEndLatency(&testMsg)
 	// not very precise but we just care about the order of magnitude
 	assert.Greater(t, latency, 0.000001)
 	assert.Less(t, latency, 0.001)
@@ -134,7 +134,7 @@ func TestLatencyCalculationMillis(t *testing.T) {
 	testMsg := utils.MessageBody(100)
 	utils.UpdatePayload(true, &testMsg)
 	time.Sleep(2 * time.Millisecond)
-	latency := utils.CalculateEndToEndLatency(true, &testMsg)
+	_, latency := utils.CalculateEndToEndLatency(&testMsg)
 	// not very precise but we just care about the order of magnitude
 	assert.Greater(t, latency, 0.001)
 	assert.Less(t, latency, 0.010)
@@ -170,7 +170,7 @@ func BenchmarkLatencyCalculation(b *testing.B) {
 	utils.UpdatePayload(false, &testMsg)
 
 	for i := 0; i < b.N; i++ {
-		_ = utils.CalculateEndToEndLatency(false, &testMsg)
+		_, _ = utils.CalculateEndToEndLatency(&testMsg)
 	}
 }
 
@@ -192,7 +192,8 @@ func BenchmarkObservingLatency(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		utils.UpdatePayload(false, &testMsg)
-		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(utils.CalculateEndToEndLatency(false, &testMsg))
+		_, latency := utils.CalculateEndToEndLatency(&testMsg)
+		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(latency)
 	}
 }
 
@@ -211,6 +212,7 @@ func BenchmarkObservingLatencyMillis(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		utils.UpdatePayload(true, &testMsg)
-		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(utils.CalculateEndToEndLatency(false, &testMsg))
+		_, latency := utils.CalculateEndToEndLatency(&testMsg)
+		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(latency)
 	}
 }

@@ -80,6 +80,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	m := metrics.EndToEndLatency
 
 	log.Info("consumer started", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
+	previousMessageTimeSent := time.Unix(0, 0)
 
 	for i := 1; i <= c.Config.ConsumeCount; i++ {
 		select {
@@ -95,12 +96,22 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 
 			payload := msg.GetData()
 			priority := strconv.Itoa(int(msg.Header.Priority))
-			m.With(prometheus.Labels{"protocol": "amqp-1.0"}).Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &payload))
+			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
+			m.With(prometheus.Labels{"protocol": "amqp-1.0"}).Observe(latency)
 
-			log.Debug("message received", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "size", len(payload))
+			if timeSent.Before(previousMessageTimeSent) {
+				metrics.MessagesConsumedOutOfOrder.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
+				log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
+			}
+			previousMessageTimeSent = timeSent
 
-			log.Debug("consumer latency", "protocol", "amqp-1.0", "consumerId", c.Id, "latency", c.Config.ConsumerLatency)
-			time.Sleep(c.Config.ConsumerLatency)
+			log.Debug("message received", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "size", len(payload), "priority", priority, "latency", latency)
+
+			if c.Config.ConsumerLatency > 0 {
+				log.Debug("consumer latency", "protocol", "amqp-1.0", "consumerId", c.Id, "latency", c.Config.ConsumerLatency)
+				time.Sleep(c.Config.ConsumerLatency)
+			}
+
 			err = receiver.AcceptMessage(ctx, msg)
 			if err != nil {
 				log.Error("message NOT accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)

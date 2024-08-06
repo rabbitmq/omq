@@ -20,22 +20,24 @@ func UpdatePayload(useMillis bool, payload *[]byte) *[]byte {
 	return payload
 }
 
-func CalculateEndToEndLatency(useMillis bool, payload *[]byte) float64 {
+func CalculateEndToEndLatency(payload *[]byte) (time.Time, float64) {
 	if len(*payload) < 12 {
 		// message sent without latency tracking
-		return 0
+		return time.Unix(0, 0), 0
 	}
-	timeSent := binary.BigEndian.Uint64((*payload)[4:])
+	now := time.Now()
+	timeSent := FormatTimestamp(binary.BigEndian.Uint64((*payload)[4:]))
+	latency := now.Sub(timeSent)
+	return timeSent, latency.Seconds()
+}
 
-	if useMillis {
-		// less precise but necessary when a different process publishes and consumes
-		now := uint64(time.Now().UnixMilli())
-		latency := now - timeSent
-		return (float64(latency) / 1000)
+func FormatTimestamp(timestamp uint64) time.Time {
+	var t time.Time
+	// should be updated before the year 2100 ;)
+	if timestamp < 4102441200000 {
+		t = time.UnixMilli(int64(timestamp))
 	} else {
-		// nanoseconds - more precise when the same process publishes and consumes
-		now := uint64(time.Now().UnixNano())
-		latency := now - timeSent
-		return (float64(latency) / 1000000000)
+		t = time.Unix(0, int64(timestamp))
 	}
+	return t
 }
