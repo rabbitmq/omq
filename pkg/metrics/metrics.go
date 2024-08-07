@@ -32,7 +32,7 @@ var (
 	MessagesConsumed           *prometheus.CounterVec
 	MessagesConsumedOutOfOrder *prometheus.CounterVec
 	PublishingLatency          *prometheus.SummaryVec
-	EndToEndLatency            *prometheus.HistogramVec
+	EndToEndLatency            *prometheus.SummaryVec
 )
 
 func RegisterMetrics(globalLabels prometheus.Labels) {
@@ -66,10 +66,10 @@ func RegisterMetrics(globalLabels prometheus.Labels) {
 		}, []string{"protocol"})
 	}
 	if EndToEndLatency == nil {
-		EndToEndLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		EndToEndLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
 			Name:        "omq_end_to_end_latency_seconds",
 			Help:        "Time from sending a message to receiving the message",
-			Buckets:     []float64{.001, .002, .003, .004, .005, .006, .007, 0.008, .009, 0.01, 0.025, 0.05, 0.1, 0.5, 1, 2, 3, 4, 5, 10, 20, 30, 60},
+			Objectives:  map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
 			ConstLabels: globalLabels,
 		}, []string{"protocol"})
 	}
