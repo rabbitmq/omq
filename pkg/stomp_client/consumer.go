@@ -62,7 +62,10 @@ func (c StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 	close(subscribed)
 
 	m := metrics.EndToEndLatency.With(prometheus.Labels{"protocol": "stomp"})
+
 	log.Info("consumer started", "protocol", "STOMP", "consumerId", c.Id, "destination", c.Topic)
+	previousMessageTimeSent := time.Unix(0, 0)
+
 	for i := 1; i <= c.Config.ConsumeCount; i++ {
 		select {
 		case msg := <-sub.C:
@@ -70,17 +73,31 @@ func (c StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 				log.Error("failed to receive a message", "protocol", "STOMP", "consumerId", c.Id, "c.Topic", c.Topic, "error", msg.Err)
 				return
 			}
-			m.Observe(utils.CalculateEndToEndLatency(c.Config.UseMillis, &msg.Body))
-			log.Debug("message received", "protocol", "stomp", "consumerId", c.Id, "destination", c.Topic, "size", len(msg.Body), "ack required", msg.ShouldAck())
 
-			log.Debug("consumer latency", "protocol", "stomp", "consumerId", c.Id, "latency", c.Config.ConsumerLatency)
-			time.Sleep(c.Config.ConsumerLatency)
+			timeSent, latency := utils.CalculateEndToEndLatency(&msg.Body)
+			m.Observe(latency.Seconds())
+
+			priority := msg.Header.Get("priority")
+
+			if timeSent.Before(previousMessageTimeSent) {
+				metrics.MessagesConsumedOutOfOrder.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
+				log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
+			}
+			previousMessageTimeSent = timeSent
+
+			log.Debug("message received", "protocol", "stomp", "consumerId", c.Id, "destination", c.Topic, "size", len(msg.Body), "ack required", msg.ShouldAck(), "priority", priority, "latency", latency)
+
+			if c.Config.ConsumerLatency > 0 {
+				log.Debug("consumer latency", "protocol", "stomp", "consumerId", c.Id, "latency", c.Config.ConsumerLatency)
+				time.Sleep(c.Config.ConsumerLatency)
+			}
+
 			err = c.Connection.Ack(msg)
 			if err != nil {
 				log.Error("message NOT acknowledged", "protocol", "stomp", "consumerId", c.Id, "destination", c.Topic)
 
 			}
-			metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "stomp", "priority": msg.Header.Get("priority")}).Inc()
+			metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "stomp", "priority": priority}).Inc()
 		case <-ctx.Done():
 			c.Stop("time limit reached")
 			return

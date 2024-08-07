@@ -28,10 +28,11 @@ var lock = &sync.Mutex{}
 var metricsServer *MetricsServer
 
 var (
-	MessagesPublished *prometheus.CounterVec
-	MessagesConsumed  *prometheus.CounterVec
-	PublishingLatency *prometheus.SummaryVec
-	EndToEndLatency   *prometheus.HistogramVec
+	MessagesPublished          *prometheus.CounterVec
+	MessagesConsumed           *prometheus.CounterVec
+	MessagesConsumedOutOfOrder *prometheus.CounterVec
+	PublishingLatency          *prometheus.SummaryVec
+	EndToEndLatency            *prometheus.HistogramVec
 )
 
 func RegisterMetrics(globalLabels prometheus.Labels) {
@@ -46,6 +47,13 @@ func RegisterMetrics(globalLabels prometheus.Labels) {
 		MessagesConsumed = promauto.NewCounterVec(prometheus.CounterOpts{
 			Name:        "omq_messages_consumed_total",
 			Help:        "The total number of consumed messages",
+			ConstLabels: globalLabels,
+		}, []string{"protocol", "priority"})
+	}
+	if MessagesConsumedOutOfOrder == nil {
+		MessagesConsumedOutOfOrder = promauto.NewCounterVec(prometheus.CounterOpts{
+			Name:        "omq_messages_consumed_out_of_order",
+			Help:        "The number of messages consumed out of order",
 			ConstLabels: globalLabels,
 		}, []string{"protocol", "priority"})
 	}

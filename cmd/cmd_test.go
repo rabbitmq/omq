@@ -120,24 +120,25 @@ func TestPublishWithPriorities(t *testing.T) {
 	}
 }
 
-func TestLatencyCalculationNano(t *testing.T) {
-	testMsg := utils.MessageBody(100)
-	utils.UpdatePayload(false, &testMsg)
-	time.Sleep(1 * time.Microsecond)
-	latency := utils.CalculateEndToEndLatency(false, &testMsg)
-	// not very precise but we just care about the order of magnitude
-	assert.Greater(t, latency, 0.000001)
-	assert.Less(t, latency, 0.001)
-}
-
-func TestLatencyCalculationMillis(t *testing.T) {
-	testMsg := utils.MessageBody(100)
-	utils.UpdatePayload(true, &testMsg)
-	time.Sleep(2 * time.Millisecond)
-	latency := utils.CalculateEndToEndLatency(true, &testMsg)
-	// not very precise but we just care about the order of magnitude
-	assert.Greater(t, latency, 0.001)
-	assert.Less(t, latency, 0.010)
+func TestLatencyCalculationA(t *testing.T) {
+	tests := []struct {
+		name      string
+		useMillis bool
+	}{
+		{"nanoseconds", false},
+		{"milliseconds", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testMsg := utils.MessageBody(100)
+			utils.UpdatePayload(tc.useMillis, &testMsg)
+			time.Sleep(10 * time.Millisecond)
+			_, latency := utils.CalculateEndToEndLatency(&testMsg)
+			// not very precise but we just care about the order of magnitude
+			assert.Greater(t, latency.Milliseconds(), int64(9))
+			assert.Less(t, latency.Milliseconds(), int64(40))
+		})
+	}
 }
 
 func TestAutoUseMillis(t *testing.T) {
@@ -165,13 +166,31 @@ func TestAutoUseMillis(t *testing.T) {
 }
 
 // benchmarking the latency calculation
-func BenchmarkLatencyCalculation(b *testing.B) {
-	testMsg := utils.MessageBody(1000)
-	utils.UpdatePayload(false, &testMsg)
+var resultUpdatePayload1 time.Time
+var resultUpdatePayload2 time.Duration
 
-	for i := 0; i < b.N; i++ {
-		_ = utils.CalculateEndToEndLatency(false, &testMsg)
+func BenchmarkLatencyCalculation(b *testing.B) {
+	benchmarks := []struct {
+		name      string
+		useMillis bool
+	}{
+		{"nanoseconds", false},
+		{"milliseconds", true},
 	}
+	var r1 time.Time
+	var r2 time.Duration
+
+	testMsg := utils.MessageBody(1000)
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			utils.UpdatePayload(bm.useMillis, &testMsg)
+
+			for i := 0; i < b.N; i++ {
+				r1, r2 = utils.CalculateEndToEndLatency(&testMsg)
+			}
+		})
+	}
+	resultUpdatePayload1, resultUpdatePayload2 = r1, r2
 }
 
 // benchmarking the latency calculation
@@ -192,25 +211,61 @@ func BenchmarkObservingLatency(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		utils.UpdatePayload(false, &testMsg)
-		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(utils.CalculateEndToEndLatency(false, &testMsg))
+		_, latency := utils.CalculateEndToEndLatency(&testMsg)
+		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(latency.Seconds())
 	}
 }
 
-func BenchmarkObservingLatencyMillis(b *testing.B) {
-	if metric == nil {
-		metric = promauto.NewSummaryVec(prometheus.SummaryOpts{
-			Name:       "benchmaking_latency_seconds",
-			Help:       "Time from sending a message to receiving a confirmation",
-			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001},
-		}, []string{"protocol"})
-	} else {
-		metric.Reset()
+var resultUpdatePayload *[]byte
+
+func BenchmarkUpdatePayload(b *testing.B) {
+	benchmarks := []struct {
+		name      string
+		useMillis bool
+	}{
+		{"nanoseconds", false},
+		{"milliseconds", true},
 	}
+
+	var r *[]byte
 
 	testMsg := utils.MessageBody(1000)
 
-	for i := 0; i < b.N; i++ {
-		utils.UpdatePayload(true, &testMsg)
-		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(utils.CalculateEndToEndLatency(false, &testMsg))
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				utils.UpdatePayload(true, &testMsg)
+			}
+		})
 	}
+	resultUpdatePayload = r
+}
+
+var resultFormatTimeStamp time.Time
+
+func BenchmarkFormatTimestamp(b *testing.B) {
+	benchmarks := []struct {
+		name      string
+		useMillis bool
+	}{
+		{"nanoseconds", false},
+		{"milliseconds", true},
+	}
+
+	var r time.Time
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			var timestamp uint64
+			if bm.useMillis {
+				timestamp = uint64(time.Now().UTC().UnixMilli())
+			} else {
+				timestamp = uint64(time.Now().UTC().UnixNano())
+			}
+
+			for i := 0; i < b.N; i++ {
+				r = utils.FormatTimestamp(timestamp)
+			}
+		})
+	}
+	resultFormatTimeStamp = r
 }
