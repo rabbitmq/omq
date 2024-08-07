@@ -57,7 +57,14 @@ func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 	}
 
 	terminus := topic.CalculateTopic(cfg.PublishTo, n)
+
+	settleMode := amqp.SenderSettleModeUnsettled.Ptr()
+	if cfg.Amqp.SendSettled {
+		settleMode = amqp.SenderSettleModeSettled.Ptr()
+	}
+
 	sender, err := session.NewSender(context.TODO(), terminus, &amqp.SenderOptions{
+		SettlementMode:   settleMode,
 		TargetDurability: durability})
 	if err != nil {
 		log.Error("publisher failed to create a sender", "protocol", "amqp-1.0", "publisherId", n, "error", err.Error())

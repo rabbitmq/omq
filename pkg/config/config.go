@@ -21,7 +21,8 @@ var AmqpDurabilityModes = map[AmqpDurabilityMode][]string{
 }
 
 type AmqpOptions struct {
-	Subject string
+	Subject     string
+	SendSettled bool
 }
 
 type MqttOptions struct {
