@@ -1,6 +1,6 @@
 ## omq
 
-`omq` is a messaging system client for testing purposes. It currently supports AMQP-1.0, STOMP and MQTT 3.1.
+`omq` is a messaging system client for testing purposes. It currently supports AMQP-1.0, STOMP and MQTT 3.1.1.
 It is developed mostly for RabbitMQ but might be useful for other brokers as well (some tests against ActiveMQ
 were performed).
 
@@ -12,11 +12,11 @@ a different protocol than the consumers.
 ```
 ./omq stomp-amqp
 ```
-will publish via STOMP and consume via AMQP (see below for the topic/queue/routing key details). A more complex example:
+will publish via STOMP and consume via AMQP 1.0 (see below for the topic/queue/routing key details). A more complex example:
 ```
 ./omq mqtt-amqp --publishers 10 --consumers 1 --publish-to 'sensor/%d' --consume-from '/topic/sensor.#' --rate 1 --size 100
 ```
-will start 10 MQTT publishers, each publishing 1 message a second, with a 100 bytes of payload, to the `amq.topic` exchange (default for the MQTT plugin)
+will start 10 MQTT publishers, each publishing 1 message a second, with 100 bytes of payload, to the `amq.topic` exchange (default for the MQTT plugin)
 with the topic/routing key of `sensor/%d`, where the `%d` is the ID of the publisher (from 1 to 10). It will also start a single AMQP 1.0 consumer that
 consumes all those messages thanks to a wildcard subscription.
 
@@ -44,6 +44,11 @@ much sense. Removing it makes it easier to use the same parameters across protoc
 with `--publish-to /topic/<protocol1><protocol2> --consume-from /topic/<protocol1><protocol2>`, which wouldn't work with MQTT without
 this special handling ("/topic/" would be a part of the topic/binding key).
 
+Read more about how RabbitMQ handles sources and targets in different protocols:
+* [AMQP 1.0](https://www.rabbitmq.com/docs/next/amqp#address-v1) format used by RabbitMQ 3.x
+* [AMQP 1.0](https://www.rabbitmq.com/docs/next/amqp#address-v2) format used by RabbitMQ 4.0+ (the old format is still supported but deprecated)
+* [MQTT](https://www.rabbitmq.com/docs/mqtt#topic-level-separator-and-wildcards)
+* [STOMP](https://www.rabbitmq.com/docs/stomp#d)
 
 ### Metrics
 
@@ -67,7 +72,7 @@ Additionally, the final values of the metrics are printed when `omq` finishes. A
 
 ### Compatibility with perf-test
 
-[perf-test](https://perftest.rabbitmq.com/) is the main testing tool used with RabbitMQ. It has many more options, but only supports AMQP 0-9-1
+[perf-test](https://perftest.rabbitmq.com/) is the main testing tool used with RabbitMQ. It has many more options, but only supports AMQP 0.9.1
 (historically, the main protocol used with RabbitMQ). `omq` uses the same message format for end-to-end latency measurment and therefore
 messages published with perf-test can be consumed by `omq` or vice versa, and the end-to-end latency will be measured.
 
@@ -78,7 +83,8 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
   -D, --cmessages int                       The number of messages to consume per consumer (default=MaxInt) (default 9223372036854775807)
   -T, --consume-from string                 The queue/topic/terminus to consume from (%d will be replaced with the consumer's id) (default "/topic/omq")
       --consumer-credits int                AMQP-1.0 consumer credits / STOMP prefetch count (default 1)
-  -L, --consumer-latency duration           consumer latency (time to accept message)
+  -L, --consumer-latency duration           consumer latency (time to accept message; not supported by MQTT)
+      --consumer-priority int32             Consumer priority (AMQP 1.0 and STOMP)
       --consumer-uri string                 URI for consuming
   -y, --consumers int                       The number of consumers to start (default 1)
   -h, --help                                help for omq
