@@ -29,11 +29,13 @@ type MqttPublisher struct {
 func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 	var token mqtt.Token
 
+	parsedUri := utils.ParseURI(cfg.PublisherUri, "1883")
+
 	// open connection
 	opts := mqtt.NewClientOptions().
-		AddBroker(cfg.PublisherUri).
-		SetUsername("guest").
-		SetPassword("guest").
+		AddBroker(parsedUri.Broker).
+		SetUsername(parsedUri.Username).
+		SetPassword(parsedUri.Password).
 		SetClientID(fmt.Sprintf("omq-pub-%d", n)).
 		SetAutoReconnect(true).
 		SetCleanSession(cfg.MqttPublisher.CleanSession).

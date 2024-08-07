@@ -16,12 +16,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// these are the default options that work with RabbitMQ
-var o []func(*stomp.Conn) error = []func(*stomp.Conn) error{
-	stomp.ConnOpt.Login("guest", "guest"),
-	stomp.ConnOpt.Host("/"),
-}
-
 type StompConsumer struct {
 	Id           int
 	Connection   *stomp.Conn
@@ -31,7 +25,14 @@ type StompConsumer struct {
 }
 
 func NewConsumer(cfg config.Config, id int) *StompConsumer {
-	conn, err := stomp.Dial("tcp", cfg.ConsumerUri, o...)
+	parsedUri := utils.ParseURI(cfg.ConsumerUri, "61613")
+
+	var o []func(*stomp.Conn) error = []func(*stomp.Conn) error{
+		stomp.ConnOpt.Login(parsedUri.Username, parsedUri.Password),
+		stomp.ConnOpt.Host("/"), // TODO
+	}
+
+	conn, err := stomp.Dial("tcp", parsedUri.Broker, o...)
 
 	if err != nil {
 		log.Error("consumer connection failed", "protocol", "STOMP", "consumerId", id, "error", err.Error())

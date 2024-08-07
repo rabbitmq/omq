@@ -2,7 +2,11 @@ package utils
 
 import (
 	"encoding/binary"
+	"net/url"
+	"os"
 	"time"
+
+	"github.com/rabbitmq/omq/pkg/log"
 )
 
 func MessageBody(size int) []byte {
@@ -40,4 +44,40 @@ func FormatTimestamp(timestamp uint64) time.Time {
 		t = time.Unix(0, int64(timestamp))
 	}
 	return t
+}
+
+type uri struct {
+	Broker   string
+	Username string
+	Password string
+}
+
+func ParseURI(rawURI string, defaultPort string) uri {
+	u, err := url.Parse(rawURI)
+	if err != nil {
+		log.Error("Cannot parse consumer URI", err)
+		os.Exit(1)
+	}
+
+	port := defaultPort
+	if u.Port() != "" {
+		port = u.Port()
+	}
+	user := "guest"
+	if u.User.Username() != "" {
+		user = u.User.Username()
+	}
+
+	pass := "guest"
+	if p, isSet := u.User.Password(); isSet {
+		pass = p
+	}
+
+	result := &uri{
+		Broker:   u.Hostname() + ":" + port,
+		Username: user,
+		Password: pass,
+	}
+
+	return *result
 }

@@ -25,10 +25,13 @@ type MqttConsumer struct {
 }
 
 func NewConsumer(cfg config.Config, id int) *MqttConsumer {
+	parsedUri := utils.ParseURI(cfg.ConsumerUri, "1883")
+
+	// open connection
 	opts := mqtt.NewClientOptions().
-		AddBroker(cfg.ConsumerUri).
-		SetUsername("guest").
-		SetPassword("guest").
+		AddBroker(parsedUri.Broker).
+		SetUsername(parsedUri.Username).
+		SetPassword(parsedUri.Password).
 		SetClientID(fmt.Sprintf("omq-sub-%d", id)).
 		SetAutoReconnect(true).
 		SetCleanSession(cfg.MqttConsumer.CleanSession).

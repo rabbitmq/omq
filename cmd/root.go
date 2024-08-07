@@ -318,9 +318,9 @@ func defaultUri(proto string) string {
 	case "amqp":
 		uri = "amqp://localhost/"
 	case "stomp":
-		uri = "localhost:61613"
+		uri = "stomp://localhost:61613"
 	case "mqtt":
-		uri = "localhost:1883"
+		uri = "mqtt://localhost:1883"
 	}
 	return uri
 }
