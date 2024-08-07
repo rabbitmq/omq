@@ -99,7 +99,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 			m.With(prometheus.Labels{"protocol": "amqp-1.0"}).Observe(latency.Seconds())
 
-			if timeSent.Before(previousMessageTimeSent) {
+			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
 				metrics.MessagesConsumedOutOfOrder.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
 				log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
 			}

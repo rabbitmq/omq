@@ -88,6 +88,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
       --consumer-uri string                 URI for consuming
   -y, --consumers int                       The number of consumers to start (default 1)
   -h, --help                                help for omq
+      --log-out-of-order-messages           Print a log line when a message is received that is older than the previously received message
   -d, --message-durability                  Mark messages as durable (default true)
       --message-priority string             Message priority (0-255, default=unset)
       --metric-tags strings                 Prometheus label-value pairs, eg. l1=v1,l2=v2

@@ -55,6 +55,7 @@ type Config struct {
 	MqttPublisher        MqttOptions
 	MqttConsumer         MqttOptions
 	MetricTags           map[string]string
+	LogOutOfOrder        bool
 }
 
 func NewConfig() Config {

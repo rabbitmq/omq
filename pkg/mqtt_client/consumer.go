@@ -70,7 +70,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 		m.Observe(latency.Seconds())
 
-		if timeSent.Before(previousMessageTimeSent) {
+		if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
 			metrics.MessagesConsumedOutOfOrder.With(prometheus.Labels{"protocol": "mqtt"}).Inc()
 			log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
 		}
