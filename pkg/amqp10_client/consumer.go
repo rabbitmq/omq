@@ -27,6 +27,7 @@ type Amqp10Consumer struct {
 	Receiver   *amqp.Receiver
 	Topic      string
 	Config     config.Config
+	whichUri   int
 }
 
 func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
@@ -37,6 +38,7 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 		Receiver:   nil,
 		Topic:      topic.CalculateTopic(cfg.ConsumeFrom, id),
 		Config:     cfg,
+		whichUri:   0,
 	}
 
 	// TODO
@@ -60,8 +62,13 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 	c.Connection = nil
 
 	for c.Connection == nil {
-		hostname, vhost := hostAndVHost(c.Config.ConsumerUri)
-		conn, err := amqp.Dial(context.TODO(), c.Config.ConsumerUri, &amqp.ConnOptions{
+		if c.whichUri >= len(c.Config.ConsumerUri) {
+			c.whichUri = 0
+		}
+		uri := c.Config.ConsumerUri[c.whichUri]
+		c.whichUri++
+		hostname, vhost := hostAndVHost(uri)
+		conn, err := amqp.Dial(context.TODO(), uri, &amqp.ConnOptions{
 			HostName: vhost,
 			TLSConfig: &tls.Config{
 				ServerName: hostname,
@@ -71,6 +78,7 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 			log.Error("consumer failed to connect", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
+			log.Debug("consumer connected", "protocol", "amqp-1.0", "consumerId", c.Id, "uri", uri)
 			c.Connection = conn
 		}
 	}

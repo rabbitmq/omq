@@ -20,6 +20,7 @@ func TestURIParsing(t *testing.T) {
 		{rawURI: "mqtt://user:pass@name.com", defaultPort: "1234", broker: "name.com:1234", username: "user", password: "pass"},
 		{rawURI: "mqtt://name.com", defaultPort: "1234", broker: "name.com:1234", username: "guest", password: "guest"},
 		{rawURI: "mqtt://local:4321", defaultPort: "1234", broker: "local:4321", username: "guest", password: "guest"},
+		// {rawURI: "local:4321", defaultPort: "1234", broker: "local:4321", username: "guest", password: "guest"},
 	}
 
 	for _, tc := range tests {

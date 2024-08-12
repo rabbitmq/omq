@@ -25,7 +25,7 @@ type StompConsumer struct {
 }
 
 func NewConsumer(cfg config.Config, id int) *StompConsumer {
-	parsedUri := utils.ParseURI(cfg.ConsumerUri, "61613")
+	parsedUri := utils.ParseURI(cfg.ConsumerUri[0], "61613")
 
 	var o []func(*stomp.Conn) error = []func(*stomp.Conn) error{
 		stomp.ConnOpt.Login(parsedUri.Username, parsedUri.Password),

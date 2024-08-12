@@ -186,8 +186,8 @@ func RootCmd() *cobra.Command {
 	}
 	rootCmd.PersistentFlags().
 		VarP(enumflag.New(&log.Level, "log-level", log.Levels, enumflag.EnumCaseInsensitive), "log-level", "l", "Log level (debug, info, error)")
-	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
-	rootCmd.PersistentFlags().StringVarP(&cfg.ConsumerUri, "consumer-uri", "", "", "URI for consuming")
+	rootCmd.PersistentFlags().StringSliceVarP(&cfg.PublisherUri, "publisher-uri", "", nil, "URI for publishing")
+	rootCmd.PersistentFlags().StringSliceVarP(&cfg.ConsumerUri, "consumer-uri", "", nil, "URI for consuming")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Publishers, "publishers", "x", 1, "The number of publishers to start")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Consumers, "consumers", "y", 1, "The number of consumers to start")
 	rootCmd.PersistentFlags().
@@ -309,13 +309,13 @@ func setUris(cfg *config.Config, command string) {
 	if command == "version" {
 		return
 	}
-	if cfg.PublisherUri == "" {
+	if cfg.PublisherUri == nil {
 		println("setting publisher uri to ", defaultUri(strings.Split(command, "-")[0]))
-		(*cfg).PublisherUri = defaultUri(strings.Split(command, "-")[0])
+		(*cfg).PublisherUri = []string{defaultUri(strings.Split(command, "-")[0])}
 	}
-	if cfg.ConsumerUri == "" {
+	if cfg.ConsumerUri == nil {
 		println("setting consumer uri to ", defaultUri(strings.Split(command, "-")[1]))
-		(*cfg).ConsumerUri = defaultUri(strings.Split(command, "-")[1])
+		(*cfg).ConsumerUri = []string{defaultUri(strings.Split(command, "-")[1])}
 	}
 }
 

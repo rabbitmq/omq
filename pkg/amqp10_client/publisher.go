@@ -26,6 +26,7 @@ type Amqp10Publisher struct {
 	Terminus   string
 	Config     config.Config
 	msg        []byte
+	whichUri   int
 }
 
 func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
@@ -35,6 +36,7 @@ func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
 		Sender:     nil,
 		Config:     cfg,
 		Terminus:   topic.CalculateTopic(cfg.PublishTo, n),
+		whichUri:   0,
 	}
 
 	publisher.Connect()
@@ -58,8 +60,13 @@ func (p *Amqp10Publisher) Connect() {
 	p.Connection = nil
 
 	for p.Connection == nil {
-		hostname, vhost := hostAndVHost(p.Config.PublisherUri)
-		conn, err = amqp.Dial(context.TODO(), p.Config.PublisherUri, &amqp.ConnOptions{
+		if p.whichUri >= len(p.Config.PublisherUri) {
+			p.whichUri = 0
+		}
+		uri := p.Config.PublisherUri[p.whichUri]
+		p.whichUri++
+		hostname, vhost := hostAndVHost(uri)
+		conn, err = amqp.Dial(context.TODO(), uri, &amqp.ConnOptions{
 			HostName: vhost,
 			TLSConfig: &tls.Config{
 				ServerName: hostname,
@@ -70,6 +77,7 @@ func (p *Amqp10Publisher) Connect() {
 			log.Error("connection failed", "protocol", "amqp-1.0", "publisherId", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
+			log.Debug("connection established", "protocol", "amqp-1.0", "publisherId", p.Id, "uri", uri)
 			p.Connection = conn
 		}
 	}
