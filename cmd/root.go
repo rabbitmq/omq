@@ -178,11 +178,14 @@ func RootCmd() *cobra.Command {
 			}
 			metricsServer := metrics.GetMetricsServer()
 			metricsServer.Start()
+			log.Setup()
 
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 		},
 	}
+	rootCmd.PersistentFlags().
+		VarP(enumflag.New(&log.Level, "log-level", log.Levels, enumflag.EnumCaseInsensitive), "log-level", "l", "Log level (debug, info, error)")
 	rootCmd.PersistentFlags().StringVarP(&cfg.PublisherUri, "publisher-uri", "", "", "URI for publishing")
 	rootCmd.PersistentFlags().StringVarP(&cfg.ConsumerUri, "consumer-uri", "", "", "URI for consuming")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Publishers, "publishers", "x", 1, "The number of publishers to start")

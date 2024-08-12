@@ -2,27 +2,22 @@ package log
 
 import (
 	"os"
-	"strings"
 
 	"log/slog"
 )
 
 var logger *slog.Logger
 
-func init() {
-	var logLevelEnv = os.Getenv("OMQ_LOG_LEVEL")
-	var logLevel slog.Level
-	switch strings.ToUpper(logLevelEnv) {
-	case "DEBUG":
-		logLevel = slog.LevelDebug
-	case "INFO":
-		logLevel = slog.LevelInfo
-	case "ERROR":
-		logLevel = slog.LevelError
-	default:
-		logLevel = slog.LevelInfo
-	}
-	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
+var Levels = map[slog.Level][]string{
+	slog.LevelDebug: {"debug"},
+	slog.LevelInfo:  {"info"},
+	slog.LevelError: {"error"},
+}
+
+var Level slog.Level
+
+func Setup() {
+	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: Level}))
 }
 
 func Debug(format string, v ...interface{}) {
