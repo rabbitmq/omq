@@ -33,7 +33,7 @@ An [OCI image](https://hub.docker.com/r/pivotalrabbitmq/omq/tags) is also availa
 
 ### Connecting to the Broker
 
-Both --publisher-uri and --consumer-uri can be repeated multiple times to set multiple
+Both `--publisher-uri` and `--consumer-uri` can be repeated multiple times to set multiple
 endpoints. If `omq` can't establish a connection or an existing connection is terminated,
 it will try the next URI from the list.
 
