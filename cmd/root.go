@@ -143,6 +143,7 @@ func RootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use: "omq",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			log.Setup()
 			if cfg.Size < 12 {
 				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
 				os.Exit(1)
@@ -180,8 +181,6 @@ func RootCmd() *cobra.Command {
 			}
 			metricsServer := metrics.GetMetricsServer()
 			metricsServer.Start()
-			log.Setup()
-
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 		},
@@ -311,11 +310,11 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 
 func setUris(cfg *config.Config, command string) {
 	if cfg.PublisherUri == nil {
-		println("setting publisher uri to ", defaultUri(strings.Split(command, "-")[0]))
+		log.Debug("setting default publisher uri", "uri", defaultUri(strings.Split(command, "-")[0]))
 		(*cfg).PublisherUri = []string{defaultUri(strings.Split(command, "-")[0])}
 	}
 	if cfg.ConsumerUri == nil {
-		println("setting consumer uri to ", defaultUri(strings.Split(command, "-")[1]))
+		log.Debug("setting default consumer uri", "uri", defaultUri(strings.Split(command, "-")[1]))
 		(*cfg).ConsumerUri = []string{defaultUri(strings.Split(command, "-")[1])}
 	}
 }

@@ -62,12 +62,12 @@ func (p *StompPublisher) Connect() {
 
 		conn, err := stomp.Dial("tcp", parsedUri.Broker, o...)
 		if err != nil {
-			log.Error("publisher connection failed", "protocol", "STOMP", "publisherId", p.Id, "error", err.Error())
+			log.Error("publisher connection failed", "publisherId", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
 			p.Connection = conn
 		}
-		log.Info("connection established", "protocol", "STOMP", "publisherId", p.Id)
+		log.Info("connection established", "publisherId", p.Id)
 	}
 }
 
@@ -89,7 +89,7 @@ func (p *StompPublisher) Start(ctx context.Context) {
 }
 
 func (p *StompPublisher) StartFullSpeed(ctx context.Context) {
-	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
+	log.Info("publisher started", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
 
 	for i := 1; i <= p.Config.PublishCount; {
 		select {
@@ -104,17 +104,17 @@ func (p *StompPublisher) StartFullSpeed(ctx context.Context) {
 			}
 		}
 	}
-	log.Debug("publisher completed", "protocol", "stomp", "publisherId", p.Id)
+	log.Debug("publisher completed", "publisherId", p.Id)
 }
 
 func (p *StompPublisher) StartIdle(ctx context.Context) {
-	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
+	log.Info("publisher started", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
 
 	_ = ctx.Done()
 }
 
 func (p *StompPublisher) StartRateLimited(ctx context.Context) {
-	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
+	log.Info("publisher started", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
 
 	msgSent := 0
@@ -145,17 +145,17 @@ func (p *StompPublisher) Send() error {
 	err := p.Connection.Send(p.Topic, "", p.msg, buildHeaders(p.Config)...)
 	timer.ObserveDuration()
 	if err != nil {
-		log.Error("message sending failure", "protocol", "STOMP", "publisherId", p.Id, "error", err)
+		log.Error("message sending failure", "publisherId", p.Id, "error", err)
 		return err
 	}
-	log.Debug("message sent", "protocol", "STOMP", "publisherId", p.Id, "destination", p.Topic)
+	log.Debug("message sent", "publisherId", p.Id, "destination", p.Topic)
 
 	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "stomp"}).Inc()
 	return nil
 }
 
 func (p *StompPublisher) Stop(reason string) {
-	log.Debug("closing connection", "protocol", "stomp", "publisherId", p.Id, "reason", reason)
+	log.Debug("closing connection", "publisherId", p.Id, "reason", reason)
 	_ = p.Connection.Disconnect()
 }
 

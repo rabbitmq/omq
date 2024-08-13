@@ -78,10 +78,10 @@ func (p *Amqp10Publisher) Connect() {
 		})
 
 		if err != nil {
-			log.Error("connection failed", "protocol", "amqp-1.0", "publisherId", p.Id, "error", err.Error())
+			log.Error("connection failed", "publisherId", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
-			log.Debug("connection established", "protocol", "amqp-1.0", "publisherId", p.Id, "uri", uri)
+			log.Debug("connection established", "publisherId", p.Id, "uri", uri)
 			p.Connection = conn
 		}
 	}
@@ -89,7 +89,7 @@ func (p *Amqp10Publisher) Connect() {
 	for p.Session == nil {
 		session, err := p.Connection.NewSession(context.TODO(), nil)
 		if err != nil {
-			log.Error("publisher failed to create a session", "protocol", "amqp-1.0", "publisherId", p.Id, "error", err.Error())
+			log.Error("publisher failed to create a session", "publisherId", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 			p.Connect()
 		} else {
@@ -121,7 +121,7 @@ func (p *Amqp10Publisher) CreateSender() {
 			SettlementMode:   settleMode,
 			TargetDurability: durability})
 		if err != nil {
-			log.Error("publisher failed to create a sender", "protocol", "amqp-1.0", "publisherId", p.Id, "error", err.Error())
+			log.Error("publisher failed to create a sender", "publisherId", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 			p.Connect()
 		} else {
@@ -146,11 +146,11 @@ func (p *Amqp10Publisher) Start(ctx context.Context) {
 		p.StartRateLimited(ctx)
 	}
 
-	log.Debug("publisher completed", "protocol", "amqp-1.0", "publisherId", p.Id)
+	log.Debug("publisher completed", "publisherId", p.Id)
 }
 
 func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
-	log.Info("publisher started", "protocol", "AMQP-1.0", "publisherId", p.Id, "rate", "unlimited", "destination", p.Terminus)
+	log.Info("publisher started", "publisherId", p.Id, "rate", "unlimited", "destination", p.Terminus)
 
 	for i := 1; i <= p.Config.PublishCount; {
 		select {
@@ -168,13 +168,13 @@ func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
 }
 
 func (p *Amqp10Publisher) StartIdle(ctx context.Context) {
-	log.Info("publisher started", "protocol", "AMQP-1.0", "publisherId", p.Id, "rate", "-", "destination", p.Terminus)
+	log.Info("publisher started", "publisherId", p.Id, "rate", "-", "destination", p.Terminus)
 
 	_ = ctx.Done()
 }
 
 func (p *Amqp10Publisher) StartRateLimited(ctx context.Context) {
-	log.Info("publisher started", "protocol", "AMQP-1.0", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Terminus)
+	log.Info("publisher started", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Terminus)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
 
 	msgSent := 0
@@ -221,15 +221,15 @@ func (p *Amqp10Publisher) Send() error {
 	err := p.Sender.Send(context.TODO(), msg, nil)
 	timer.ObserveDuration()
 	if err != nil {
-		log.Error("message sending failure", "protocol", "amqp-1.0", "publisherId", p.Id, "error", err.Error())
+		log.Error("message sending failure", "publisherId", p.Id, "error", err.Error())
 		return err
 	}
 	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
-	log.Debug("message sent", "protocol", "amqp-1.0", "publisherId", p.Id)
+	log.Debug("message sent", "publisherId", p.Id)
 	return nil
 }
 
 func (p *Amqp10Publisher) Stop(reason string) {
-	log.Debug("closing connection", "protocol", "amqp-1.0", "publisherId", p.Id, "reason", reason)
+	log.Debug("closing connection", "publisherId", p.Id, "reason", reason)
 	_ = p.Connection.Close()
 }

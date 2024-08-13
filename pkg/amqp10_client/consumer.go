@@ -79,10 +79,10 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 			},
 		})
 		if err != nil {
-			log.Error("consumer failed to connect", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
+			log.Error("consumer failed to connect", "consumerId", c.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
-			log.Debug("consumer connected", "protocol", "amqp-1.0", "consumerId", c.Id, "uri", uri)
+			log.Debug("consumer connected", "consumerId", c.Id, "uri", uri)
 			c.Connection = conn
 		}
 	}
@@ -90,7 +90,7 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 	for c.Session == nil {
 		session, err := c.Connection.NewSession(context.TODO(), nil)
 		if err != nil {
-			log.Error("consumer failed to create a session", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
+			log.Error("consumer failed to create a session", "consumerId", c.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
 			c.Session = session
@@ -112,7 +112,7 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 	for c.Receiver == nil {
 		receiver, err := c.Session.NewReceiver(ctx, c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Properties: buildLinkProperties(c.Config), Filters: buildLinkFilters(c.Config)})
 		if err != nil {
-			log.Error("consumer failed to create a receiver", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
+			log.Error("consumer failed to create a receiver", "consumerId", c.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
 			c.Receiver = receiver
@@ -125,13 +125,13 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 
 	c.CreateReceiver(ctx)
 	close(subscribed)
-	log.Info("consumer started", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
+	log.Info("consumer started", "consumerId", c.Id, "terminus", c.Topic)
 	previousMessageTimeSent := time.Unix(0, 0)
 
 	for i := 1; i <= c.Config.ConsumeCount; {
 		if c.Receiver == nil {
 			c.CreateReceiver(ctx)
-			log.Debug("consumer subscribed", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
+			log.Debug("consumer subscribed", "consumerId", c.Id, "terminus", c.Topic)
 		}
 
 		select {
@@ -141,7 +141,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 		default:
 			msg, err := c.Receiver.Receive(ctx, nil)
 			if err != nil {
-				log.Error("failed to receive a message", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
+				log.Error("failed to receive a message", "consumerId", c.Id, "terminus", c.Topic)
 				c.Connect(ctx)
 				continue
 			}
@@ -157,30 +157,30 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			}
 			previousMessageTimeSent = timeSent
 
-			log.Debug("message received", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "size", len(payload), "priority", priority, "latency", latency)
+			log.Debug("message received", "consumerId", c.Id, "terminus", c.Topic, "size", len(payload), "priority", priority, "latency", latency)
 
 			if c.Config.ConsumerLatency > 0 {
-				log.Debug("consumer latency", "protocol", "amqp-1.0", "consumerId", c.Id, "latency", c.Config.ConsumerLatency)
+				log.Debug("consumer latency", "consumerId", c.Id, "latency", c.Config.ConsumerLatency)
 				time.Sleep(c.Config.ConsumerLatency)
 			}
 
 			err = c.Receiver.AcceptMessage(ctx, msg)
 			if err != nil {
-				log.Error("message NOT accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
+				log.Error("message NOT accepted", "consumerId", c.Id, "terminus", c.Topic)
 			} else {
 				metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
 				i++
-				log.Debug("message accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
+				log.Debug("message accepted", "consumerId", c.Id, "terminus", c.Topic)
 			}
 		}
 	}
 
 	c.Stop("message count reached")
-	log.Debug("consumer finished", "protocol", "amqp-1.0", "consumerId", c.Id)
+	log.Debug("consumer finished", "consumerId", c.Id)
 }
 
 func (c *Amqp10Consumer) Stop(reason string) {
-	log.Debug("closing connection", "protocol", "amqp-1.0", "consumerId", c.Id, "reason", reason)
+	log.Debug("closing connection", "consumerId", c.Id, "reason", reason)
 	_ = c.Connection.Close()
 }
 

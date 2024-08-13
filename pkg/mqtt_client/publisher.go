@@ -34,7 +34,7 @@ func NewPublisher(cfg config.Config, id int) *MqttPublisher {
 		SetAutoReconnect(true).
 		SetCleanSession(cfg.MqttPublisher.CleanSession).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			log.Info("connection lost", "protocol", "MQTT", "publisherId", id)
+			log.Info("connection lost", "publisherId", id)
 		}).
 		SetProtocolVersion(4)
 
@@ -82,11 +82,11 @@ func (p MqttPublisher) Start(ctx context.Context) {
 	default:
 		p.StartRateLimited(ctx)
 	}
-	log.Debug("publisher stopped", "protocol", "MQTT", "publisherId", p.Id)
+	log.Debug("publisher stopped", "publisherId", p.Id)
 }
 
 func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
-	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
+	log.Info("publisher started", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
 
 	for i := 1; i <= p.Config.PublishCount; i++ {
 		select {
@@ -99,13 +99,13 @@ func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
 }
 
 func (p MqttPublisher) StartIdle(ctx context.Context) {
-	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
+	log.Info("publisher started", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
 
 	_ = ctx.Done()
 }
 
 func (p MqttPublisher) StartRateLimited(ctx context.Context) {
-	log.Info("publisher started", "protocol", "MQTT", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
+	log.Info("publisher started", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
 
 	msgSent := 0
@@ -132,13 +132,13 @@ func (p MqttPublisher) Send() {
 	token.Wait()
 	timer.ObserveDuration()
 	if token.Error() != nil {
-		log.Error("message sending failure", "protocol", "MQTT", "publisherId", p.Id, "error", token.Error())
+		log.Error("message sending failure", "publisherId", p.Id, "error", token.Error())
 	}
-	log.Debug("message sent", "protocol", "MQTT", "publisherId", p.Id)
+	log.Debug("message sent", "publisherId", p.Id)
 	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "mqtt"}).Inc()
 }
 
 func (p MqttPublisher) Stop(reason string) {
-	log.Debug("closing connection", "protocol", "mqtt", "publisherId", p.Id, "reason", reason)
+	log.Debug("closing connection", "publisherId", p.Id, "reason", reason)
 	p.Connection.Disconnect(250)
 }
