@@ -14,7 +14,8 @@ a different protocol than the consumers.
 ```
 will publish via STOMP and consume via AMQP 1.0 (see below for the topic/queue/routing key details). A more complex example:
 ```
-./omq mqtt-amqp --publishers 10 --consumers 1 --publish-to 'sensor/%d' --consume-from '/topic/sensor.#' --rate 1 --size 100
+./omq mqtt-amqp --publishers 10 --consumers 1 --rate 1 --size 100 \
+                --publish-to 'sensor/%d' --consume-from '/topic/sensor.#'
 ```
 will start 10 MQTT publishers, each publishing 1 message a second, with 100 bytes of payload, to the `amq.topic` exchange (default for the MQTT plugin)
 with the topic/routing key of `sensor/%d`, where the `%d` is the ID of the publisher (from 1 to 10). It will also start a single AMQP 1.0 consumer that
