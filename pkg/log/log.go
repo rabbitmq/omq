@@ -3,12 +3,10 @@ package log
 import (
 	"os"
 
-	"log/slog"
-
 	"github.com/charmbracelet/log"
 )
 
-var logger *slog.Logger
+var logger *log.Logger
 
 var Levels = map[log.Level][]string{
 	log.DebugLevel: {"debug"},
@@ -19,19 +17,24 @@ var Levels = map[log.Level][]string{
 var Level log.Level
 
 func Setup() {
-	handler := log.New(os.Stderr)
-	handler.SetLevel(Level)
-	logger = slog.New(handler)
+	logger = log.NewWithOptions(os.Stderr, log.Options{
+		ReportTimestamp: true,
+	})
+	logger.SetLevel(Level)
 }
 
-func Debug(format string, v ...interface{}) {
-	logger.Debug(format, v...)
+func Debug(msg interface{}, keyvals ...interface{}) {
+	logger.Debug(msg, keyvals...)
 }
 
-func Info(format string, v ...interface{}) {
-	logger.Info(format, v...)
+func Info(msg interface{}, keyvals ...interface{}) {
+	logger.Info(msg, keyvals...)
 }
 
-func Error(format string, v ...interface{}) {
-	logger.Error(format, v...)
+func Error(msg interface{}, keyvals ...interface{}) {
+	logger.Error(msg, keyvals...)
+}
+
+func Print(msg interface{}, keyvals ...interface{}) {
+	logger.Print(msg, keyvals...)
 }

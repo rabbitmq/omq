@@ -139,7 +139,7 @@ func (m MetricsServer) PrintMetrics() {
 		return
 	}
 
-	fmt.Println(" *********** RESULTS *********** ")
+	log.Print(" *********** RESULTS *********** ")
 	metrics := strings.Split(string(body), "\n")
 	for _, metric := range metrics {
 		if strings.HasPrefix(metric, "omq_") {
