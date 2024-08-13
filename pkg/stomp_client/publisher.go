@@ -25,7 +25,7 @@ type StompPublisher struct {
 }
 
 func NewPublisher(cfg config.Config, id int) *StompPublisher {
-	parsedUri := utils.ParseURI(cfg.PublisherUri[0], "61613")
+	parsedUri := utils.ParseURI(cfg.PublisherUri[0], "stomp", "61613")
 
 	var o []func(*stomp.Conn) error = []func(*stomp.Conn) error{
 		stomp.ConnOpt.Login(parsedUri.Username, parsedUri.Password),

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/log"
@@ -52,7 +53,11 @@ type uri struct {
 	Password string
 }
 
-func ParseURI(rawURI string, defaultPort string) uri {
+func ParseURI(rawURI string, defaultScheme string, defaultPort string) uri {
+	if !strings.HasPrefix(rawURI, defaultScheme) {
+		rawURI = defaultScheme + "://" + rawURI
+	}
+
 	u, err := url.Parse(rawURI)
 	if err != nil {
 		log.Error("Cannot parse consumer URI", err)

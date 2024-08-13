@@ -35,7 +35,7 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 		SetProtocolVersion(4)
 
 	for _, uri := range cfg.ConsumerUri {
-		parsedUri := utils.ParseURI(uri, "1883")
+		parsedUri := utils.ParseURI(uri, "mqtt", "1883")
 		opts.AddBroker(parsedUri.Broker).
 			SetUsername(parsedUri.Username).
 			SetPassword(parsedUri.Password)

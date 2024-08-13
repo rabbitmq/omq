@@ -39,7 +39,7 @@ func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 		SetProtocolVersion(4)
 
 	for _, uri := range cfg.PublisherUri {
-		parsedUri := utils.ParseURI(uri, "1883")
+		parsedUri := utils.ParseURI(uri, "mqtt", "1883")
 		opts.AddBroker(parsedUri.Broker).
 			SetUsername(parsedUri.Username).
 			SetPassword(parsedUri.Password)
