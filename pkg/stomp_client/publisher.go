@@ -22,34 +22,52 @@ type StompPublisher struct {
 	Topic      string
 	Config     config.Config
 	msg        []byte
+	whichUri   int
 }
 
 func NewPublisher(cfg config.Config, id int) *StompPublisher {
-	parsedUri := utils.ParseURI(cfg.PublisherUri, "61613")
-
-	var o []func(*stomp.Conn) error = []func(*stomp.Conn) error{
-		stomp.ConnOpt.Login(parsedUri.Username, parsedUri.Password),
-		stomp.ConnOpt.Host("/"), // TODO
-	}
-
-	conn, err := stomp.Dial("tcp", parsedUri.Broker, o...)
-	if err != nil {
-		log.Error("publisher connection failed", "protocol", "STOMP", "publisherId", id, "error", err.Error())
-		return nil
-	}
-	log.Info("publisher connected", "protocol", "STOMP", "publisherId", id)
-
-	topic := topic.CalculateTopic(cfg.PublishTo, id)
-
-	return &StompPublisher{
+	publisher := &StompPublisher{
 		Id:         id,
-		Connection: conn,
-		Topic:      topic,
+		Connection: nil,
+		Topic:      topic.CalculateTopic(cfg.PublishTo, id),
 		Config:     cfg,
+	}
+
+	publisher.Connect()
+
+	return publisher
+}
+
+func (p *StompPublisher) Connect() {
+	if p.Connection != nil {
+		_ = p.Connection.Disconnect()
+	}
+
+	for p.Connection == nil {
+		if p.whichUri >= len(p.Config.PublisherUri) {
+			p.whichUri = 0
+		}
+		uri := p.Config.PublisherUri[p.whichUri]
+		p.whichUri++
+		parsedUri := utils.ParseURI(uri, "stomp", "61613")
+
+		var o []func(*stomp.Conn) error = []func(*stomp.Conn) error{
+			stomp.ConnOpt.Login(parsedUri.Username, parsedUri.Password),
+			stomp.ConnOpt.Host("/"), // TODO
+		}
+
+		conn, err := stomp.Dial("tcp", parsedUri.Broker, o...)
+		if err != nil {
+			log.Error("publisher connection failed", "protocol", "STOMP", "publisherId", p.Id, "error", err.Error())
+			time.Sleep(1 * time.Second)
+		} else {
+			p.Connection = conn
+		}
+		log.Info("connection established", "protocol", "STOMP", "publisherId", p.Id)
 	}
 }
 
-func (p StompPublisher) Start(ctx context.Context) {
+func (p *StompPublisher) Start(ctx context.Context) {
 	// sleep random interval to avoid all publishers publishing at the same time
 	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
@@ -66,27 +84,32 @@ func (p StompPublisher) Start(ctx context.Context) {
 	}
 }
 
-func (p StompPublisher) StartFullSpeed(ctx context.Context) {
+func (p *StompPublisher) StartFullSpeed(ctx context.Context) {
 	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
 
-	for i := 1; i <= p.Config.PublishCount; i++ {
+	for i := 1; i <= p.Config.PublishCount; {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			p.Send()
+			err := p.Send()
+			if err != nil {
+				p.Connect()
+			} else {
+				i++
+			}
 		}
 	}
 	log.Debug("publisher completed", "protocol", "stomp", "publisherId", p.Id)
 }
 
-func (p StompPublisher) StartIdle(ctx context.Context) {
+func (p *StompPublisher) StartIdle(ctx context.Context) {
 	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
 
 	_ = ctx.Done()
 }
 
-func (p StompPublisher) StartRateLimited(ctx context.Context) {
+func (p *StompPublisher) StartRateLimited(ctx context.Context) {
 	log.Info("publisher started", "protocol", "STOMP", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
 
@@ -97,17 +120,21 @@ func (p StompPublisher) StartRateLimited(ctx context.Context) {
 			p.Stop("time limit reached")
 			return
 		case <-ticker.C:
-			p.Send()
-			msgSent++
-			if msgSent >= p.Config.PublishCount {
-				p.Stop("publish count reached")
-				return
+			err := p.Send()
+			if err != nil {
+				p.Connect()
+			} else {
+				msgSent++
+				if msgSent >= p.Config.PublishCount {
+					p.Stop("publish count reached")
+					return
+				}
 			}
 		}
 	}
 }
 
-func (p StompPublisher) Send() {
+func (p *StompPublisher) Send() error {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 
 	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "stomp"}))
@@ -115,14 +142,15 @@ func (p StompPublisher) Send() {
 	timer.ObserveDuration()
 	if err != nil {
 		log.Error("message sending failure", "protocol", "STOMP", "publisherId", p.Id, "error", err)
-		return
+		return err
 	}
 	log.Debug("message sent", "protocol", "STOMP", "publisherId", p.Id, "destination", p.Topic)
 
 	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "stomp"}).Inc()
+	return nil
 }
 
-func (p StompPublisher) Stop(reason string) {
+func (p *StompPublisher) Stop(reason string) {
 	log.Debug("closing connection", "protocol", "stomp", "publisherId", p.Id, "reason", reason)
 	_ = p.Connection.Disconnect()
 }

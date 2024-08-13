@@ -31,8 +31,8 @@ type MqttOptions struct {
 }
 
 type Config struct {
-	PublisherUri         string
-	ConsumerUri          string
+	PublisherUri         []string
+	ConsumerUri          []string
 	Publishers           int
 	Consumers            int
 	PublishCount         int

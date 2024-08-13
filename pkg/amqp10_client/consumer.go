@@ -24,42 +24,77 @@ type Amqp10Consumer struct {
 	Id         int
 	Connection *amqp.Conn
 	Session    *amqp.Session
+	Receiver   *amqp.Receiver
 	Topic      string
 	Config     config.Config
+	whichUri   int
 }
 
 func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
-	// open connection
-	hostname, vhost := hostAndVHost(cfg.ConsumerUri)
-	conn, err := amqp.Dial(context.TODO(), cfg.ConsumerUri, &amqp.ConnOptions{
-		HostName: vhost,
-		TLSConfig: &tls.Config{
-			ServerName: hostname}})
-	if err != nil {
-		log.Error("consumer failed to connect", "protocol", "amqp-1.0", "consumerId", id, "error", err.Error())
-		return nil
-	}
-
-	// open seesion
-	session, err := conn.NewSession(context.TODO(), nil)
-	if err != nil {
-		log.Error("consumer failed to create a session", "protocol", "amqp-1.0", "consumerId", id, "error", err.Error())
-		return nil
-	}
-
-	topic := topic.CalculateTopic(cfg.ConsumeFrom, id)
-
-	return &Amqp10Consumer{
+	consumer := &Amqp10Consumer{
 		Id:         id,
-		Connection: conn,
-		Session:    session,
-		Topic:      topic,
+		Connection: nil,
+		Session:    nil,
+		Receiver:   nil,
+		Topic:      topic.CalculateTopic(cfg.ConsumeFrom, id),
 		Config:     cfg,
+		whichUri:   0,
 	}
 
+	// TODO
+	consumer.Connect(context.TODO())
+
+	return consumer
 }
 
-func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
+func (c *Amqp10Consumer) Connect(ctx context.Context) {
+	if c.Receiver != nil {
+		_ = c.Receiver.Close(ctx)
+	}
+	if c.Session != nil {
+		_ = c.Session.Close(context.Background())
+	}
+	if c.Connection != nil {
+		_ = c.Connection.Close()
+	}
+	c.Receiver = nil
+	c.Session = nil
+	c.Connection = nil
+
+	for c.Connection == nil {
+		if c.whichUri >= len(c.Config.ConsumerUri) {
+			c.whichUri = 0
+		}
+		uri := c.Config.ConsumerUri[c.whichUri]
+		c.whichUri++
+		hostname, vhost := hostAndVHost(uri)
+		conn, err := amqp.Dial(context.TODO(), uri, &amqp.ConnOptions{
+			HostName: vhost,
+			TLSConfig: &tls.Config{
+				ServerName: hostname,
+			},
+		})
+		if err != nil {
+			log.Error("consumer failed to connect", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
+			time.Sleep(1 * time.Second)
+		} else {
+			log.Debug("consumer connected", "protocol", "amqp-1.0", "consumerId", c.Id, "uri", uri)
+			c.Connection = conn
+		}
+	}
+
+	for c.Session == nil {
+		session, err := c.Connection.NewSession(context.TODO(), nil)
+		if err != nil {
+			log.Error("consumer failed to create a session", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
+			time.Sleep(1 * time.Second)
+		} else {
+			c.Session = session
+		}
+	}
+}
+
+func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 	var durability amqp.Durability
 	switch c.Config.QueueDurability {
 	case config.None:
@@ -69,29 +104,42 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	case config.UnsettledState:
 		durability = amqp.DurabilityUnsettledState
 	}
-	receiver, err := c.Session.NewReceiver(ctx, c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Properties: buildLinkProperties(c.Config), Filters: buildLinkFilters(c.Config)})
-	if err != nil {
-		log.Error("consumer failed to create a receiver", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
-		return
-	}
-	close(subscribed)
-	log.Debug("consumer subscribed", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic, "durability", durability)
 
+	for c.Receiver == nil {
+		receiver, err := c.Session.NewReceiver(ctx, c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Properties: buildLinkProperties(c.Config), Filters: buildLinkFilters(c.Config)})
+		if err != nil {
+			log.Error("consumer failed to create a receiver", "protocol", "amqp-1.0", "consumerId", c.Id, "error", err.Error())
+			time.Sleep(1 * time.Second)
+		} else {
+			c.Receiver = receiver
+		}
+	}
+}
+
+func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	m := metrics.EndToEndLatency
 
+	c.CreateReceiver(ctx)
+	close(subscribed)
 	log.Info("consumer started", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 	previousMessageTimeSent := time.Unix(0, 0)
 
-	for i := 1; i <= c.Config.ConsumeCount; i++ {
+	for i := 1; i <= c.Config.ConsumeCount; {
+		if c.Receiver == nil {
+			c.CreateReceiver(ctx)
+			log.Debug("consumer subscribed", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
+		}
+
 		select {
 		case <-ctx.Done():
 			c.Stop("time limit reached")
 			return
 		default:
-			msg, err := receiver.Receive(ctx, nil)
+			msg, err := c.Receiver.Receive(ctx, nil)
 			if err != nil {
 				log.Error("failed to receive a message", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
-				return
+				c.Connect(ctx)
+				continue
 			}
 
 			payload := msg.GetData()
@@ -112,12 +160,14 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 				time.Sleep(c.Config.ConsumerLatency)
 			}
 
-			err = receiver.AcceptMessage(ctx, msg)
+			err = c.Receiver.AcceptMessage(ctx, msg)
 			if err != nil {
 				log.Error("message NOT accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
+			} else {
+				metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
+				i++
+				log.Debug("message accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 			}
-			metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
-			log.Debug("message accepted", "protocol", "amqp-1.0", "consumerId", c.Id, "terminus", c.Topic)
 		}
 	}
 
@@ -125,7 +175,7 @@ func (c Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	log.Debug("consumer finished", "protocol", "amqp-1.0", "consumerId", c.Id)
 }
 
-func (c Amqp10Consumer) Stop(reason string) {
+func (c *Amqp10Consumer) Stop(reason string) {
 	log.Debug("closing connection", "protocol", "amqp-1.0", "consumerId", c.Id, "reason", reason)
 	_ = c.Connection.Close()
 }
