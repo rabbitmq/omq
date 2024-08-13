@@ -25,9 +25,6 @@ func Setup() {
 }
 
 func Debug(format string, v ...interface{}) {
-	if logger == nil {
-		Setup()
-	}
 	logger.Debug(format, v...)
 }
 
