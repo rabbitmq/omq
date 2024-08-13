@@ -40,7 +40,7 @@ func NewPublisher(cfg config.Config, id int) *Amqp10Publisher {
 	}
 
 	if cfg.SpreadConnections {
-		publisher.whichUri = id - 1%len(cfg.PublisherUri)
+		publisher.whichUri = (id - 1) % len(cfg.PublisherUri)
 	}
 
 	publisher.Connect()

@@ -46,6 +46,8 @@ func TestWrappedSequence(t *testing.T) {
 		{length: 5, start: 0, expectedSequence: []int{0, 1, 2, 3, 4}},
 		{length: 5, start: 1, expectedSequence: []int{1, 2, 3, 4, 0}},
 		{length: 3, start: 1, expectedSequence: []int{1, 2, 0}},
+		{length: 3, start: 4, expectedSequence: []int{1, 2, 0}},
+		{length: 3, start: 5, expectedSequence: []int{2, 0, 1}},
 		{length: 1, start: 2, expectedSequence: []int{0}},
 	}
 
