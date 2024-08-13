@@ -29,14 +29,18 @@ type Amqp10Publisher struct {
 	whichUri   int
 }
 
-func NewPublisher(cfg config.Config, n int) *Amqp10Publisher {
+func NewPublisher(cfg config.Config, id int) *Amqp10Publisher {
 	publisher := &Amqp10Publisher{
-		Id:         n,
+		Id:         id,
 		Connection: nil,
 		Sender:     nil,
 		Config:     cfg,
-		Terminus:   topic.CalculateTopic(cfg.PublishTo, n),
+		Terminus:   topic.CalculateTopic(cfg.PublishTo, id),
 		whichUri:   0,
+	}
+
+	if cfg.SpreadConnections {
+		publisher.whichUri = id - 1%len(cfg.PublisherUri)
 	}
 
 	publisher.Connect()

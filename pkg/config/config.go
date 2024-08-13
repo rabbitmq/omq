@@ -35,6 +35,7 @@ type Config struct {
 	ConsumerUri          []string
 	Publishers           int
 	Consumers            int
+	SpreadConnections    bool
 	PublishCount         int
 	ConsumeCount         int
 	PublishTo            string

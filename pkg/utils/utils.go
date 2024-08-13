@@ -86,3 +86,16 @@ func ParseURI(rawURI string, defaultScheme string, defaultPort string) uri {
 
 	return *result
 }
+
+// generate a sequence of `len` integres starting with `start`
+// and wrapped, so that it contains all values from 0 to len-1
+func WrappedSequence(len int, start int) []int {
+	if start > len {
+		start = start % len
+	}
+	seq := make([]int, len)
+	for i := 0; i < len; i++ {
+		seq[i] = (start + i) % len
+	}
+	return seq
+}

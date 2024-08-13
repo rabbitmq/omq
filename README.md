@@ -113,6 +113,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
       --queue-durability queue-durability   Queue durability (default: configuration - the queue definition is durable) (default configuration)
   -r, --rate float                          Messages per second (-1 = unlimited) (default -1)
   -s, --size int                            Message payload size in bytes (default 12)
+      --spread-connections                  Spread connections across URIs (default true)
       --stream-filter-value-set string      Stream filter value for publisher
       --stream-filter-values string         Stream consumer filter
       --stream-offset string                Stream consumer offset specification (default=next)

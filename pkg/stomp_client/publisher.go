@@ -33,6 +33,10 @@ func NewPublisher(cfg config.Config, id int) *StompPublisher {
 		Config:     cfg,
 	}
 
+	if cfg.SpreadConnections {
+		publisher.whichUri = id - 1%len(cfg.PublisherUri)
+	}
+
 	publisher.Connect()
 
 	return publisher

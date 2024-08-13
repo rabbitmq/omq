@@ -26,20 +26,20 @@ type MqttPublisher struct {
 	msg        []byte
 }
 
-func NewPublisher(cfg config.Config, n int) *MqttPublisher {
+func NewPublisher(cfg config.Config, id int) *MqttPublisher {
 	var token mqtt.Token
 
 	opts := mqtt.NewClientOptions().
-		SetClientID(fmt.Sprintf("omq-pub-%d", n)).
+		SetClientID(fmt.Sprintf("omq-pub-%d", id)).
 		SetAutoReconnect(true).
 		SetCleanSession(cfg.MqttPublisher.CleanSession).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			log.Info("connection lost", "protocol", "MQTT", "publisherId", n)
+			log.Info("connection lost", "protocol", "MQTT", "publisherId", id)
 		}).
 		SetProtocolVersion(4)
 
-	for _, uri := range cfg.PublisherUri {
-		parsedUri := utils.ParseURI(uri, "mqtt", "1883")
+	for _, n := range utils.WrappedSequence(len(cfg.PublisherUri), id-1) {
+		parsedUri := utils.ParseURI(cfg.PublisherUri[n], "mqtt", "1883")
 		opts.AddBroker(parsedUri.Broker).
 			SetUsername(parsedUri.Username).
 			SetPassword(parsedUri.Password)
@@ -49,7 +49,7 @@ func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 	token = connection.Connect()
 	token.Wait()
 
-	topic := topic.CalculateTopic(cfg.PublishTo, n)
+	topic := topic.CalculateTopic(cfg.PublishTo, id)
 	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix
 	// since MQTT has no concept of exchanges, we need to remove it
 	// this should get more flexible in the future
@@ -57,7 +57,7 @@ func NewPublisher(cfg config.Config, n int) *MqttPublisher {
 	topic = strings.TrimPrefix(topic, "/topic/")
 
 	return &MqttPublisher{
-		Id:         n,
+		Id:         id,
 		Connection: connection,
 		Topic:      topic,
 		Config:     cfg,

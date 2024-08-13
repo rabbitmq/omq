@@ -41,7 +41,11 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 		whichUri:   0,
 	}
 
-	// TODO
+	if cfg.SpreadConnections {
+		consumer.whichUri = id - 1%len(cfg.ConsumerUri)
+	}
+
+	// TODO: context?
 	consumer.Connect(context.TODO())
 
 	return consumer

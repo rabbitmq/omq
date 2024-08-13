@@ -222,6 +222,8 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringSliceVar(&metricTags, "metric-tags", []string{}, "Prometheus label-value pairs, eg. l1=v1,l2=v2")
 	rootCmd.PersistentFlags().
 		BoolVar(&cfg.LogOutOfOrder, "log-out-of-order-messages", false, "Print a log line when a message is received that is older than the previously received message")
+	rootCmd.PersistentFlags().
+		BoolVar(&cfg.SpreadConnections, "spread-connections", true, "Spread connections across URIs")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)
