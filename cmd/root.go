@@ -147,7 +147,9 @@ func RootCmd() *cobra.Command {
 				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
 				os.Exit(1)
 			}
-			setUris(&cfg, cmd.Use)
+			if cmd.Use != "version" {
+				setUris(&cfg, cmd.Use)
+			}
 
 			// nanoseconds shouldn't be used across processes
 			if cfg.Publishers == 0 || cfg.Consumers == 0 {
@@ -306,9 +308,6 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 }
 
 func setUris(cfg *config.Config, command string) {
-	if command == "version" {
-		return
-	}
 	if cfg.PublisherUri == nil {
 		println("setting publisher uri to ", defaultUri(strings.Split(command, "-")[0]))
 		(*cfg).PublisherUri = []string{defaultUri(strings.Split(command, "-")[0])}
