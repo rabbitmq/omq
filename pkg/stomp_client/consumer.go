@@ -22,57 +22,92 @@ type StompConsumer struct {
 	Subscription *stomp.Subscription
 	Topic        string
 	Config       config.Config
+	whichUri     int
 }
 
 func NewConsumer(cfg config.Config, id int) *StompConsumer {
-	parsedUri := utils.ParseURI(cfg.ConsumerUri[0], "stomp", "61613")
 
-	var o []func(*stomp.Conn) error = []func(*stomp.Conn) error{
-		stomp.ConnOpt.Login(parsedUri.Username, parsedUri.Password),
-		stomp.ConnOpt.Host("/"), // TODO
+	consumer := &StompConsumer{
+		Id:           id,
+		Connection:   nil,
+		Subscription: nil,
+		Topic:        topic.CalculateTopic(cfg.ConsumeFrom, id),
+		Config:       cfg,
+		whichUri:     0,
 	}
 
-	conn, err := stomp.Dial("tcp", parsedUri.Broker, o...)
+	consumer.Connect()
 
-	if err != nil {
-		log.Error("consumer connection failed", "protocol", "STOMP", "consumerId", id, "error", err.Error())
-		return nil
-	}
-
-	topic := topic.CalculateTopic(cfg.ConsumeFrom, id)
-
-	return &StompConsumer{
-		Id:         id,
-		Connection: conn,
-		Topic:      topic,
-		Config:     cfg,
-	}
+	return consumer
 }
 
-func (c StompConsumer) Start(ctx context.Context, subscribed chan bool) {
+func (c *StompConsumer) Connect() {
+	if c.Subscription != nil {
+		_ = c.Subscription.Unsubscribe()
+	}
+	if c.Connection != nil {
+		_ = c.Connection.Disconnect()
+	}
+	c.Subscription = nil
+	c.Connection = nil
+
+	for c.Connection == nil {
+		if c.whichUri >= len(c.Config.ConsumerUri) {
+			c.whichUri = 0
+		}
+		uri := c.Config.ConsumerUri[c.whichUri]
+		c.whichUri++
+		parsedUri := utils.ParseURI(uri, "stomp", "61613")
+
+		var o []func(*stomp.Conn) error = []func(*stomp.Conn) error{
+			stomp.ConnOpt.Login(parsedUri.Username, parsedUri.Password),
+			stomp.ConnOpt.Host("/"), // TODO
+		}
+
+		log.Debug("connecting to broker", "protocol", "STOMP", "consumerId", c.Id, "broker", parsedUri.Broker)
+		conn, err := stomp.Dial("tcp", parsedUri.Broker, o...)
+
+		if err != nil {
+			log.Error("consumer connection failed", "protocol", "STOMP", "consumerId", c.Id, "error", err.Error())
+			time.Sleep(1 * time.Second)
+		} else {
+			c.Connection = conn
+		}
+	}
+
+}
+
+func (c *StompConsumer) Subscribe() {
 	var sub *stomp.Subscription
 	var err error
 
-	log.Info("subscribing to durable queue", "protocol", "STOMP", "consumerId", c.Id, "queue", c.Topic, "offset", c.Config.StreamOffset, "credits", c.Config.ConsumerCredits)
 	sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, buildSubscribeOpts(c.Config)...)
 	if err != nil {
 		log.Error("subscription failed", "protocol", "STOMP", "consumerId", c.Id, "queue", c.Topic, "error", err.Error())
 		return
 	}
 	c.Subscription = sub
-	close(subscribed)
+}
 
+func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
+	c.Subscribe()
+	close(subscribed)
+	log.Info("consumer started", "protocol", "STOMP", "consumerId", c.Id, "destination", c.Topic)
+
+	previousMessageTimeSent := time.Unix(0, 0)
 	m := metrics.EndToEndLatency.With(prometheus.Labels{"protocol": "stomp"})
 
-	log.Info("consumer started", "protocol", "STOMP", "consumerId", c.Id, "destination", c.Topic)
-	previousMessageTimeSent := time.Unix(0, 0)
+	for i := 1; i <= c.Config.ConsumeCount; {
+		if c.Subscription == nil {
+			c.Subscribe()
+		}
 
-	for i := 1; i <= c.Config.ConsumeCount; i++ {
 		select {
-		case msg := <-sub.C:
+		case msg := <-c.Subscription.C:
 			if msg.Err != nil {
 				log.Error("failed to receive a message", "protocol", "STOMP", "consumerId", c.Id, "c.Topic", c.Topic, "error", msg.Err)
-				return
+				c.Connect()
+				continue
 			}
 
 			timeSent, latency := utils.CalculateEndToEndLatency(&msg.Body)
@@ -93,12 +128,15 @@ func (c StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 				time.Sleep(c.Config.ConsumerLatency)
 			}
 
-			err = c.Connection.Ack(msg)
+			err := c.Connection.Ack(msg)
 			if err != nil {
 				log.Error("message NOT acknowledged", "protocol", "stomp", "consumerId", c.Id, "destination", c.Topic)
 
+			} else {
+				metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "stomp", "priority": priority}).Inc()
+				i++
+				log.Debug("message acknowledged", "protocol", "stomp", "consumerId", c.Id, "terminus", c.Topic)
 			}
-			metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "stomp", "priority": priority}).Inc()
 		case <-ctx.Done():
 			c.Stop("time limit reached")
 			return
@@ -111,10 +149,14 @@ func (c StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 
 }
 
-func (c StompConsumer) Stop(reason string) {
+func (c *StompConsumer) Stop(reason string) {
 	log.Debug("closing connection", "protocol", "stomp", "consumerId", c.Id, "reason", reason)
-	_ = c.Subscription.Unsubscribe()
-	_ = c.Connection.Disconnect()
+	if c.Subscription != nil {
+		_ = c.Subscription.Unsubscribe()
+	}
+	if c.Connection != nil {
+		_ = c.Connection.Disconnect()
+	}
 }
 
 func buildSubscribeOpts(cfg config.Config) []func(*frame.Frame) error {
