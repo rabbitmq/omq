@@ -31,6 +31,19 @@ go install github.com/rabbitmq/omq@main
 
 An [OCI image](https://hub.docker.com/r/pivotalrabbitmq/omq/tags) is also available: `pivotalrabbitmq/omq`.
 
+### Connecting to the Broker
+
+Both --publisher-uri and --consumer-uri can be repeated multiple times to set multiple
+endpoints. If `omq` can't establish a connection or an existing connection is terminated,
+it will try the next URI from the list.
+
+Example:
+```
+omq mqtt --consumer-uri mqtt://localhost:1883 --publisher-uri mqtt://localhost:1883 \
+         --consumer-uri mqtt://localhost:1884 --publisher-uri mqtt://localhost:1884 \
+         --consumer-uri mqtt://localhost:1885 --publisher-uri mqtt://localhost:1885
+```
+
 ### Terminus/Topic/Queue/Routing Key
 
 Different protocols refer to the targets / sources of messages differently and RabbitMQ handles each protocol differently as well.
@@ -85,7 +98,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
       --consumer-credits int                AMQP-1.0 consumer credits / STOMP prefetch count (default 1)
   -L, --consumer-latency duration           consumer latency (time to accept message; not supported by MQTT)
       --consumer-priority int32             Consumer priority (AMQP 1.0 and STOMP)
-      --consumer-uri string                 URI for consuming
+      --consumer-uri strings                URI for consuming
   -y, --consumers int                       The number of consumers to start (default 1)
   -h, --help                                help for omq
   -l, --log-level log-level                 Log level (debug, info, error) (default info)
@@ -95,7 +108,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
       --metric-tags strings                 Prometheus label-value pairs, eg. l1=v1,l2=v2
   -C, --pmessages int                       The number of messages to send per publisher (default 9223372036854775807)
   -t, --publish-to string                   The topic/terminus to publish to (%d will be replaced with the publisher's id) (default "/topic/omq")
-      --publisher-uri string                URI for publishing
+      --publisher-uri strings               URI for publishing
   -x, --publishers int                      The number of publishers to start (default 1)
       --queue-durability queue-durability   Queue durability (default: configuration - the queue definition is durable) (default configuration)
   -r, --rate float                          Messages per second (-1 = unlimited) (default -1)
