@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
+	vm "github.com/VictoriaMetrics/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/utils"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -197,6 +199,7 @@ func BenchmarkLatencyCalculation(b *testing.B) {
 var metric *prometheus.SummaryVec
 
 func BenchmarkObservingLatency(b *testing.B) {
+	b.ReportAllocs()
 	if metric == nil {
 		metric = promauto.NewSummaryVec(prometheus.SummaryOpts{
 			Name:       "benchmaking_latency_seconds",
@@ -213,6 +216,22 @@ func BenchmarkObservingLatency(b *testing.B) {
 		utils.UpdatePayload(false, &testMsg)
 		_, latency := utils.CalculateEndToEndLatency(&testMsg)
 		metric.With(prometheus.Labels{"protocol": "foo"}).Observe(latency.Seconds())
+	}
+}
+
+var vmetric *prometheus.SummaryVec
+
+func BenchmarkVObservingLatency(b *testing.B) {
+	b.ReportAllocs()
+
+	var s = vm.GetOrCreateSummary(`request_duration_seconds{path="/foo/bar"}`)
+
+	testMsg := utils.MessageBody(1000)
+
+	for i := 0; i < b.N; i++ {
+		utils.UpdatePayload(false, &testMsg)
+		t, _ := utils.CalculateEndToEndLatency(&testMsg)
+		s.UpdateDuration(t)
 	}
 }
 

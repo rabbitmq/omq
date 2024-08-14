@@ -305,6 +305,18 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 		time.AfterFunc(cfg.Duration, func() { cancel() })
 	}
 	log.Info("Waiting for all publishers and consumers to complete")
+
+	// every  second, print the current values of the metrics
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
+				log.Print("foo")
+			}
+		}
+	}()
 	wg.Wait()
 }
 
