@@ -87,7 +87,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 	if token.Error() != nil {
 		log.Error("failed to subscribe", "consumerId", c.Id, "error", token.Error())
 	}
-	log.Info("consumer started", "consumerId", c.Id, "c.Topic", c.Topic)
+	log.Info("consumer started", "consumerId", c.Id, "topic", c.Topic)
 
 	// TODO: currently we can consume more than ConsumerCount messages
 	for msgsReceived < c.Config.ConsumeCount {
