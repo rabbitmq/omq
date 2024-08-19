@@ -186,6 +186,5 @@ func buildSubscribeOpts(cfg config.Config) []func(*frame.Frame) error {
 		subscribeOpts = append(subscribeOpts,
 			stomp.SubscribeOpt.Header("x-stream-filter", cfg.StreamFilterValues))
 	}
-	log.Info("subscribe options", "filter", cfg.StreamFilterValues)
 	return subscribeOpts
 }

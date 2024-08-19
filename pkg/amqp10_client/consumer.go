@@ -113,6 +113,9 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 	for c.Receiver == nil {
 		receiver, err := c.Session.NewReceiver(ctx, c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Properties: buildLinkProperties(c.Config), Filters: buildLinkFilters(c.Config)})
 		if err != nil {
+			if err == context.Canceled {
+				return
+			}
 			log.Error("consumer failed to create a receiver", "consumerId", c.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
@@ -142,7 +145,10 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 		default:
 			msg, err := c.Receiver.Receive(ctx, nil)
 			if err != nil {
-				log.Error("failed to receive a message", "consumerId", c.Id, "terminus", c.Topic)
+				if err == context.Canceled {
+					return
+				}
+				log.Error("failed to receive a message", "consumerId", c.Id, "terminus", c.Topic, "error", err.Error())
 				c.Connect(ctx)
 				continue
 			}
