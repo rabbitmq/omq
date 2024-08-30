@@ -173,6 +173,9 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 
 			err = c.Receiver.AcceptMessage(ctx, msg)
 			if err != nil {
+				if err == context.Canceled {
+					return
+				}
 				log.Error("message NOT accepted", "consumerId", c.Id, "terminus", c.Topic)
 			} else {
 				metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
