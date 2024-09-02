@@ -149,7 +149,7 @@ func (m *MetricsServer) PrintMessageRates(ctx context.Context) {
 }
 
 func (m *MetricsServer) PrintFinalMetrics() {
-	log.Print("TOTAL PUBLLISHED",
+	log.Print("TOTAL PUBLISHED",
 		"messages", MessagesPublished.Get(),
 		"rate", fmt.Sprintf("%.2f/s", float64(MessagesPublished.Get())/time.Since(m.started).Seconds()))
 	log.Print("TOTAL CONSUMED",
