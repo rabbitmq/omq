@@ -160,6 +160,11 @@ func RootCmd() *cobra.Command {
 				log.Error("ERROR: combined release and reject rate can't be more than 100%")
 				os.Exit(1)
 			}
+			// go-amqp treats `0` as if the value was not set and uses 1 credit
+			// this is confusing, so here we treat 0 as -1 (which go-amqp trets as 0...)
+			if cfg.ConsumerCredits == 0 {
+				cfg.ConsumerCredits = -1
+			}
 			if cmd.Use != "version" {
 				setUris(&cfg, cmd.Use)
 			}
