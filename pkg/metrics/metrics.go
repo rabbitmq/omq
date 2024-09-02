@@ -19,6 +19,7 @@ import (
 type MetricsServer struct {
 	httpServer *http.Server
 	running    bool
+	started    time.Time
 }
 
 var lock = &sync.Mutex{}
@@ -77,7 +78,7 @@ func GetMetricsServer() *MetricsServer {
 	return metricsServer
 }
 
-func (m MetricsServer) Start() {
+func (m *MetricsServer) Start() {
 	if m.running {
 		return
 	}
@@ -87,6 +88,8 @@ func (m MetricsServer) Start() {
 			m.httpServer.RegisterOnShutdown(func() {
 				m.running = false
 			})
+			m.started = time.Now()
+			m.running = true
 			log.Debug("Starting Prometheus metrics server", "address", m.httpServer.Addr)
 			err := m.httpServer.ListenAndServe()
 			if errors.Is(err, syscall.EADDRINUSE) {
@@ -94,20 +97,14 @@ func (m MetricsServer) Start() {
 				m.httpServer.Addr = get_metrics_ip() + ":" + fmt.Sprint(port+1)
 				log.Info("Prometheus metrics: port already in use, trying the next one", "port", m.httpServer.Addr)
 			}
-			m.running = true
 		}
 	}()
-}
-
-func (m MetricsServer) Stop() {
-	_ = m.httpServer.Shutdown(context.TODO())
-	log.Debug("Prometheus metrics stopped")
 }
 
 var previouslyPublished uint64
 var previouslyConsumed uint64
 
-func (m MetricsServer) PrintMessageRates(ctx context.Context) {
+func (m *MetricsServer) PrintMessageRates(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -130,10 +127,13 @@ func (m MetricsServer) PrintMessageRates(ctx context.Context) {
 	}()
 }
 
-func (m MetricsServer) PrintFinalMetrics() {
-	log.Print("SUMMARY",
-		"published", MessagesPublished.Get(),
-		"consumed", MessagesConsumed.Get())
+func (m *MetricsServer) PrintFinalMetrics() {
+	log.Print("TOTAL PUBLLISHED",
+		"messages", MessagesPublished.Get(),
+		"rate", fmt.Sprintf("%.2f/s", float64(MessagesPublished.Get())/time.Since(m.started).Seconds()))
+	log.Print("TOTAL CONSUMED",
+		"consumed", MessagesConsumed.Get(),
+		"rate", fmt.Sprintf("%.2f/s", float64(MessagesConsumed.Get())/time.Since(m.started).Seconds()))
 
 }
 
