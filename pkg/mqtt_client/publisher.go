@@ -14,8 +14,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type MqttPublisher struct {
@@ -86,7 +84,7 @@ func (p MqttPublisher) Start(ctx context.Context) {
 }
 
 func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
-	log.Info("publisher started", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
+	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Topic)
 
 	for i := 1; i <= p.Config.PublishCount; i++ {
 		select {
@@ -127,15 +125,16 @@ func (p MqttPublisher) StartRateLimited(ctx context.Context) {
 
 func (p MqttPublisher) Send() {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
-	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "mqtt"}))
+	startTime := time.Now()
 	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), false, p.msg)
 	token.Wait()
-	timer.ObserveDuration()
+	latency := time.Since(startTime)
 	if token.Error() != nil {
 		log.Error("message sending failure", "publisherId", p.Id, "error", token.Error())
 	}
-	log.Debug("message sent", "publisherId", p.Id)
-	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "mqtt"}).Inc()
+	metrics.MessagesPublished.Inc()
+	metrics.PublishingLatency.Update(latency.Seconds())
+	log.Debug("message sent", "publisherId", p.Id, "destination", p.Topic, "latency", latency)
 }
 
 func (p MqttPublisher) Stop(reason string) {

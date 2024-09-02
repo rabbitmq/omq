@@ -304,19 +304,10 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 		log.Debug("Will stop all consumers and publishers at " + time.Now().Add(cfg.Duration).String())
 		time.AfterFunc(cfg.Duration, func() { cancel() })
 	}
-	log.Info("Waiting for all publishers and consumers to complete")
 
 	// every  second, print the current values of the metrics
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(1 * time.Second):
-				log.Print("foo")
-			}
-		}
-	}()
+	m := metrics.GetMetricsServer()
+	m.PrintMessageRates(ctx)
 	wg.Wait()
 }
 
@@ -346,6 +337,6 @@ func defaultUri(proto string) string {
 
 func shutdown() {
 	metricsServer := metrics.GetMetricsServer()
-	metricsServer.PrintMetrics()
+	metricsServer.PrintFinalMetrics()
 	os.Exit(1)
 }

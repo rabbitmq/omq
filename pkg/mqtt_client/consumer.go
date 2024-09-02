@@ -13,8 +13,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type MqttConsumer struct {
@@ -59,20 +57,18 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 }
 
 func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
-	m := metrics.EndToEndLatency.With(prometheus.Labels{"protocol": "mqtt"})
-
 	msgsReceived := 0
 
 	previousMessageTimeSent := time.Unix(0, 0)
 
 	handler := func(client mqtt.Client, msg mqtt.Message) {
-		metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "mqtt", "priority": ""}).Inc()
+		metrics.MessagesConsumed.Inc()
 		payload := msg.Payload()
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
-		m.Observe(latency.Seconds())
+		metrics.EndToEndLatency.UpdateDuration(timeSent)
 
 		if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
-			metrics.MessagesConsumedOutOfOrder.With(prometheus.Labels{"protocol": "mqtt"}).Inc()
+			metrics.MessagesConsumedOutOfOrder.Inc()
 			log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
 		}
 		previousMessageTimeSent = timeSent
@@ -87,7 +83,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 	if token.Error() != nil {
 		log.Error("failed to subscribe", "consumerId", c.Id, "error", token.Error())
 	}
-	log.Info("consumer started", "consumerId", c.Id, "topic", c.Topic)
+	log.Info("consumer started", "id", c.Id, "topic", c.Topic)
 
 	// TODO: currently we can consume more than ConsumerCount messages
 	for msgsReceived < c.Config.ConsumeCount {

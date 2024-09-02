@@ -15,7 +15,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 
 	"github.com/Azure/go-amqp"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Amqp10Publisher struct {
@@ -151,7 +150,7 @@ func (p *Amqp10Publisher) Start(ctx context.Context) {
 }
 
 func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
-	log.Info("publisher started", "publisherId", p.Id, "rate", "unlimited", "destination", p.Terminus)
+	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Terminus)
 
 	for i := 1; i <= p.Config.PublishCount; {
 		select {
@@ -218,19 +217,21 @@ func (p *Amqp10Publisher) Send() error {
 		msg.Header.Priority = uint8(priority)
 	}
 
-	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "amqp-1.0"}))
+	startTime := time.Now()
 	err := p.Sender.Send(context.TODO(), msg, nil)
-	timer.ObserveDuration()
+	latency := time.Since(startTime)
 	if err != nil {
 		log.Error("message sending failure", "publisherId", p.Id, "error", err.Error())
 		return err
 	}
-	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "amqp-1.0"}).Inc()
-	log.Debug("message sent", "publisherId", p.Id)
+	metrics.MessagesPublished.Inc()
+	metrics.PublishingLatency.Update(latency.Seconds())
+	log.Debug("message sent", "publisherId", p.Id, "destination", p.Terminus, "latency", latency)
 	return nil
 }
 
 func (p *Amqp10Publisher) Stop(reason string) {
 	log.Debug("closing connection", "publisherId", p.Id, "reason", reason)
 	_ = p.Connection.Close()
+	log.Info("publisher stopped", "publisherId", p.Id, "messagesPublished", metrics.MessagesPublished.Get())
 }

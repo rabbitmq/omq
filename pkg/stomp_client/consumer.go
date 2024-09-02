@@ -13,7 +13,6 @@ import (
 
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type StompConsumer struct {
@@ -96,10 +95,9 @@ func (c *StompConsumer) Subscribe() {
 func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 	c.Subscribe()
 	close(subscribed)
-	log.Info("consumer started", "consumerId", c.Id, "destination", c.Topic)
+	log.Info("consumer started", "id", c.Id, "destination", c.Topic)
 
 	previousMessageTimeSent := time.Unix(0, 0)
-	m := metrics.EndToEndLatency.With(prometheus.Labels{"protocol": "stomp"})
 
 	for i := 1; i <= c.Config.ConsumeCount; {
 		if c.Subscription == nil {
@@ -115,12 +113,12 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 			}
 
 			timeSent, latency := utils.CalculateEndToEndLatency(&msg.Body)
-			m.Observe(latency.Seconds())
+			metrics.EndToEndLatency.UpdateDuration(timeSent)
 
 			priority := msg.Header.Get("priority")
 
 			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
-				metrics.MessagesConsumedOutOfOrder.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
+				metrics.MessagesConsumedOutOfOrder.Inc()
 				log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
 			}
 			previousMessageTimeSent = timeSent
@@ -137,7 +135,7 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 				log.Error("message NOT acknowledged", "consumerId", c.Id, "destination", c.Topic)
 
 			} else {
-				metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "stomp", "priority": priority}).Inc()
+				metrics.MessagesConsumed.Inc()
 				i++
 				log.Debug("message acknowledged", "consumerId", c.Id, "terminus", c.Topic)
 			}
