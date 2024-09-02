@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -37,22 +38,20 @@ var (
 )
 
 func RegisterMetrics(globalLabels map[string]string) {
-	labels := ""
-	if len(globalLabels) > 0 {
-		labels = "{"
-		for label, value := range globalLabels {
-			labels += label + `="` + value + `",`
-		}
-		labels = strings.TrimSuffix(labels, ",") + "}"
-	}
+	normal := map[string]string{"priority": "normal"}
+	maps.Copy(normal, globalLabels)
+	normalPriorityLabels := labelsToString(normal)
+	high := map[string]string{"priority": "high"}
+	maps.Copy(high, globalLabels)
+	highPriorityLabels := labelsToString(high)
 
-	MessagesPublished = vmetrics.GetOrCreateCounter("omq_messages_published_total" + labels)
-	MessagesConsumedNormalPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_total{priority="normal"}` + labels)
-	MessagesConsumedHighPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_total{priority="high"}` + labels)
-	MessagesConsumedOutOfOrderNormalPriority = vmetrics.GetOrCreateCounter("omq_messages_consumed_out_of_order" + labels)
-	MessagesConsumedOutOfOrderHighPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order{priority="high"}` + labels)
-	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`+labels, 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
-	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labels, 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
+	MessagesPublished = vmetrics.GetOrCreateCounter("omq_messages_published_total" + labelsToString(globalLabels))
+	MessagesConsumedNormalPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_total` + normalPriorityLabels)
+	MessagesConsumedHighPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_total` + highPriorityLabels)
+	MessagesConsumedOutOfOrderNormalPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + normalPriorityLabels)
+	MessagesConsumedOutOfOrderHighPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + highPriorityLabels)
+	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`+labelsToString(globalLabels), 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
+	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labelsToString(globalLabels), 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
 }
 
 func MessagesConsumedMetric(priority int) *vmetrics.Counter {
@@ -166,4 +165,16 @@ func get_metrics_ip() string {
 	} else {
 		return "0.0.0.0"
 	}
+}
+
+func labelsToString(labels map[string]string) string {
+	result := ""
+	if len(labels) > 0 {
+		result = "{"
+		for label, value := range labels {
+			result += label + `="` + value + `",`
+		}
+		result = strings.TrimSuffix(result, ",") + "}"
+	}
+	return result
 }
