@@ -174,9 +174,9 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			case "accept":
 				err = c.Receiver.AcceptMessage(ctx, msg)
 			case "release":
-				err = c.Receiver.RejectMessage(ctx, msg, nil)
-			case "reject":
 				err = c.Receiver.ReleaseMessage(ctx, msg)
+			case "reject":
+				err = c.Receiver.RejectMessage(ctx, msg, nil)
 			}
 			if err != nil {
 				if err == context.Canceled {
