@@ -78,10 +78,10 @@ func (p *Amqp10Publisher) Connect() {
 		})
 
 		if err != nil {
-			log.Error("connection failed", "publisherId", p.Id, "error", err.Error())
+			log.Error("connection failed", "id", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
-			log.Debug("connection established", "publisherId", p.Id, "uri", uri)
+			log.Debug("connection established", "id", p.Id, "uri", uri)
 			p.Connection = conn
 		}
 	}
@@ -89,7 +89,7 @@ func (p *Amqp10Publisher) Connect() {
 	for p.Session == nil {
 		session, err := p.Connection.NewSession(context.TODO(), nil)
 		if err != nil {
-			log.Error("publisher failed to create a session", "publisherId", p.Id, "error", err.Error())
+			log.Error("publisher failed to create a session", "id", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 			p.Connect()
 		} else {
@@ -121,7 +121,7 @@ func (p *Amqp10Publisher) CreateSender() {
 			SettlementMode:   settleMode,
 			TargetDurability: durability})
 		if err != nil {
-			log.Error("publisher failed to create a sender", "publisherId", p.Id, "error", err.Error())
+			log.Error("publisher failed to create a sender", "id", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 			p.Connect()
 		} else {
@@ -146,7 +146,7 @@ func (p *Amqp10Publisher) Start(ctx context.Context) {
 		p.StartRateLimited(ctx)
 	}
 
-	log.Debug("publisher completed", "publisherId", p.Id)
+	log.Debug("publisher completed", "id", p.Id)
 }
 
 func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
@@ -168,13 +168,13 @@ func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
 }
 
 func (p *Amqp10Publisher) StartIdle(ctx context.Context) {
-	log.Info("publisher started", "publisherId", p.Id, "rate", "-", "destination", p.Terminus)
+	log.Info("publisher started", "id", p.Id, "rate", "-", "destination", p.Terminus)
 
 	_ = ctx.Done()
 }
 
 func (p *Amqp10Publisher) StartRateLimited(ctx context.Context) {
-	log.Info("publisher started", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Terminus)
+	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Terminus)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
 
 	msgSent := 0
@@ -221,17 +221,17 @@ func (p *Amqp10Publisher) Send() error {
 	err := p.Sender.Send(context.TODO(), msg, nil)
 	latency := time.Since(startTime)
 	if err != nil {
-		log.Error("message sending failure", "publisherId", p.Id, "error", err.Error())
+		log.Error("message sending failure", "id", p.Id, "error", err.Error())
 		return err
 	}
 	metrics.MessagesPublished.Inc()
 	metrics.PublishingLatency.Update(latency.Seconds())
-	log.Debug("message sent", "publisherId", p.Id, "destination", p.Terminus, "latency", latency)
+	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency)
 	return nil
 }
 
 func (p *Amqp10Publisher) Stop(reason string) {
-	log.Debug("closing connection", "publisherId", p.Id, "reason", reason)
+	log.Debug("closing connection", "id", p.Id, "reason", reason)
 	_ = p.Connection.Close()
-	log.Info("publisher stopped", "publisherId", p.Id, "messagesPublished", metrics.MessagesPublished.Get())
+	log.Info("publisher stopped", "id", p.Id, "messagesPublished", metrics.MessagesPublished.Get())
 }

@@ -32,7 +32,7 @@ func NewPublisher(cfg config.Config, id int) *MqttPublisher {
 		SetAutoReconnect(true).
 		SetCleanSession(cfg.MqttPublisher.CleanSession).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			log.Info("connection lost", "publisherId", id)
+			log.Info("connection lost", "id", id)
 		}).
 		SetProtocolVersion(4)
 
@@ -80,7 +80,7 @@ func (p MqttPublisher) Start(ctx context.Context) {
 	default:
 		p.StartRateLimited(ctx)
 	}
-	log.Debug("publisher stopped", "publisherId", p.Id)
+	log.Debug("publisher stopped", "id", p.Id)
 }
 
 func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
@@ -97,13 +97,13 @@ func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
 }
 
 func (p MqttPublisher) StartIdle(ctx context.Context) {
-	log.Info("publisher started", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
+	log.Info("publisher started", "id", p.Id, "rate", "-", "destination", p.Topic)
 
 	_ = ctx.Done()
 }
 
 func (p MqttPublisher) StartRateLimited(ctx context.Context) {
-	log.Info("publisher started", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
+	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
 
 	msgSent := 0
@@ -130,14 +130,14 @@ func (p MqttPublisher) Send() {
 	token.Wait()
 	latency := time.Since(startTime)
 	if token.Error() != nil {
-		log.Error("message sending failure", "publisherId", p.Id, "error", token.Error())
+		log.Error("message sending failure", "id", p.Id, "error", token.Error())
 	}
 	metrics.MessagesPublished.Inc()
 	metrics.PublishingLatency.Update(latency.Seconds())
-	log.Debug("message sent", "publisherId", p.Id, "destination", p.Topic, "latency", latency)
+	log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 }
 
 func (p MqttPublisher) Stop(reason string) {
-	log.Debug("closing connection", "publisherId", p.Id, "reason", reason)
+	log.Debug("closing connection", "id", p.Id, "reason", reason)
 	p.Connection.Disconnect(250)
 }

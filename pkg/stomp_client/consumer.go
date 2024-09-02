@@ -67,11 +67,11 @@ func (c *StompConsumer) Connect() {
 			stomp.ConnOpt.Host("/"), // TODO
 		}
 
-		log.Debug("connecting to broker", "consumerId", c.Id, "broker", parsedUri.Broker)
+		log.Debug("connecting to broker", "id", c.Id, "broker", parsedUri.Broker)
 		conn, err := stomp.Dial("tcp", parsedUri.Broker, o...)
 
 		if err != nil {
-			log.Error("consumer connection failed", "consumerId", c.Id, "error", err.Error())
+			log.Error("consumer connection failed", "id", c.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
 			c.Connection = conn
@@ -86,7 +86,7 @@ func (c *StompConsumer) Subscribe() {
 
 	sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, buildSubscribeOpts(c.Config)...)
 	if err != nil {
-		log.Error("subscription failed", "consumerId", c.Id, "queue", c.Topic, "error", err.Error())
+		log.Error("subscription failed", "id", c.Id, "queue", c.Topic, "error", err.Error())
 		return
 	}
 	c.Subscription = sub
@@ -107,7 +107,7 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 		select {
 		case msg := <-c.Subscription.C:
 			if msg.Err != nil {
-				log.Error("failed to receive a message", "consumerId", c.Id, "c.Topic", c.Topic, "error", msg.Err)
+				log.Error("failed to receive a message", "id", c.Id, "c.Topic", c.Topic, "error", msg.Err)
 				c.Connect()
 				continue
 			}
@@ -123,21 +123,21 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 			}
 			previousMessageTimeSent = timeSent
 
-			log.Debug("message received", "consumerId", c.Id, "destination", c.Topic, "size", len(msg.Body), "ack required", msg.ShouldAck(), "priority", priority, "latency", latency)
+			log.Debug("message received", "id", c.Id, "destination", c.Topic, "size", len(msg.Body), "ack required", msg.ShouldAck(), "priority", priority, "latency", latency)
 
 			if c.Config.ConsumerLatency > 0 {
-				log.Debug("consumer latency", "consumerId", c.Id, "latency", c.Config.ConsumerLatency)
+				log.Debug("consumer latency", "id", c.Id, "latency", c.Config.ConsumerLatency)
 				time.Sleep(c.Config.ConsumerLatency)
 			}
 
 			err := c.Connection.Ack(msg)
 			if err != nil {
-				log.Error("message NOT acknowledged", "consumerId", c.Id, "destination", c.Topic)
+				log.Error("message NOT acknowledged", "id", c.Id, "destination", c.Topic)
 
 			} else {
 				metrics.MessagesConsumedMetric(priority).Inc()
 				i++
-				log.Debug("message acknowledged", "consumerId", c.Id, "terminus", c.Topic)
+				log.Debug("message acknowledged", "id", c.Id, "terminus", c.Topic)
 			}
 		case <-ctx.Done():
 			c.Stop("time limit reached")
@@ -147,12 +147,12 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 	}
 
 	c.Stop("message count reached")
-	log.Debug("consumer finished", "consumerId", c.Id)
+	log.Debug("consumer finished", "id", c.Id)
 
 }
 
 func (c *StompConsumer) Stop(reason string) {
-	log.Debug("closing connection", "consumerId", c.Id, "reason", reason)
+	log.Debug("closing connection", "id", c.Id, "reason", reason)
 	if c.Subscription != nil {
 		_ = c.Subscription.Unsubscribe()
 	}

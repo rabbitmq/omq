@@ -28,7 +28,7 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 		SetAutoReconnect(true).
 		SetCleanSession(cfg.MqttConsumer.CleanSession).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			log.Info("connection lost", "consumerId", id)
+			log.Info("connection lost", "id", id)
 		}).
 		SetProtocolVersion(4)
 
@@ -74,14 +74,14 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 		previousMessageTimeSent = timeSent
 
 		msgsReceived++
-		log.Debug("message received", "consumerId", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency)
+		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency)
 	}
 
 	close(subscribed)
 	token := c.Connection.Subscribe(c.Topic, byte(c.Config.MqttConsumer.QoS), handler)
 	token.Wait()
 	if token.Error() != nil {
-		log.Error("failed to subscribe", "consumerId", c.Id, "error", token.Error())
+		log.Error("failed to subscribe", "id", c.Id, "error", token.Error())
 	}
 	log.Info("consumer started", "id", c.Id, "topic", c.Topic)
 
@@ -100,6 +100,6 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 }
 
 func (c MqttConsumer) Stop(reason string) {
-	log.Debug("closing connection", "consumerId", c.Id, "reason", reason)
+	log.Debug("closing connection", "id", c.Id, "reason", reason)
 	c.Connection.Disconnect(250)
 }

@@ -61,12 +61,12 @@ func (p *StompPublisher) Connect() {
 
 		conn, err := stomp.Dial("tcp", parsedUri.Broker, o...)
 		if err != nil {
-			log.Error("publisher connection failed", "publisherId", p.Id, "error", err.Error())
+			log.Error("publisher connection failed", "id", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
 			p.Connection = conn
 		}
-		log.Info("connection established", "publisherId", p.Id)
+		log.Info("connection established", "id", p.Id)
 	}
 }
 
@@ -103,17 +103,17 @@ func (p *StompPublisher) StartFullSpeed(ctx context.Context) {
 			}
 		}
 	}
-	log.Debug("publisher completed", "publisherId", p.Id)
+	log.Debug("publisher completed", "id", p.Id)
 }
 
 func (p *StompPublisher) StartIdle(ctx context.Context) {
-	log.Info("publisher started", "publisherId", p.Id, "rate", "-", "destination", p.Topic)
+	log.Info("publisher started", "id", p.Id, "rate", "-", "destination", p.Topic)
 
 	_ = ctx.Done()
 }
 
 func (p *StompPublisher) StartRateLimited(ctx context.Context) {
-	log.Info("publisher started", "publisherId", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
+	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
 
 	msgSent := 0
@@ -144,17 +144,17 @@ func (p *StompPublisher) Send() error {
 	err := p.Connection.Send(p.Topic, "", p.msg, buildHeaders(p.Config)...)
 	latency := time.Since(startTime)
 	if err != nil {
-		log.Error("message sending failure", "publisherId", p.Id, "error", err)
+		log.Error("message sending failure", "id", p.Id, "error", err)
 		return err
 	}
 	metrics.MessagesPublished.Inc()
 	metrics.PublishingLatency.Update(latency.Seconds())
-	log.Debug("message sent", "publisherId", p.Id, "destination", p.Topic, "latency", latency)
+	log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 	return nil
 }
 
 func (p *StompPublisher) Stop(reason string) {
-	log.Debug("closing connection", "publisherId", p.Id, "reason", reason)
+	log.Debug("closing connection", "id", p.Id, "reason", reason)
 	_ = p.Connection.Disconnect()
 }
 
