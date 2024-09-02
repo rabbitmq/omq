@@ -17,7 +17,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 
 	amqp "github.com/Azure/go-amqp"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Amqp10Consumer struct {
@@ -125,11 +124,9 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 }
 
 func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
-	m := metrics.EndToEndLatency
-
 	c.CreateReceiver(ctx)
 	close(subscribed)
-	log.Info("consumer started", "consumerId", c.Id, "terminus", c.Topic)
+	log.Info("consumer started", "id", c.Id, "terminus", c.Topic)
 	previousMessageTimeSent := time.Unix(0, 0)
 
 	for i := 1; i <= c.Config.ConsumeCount; {
@@ -156,10 +153,10 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			payload := msg.GetData()
 			priority := strconv.Itoa(int(msg.Header.Priority))
 			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
-			m.With(prometheus.Labels{"protocol": "amqp-1.0"}).Observe(latency.Seconds())
+			metrics.EndToEndLatency.UpdateDuration(timeSent)
 
 			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
-				metrics.MessagesConsumedOutOfOrder.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
+				metrics.MessagesConsumedOutOfOrder.Inc()
 				log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
 			}
 			previousMessageTimeSent = timeSent
@@ -178,7 +175,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 				}
 				log.Error("message NOT accepted", "consumerId", c.Id, "terminus", c.Topic)
 			} else {
-				metrics.MessagesConsumed.With(prometheus.Labels{"protocol": "amqp-1.0", "priority": priority}).Inc()
+				metrics.MessagesConsumed.Inc()
 				i++
 				log.Debug("message accepted", "consumerId", c.Id, "terminus", c.Topic)
 			}

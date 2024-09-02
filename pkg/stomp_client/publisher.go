@@ -13,7 +13,6 @@ import (
 
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type StompPublisher struct {
@@ -89,7 +88,7 @@ func (p *StompPublisher) Start(ctx context.Context) {
 }
 
 func (p *StompPublisher) StartFullSpeed(ctx context.Context) {
-	log.Info("publisher started", "publisherId", p.Id, "rate", "unlimited", "destination", p.Topic)
+	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Topic)
 
 	for i := 1; i <= p.Config.PublishCount; {
 		select {
@@ -141,16 +140,16 @@ func (p *StompPublisher) StartRateLimited(ctx context.Context) {
 func (p *StompPublisher) Send() error {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 
-	timer := prometheus.NewTimer(metrics.PublishingLatency.With(prometheus.Labels{"protocol": "stomp"}))
+	startTime := time.Now()
 	err := p.Connection.Send(p.Topic, "", p.msg, buildHeaders(p.Config)...)
-	timer.ObserveDuration()
+	latency := time.Since(startTime)
 	if err != nil {
 		log.Error("message sending failure", "publisherId", p.Id, "error", err)
 		return err
 	}
-	log.Debug("message sent", "publisherId", p.Id, "destination", p.Topic)
-
-	metrics.MessagesPublished.With(prometheus.Labels{"protocol": "stomp"}).Inc()
+	metrics.MessagesPublished.Inc()
+	metrics.PublishingLatency.Update(latency.Seconds())
+	log.Debug("message sent", "publisherId", p.Id, "destination", p.Topic, "latency", latency)
 	return nil
 }
 
