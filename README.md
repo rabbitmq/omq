@@ -95,6 +95,8 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
 ### Options
 
 ```
+      --amqp-reject-rate int                Rate of messages to reject (0-100%)
+      --amqp-release-rate int               Rate of messages to release without accepting (0-100%)
       --amqp-subject string                 AMQP 1.0 message subject
   -D, --cmessages int                       The number of messages to consume per consumer (default=MaxInt) (default 9223372036854775807)
   -T, --consume-from string                 The queue/topic/terminus to consume from (%d will be replaced with the consumer's id) (default "/topic/omq")
