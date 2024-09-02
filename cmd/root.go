@@ -175,10 +175,7 @@ func RootCmd() *cobra.Command {
 				}
 				cfg.MetricTags[parts[0]] = parts[1]
 			}
-			if metricTags != nil {
-				metrics.RegisterMetrics(cfg.MetricTags)
-				metricTags = nil
-			}
+			metrics.RegisterMetrics(cfg.MetricTags)
 			metricsServer := metrics.GetMetricsServer()
 			metricsServer.Start()
 		},

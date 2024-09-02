@@ -13,7 +13,6 @@ import (
 	"time"
 
 	vmetrics "github.com/VictoriaMetrics/metrics"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rabbitmq/omq/pkg/log"
 )
 
@@ -34,13 +33,21 @@ var (
 	EndToEndLatency            *vmetrics.Summary
 )
 
-// TODO globalLabels
-func RegisterMetrics(globalLabels prometheus.Labels) {
-	MessagesPublished = vmetrics.GetOrCreateCounter("omq_messages_published_total")
-	MessagesConsumed = vmetrics.GetOrCreateCounter("omq_messages_consumed_total")
-	MessagesConsumedOutOfOrder = vmetrics.GetOrCreateCounter("omq_messages_consumed_out_of_order")
-	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`, 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
-	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`, 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
+func RegisterMetrics(globalLabels map[string]string) {
+	labels := ""
+	if len(globalLabels) > 0 {
+		labels = "{"
+		for label, value := range globalLabels {
+			labels += label + `="` + value + `",`
+		}
+		labels = strings.TrimSuffix(labels, ",") + "}"
+	}
+
+	MessagesPublished = vmetrics.GetOrCreateCounter("omq_messages_published_total" + labels)
+	MessagesConsumed = vmetrics.GetOrCreateCounter("omq_messages_consumed_total" + labels)
+	MessagesConsumedOutOfOrder = vmetrics.GetOrCreateCounter("omq_messages_consumed_out_of_order" + labels)
+	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`+labels, 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
+	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labels, 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
 }
 
 func Reset() {
