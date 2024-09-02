@@ -82,7 +82,9 @@ Sample Prometheus scrape config:
 
 You can find [a simple dashboard](./dashboard/OMQ-Grafana.json) in this repo.
 
-Additionally, the final values of the metrics are printed when `omq` finishes. A nicer output or TUI will be available at some point.
+Additionally, metrics are printed to the console every second and a summary is printed upon termination.
+Small differences between the values printed and exposed over HTTP are expected, since they are scraped
+at a different point in time.
 
 ### Compatibility with perf-test
 
