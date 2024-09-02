@@ -115,10 +115,10 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 			timeSent, latency := utils.CalculateEndToEndLatency(&msg.Body)
 			metrics.EndToEndLatency.UpdateDuration(timeSent)
 
-			priority := msg.Header.Get("priority")
+			priority, _ := strconv.Atoi(msg.Header.Get("priority"))
 
 			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
-				metrics.MessagesConsumedOutOfOrder.Inc()
+				metrics.MessagesConsumedOutOfOrderMetric(priority).Inc()
 				log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
 			}
 			previousMessageTimeSent = timeSent
@@ -135,7 +135,7 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 				log.Error("message NOT acknowledged", "consumerId", c.Id, "destination", c.Topic)
 
 			} else {
-				metrics.MessagesConsumed.Inc()
+				metrics.MessagesConsumedMetric(priority).Inc()
 				i++
 				log.Debug("message acknowledged", "consumerId", c.Id, "terminus", c.Topic)
 			}

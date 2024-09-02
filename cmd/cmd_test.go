@@ -53,50 +53,50 @@ func TestPublishConsume(t *testing.T) {
 
 			}, 2*time.Second, 100*time.Millisecond)
 			assert.Eventually(t, func() bool {
-				return assert.Equal(t, uint64(1), metrics.MessagesConsumed.Get())
+				return assert.Equal(t, uint64(1), metrics.MessagesConsumedNormalPriority.Get())
 			}, 2*time.Second, 100*time.Millisecond)
 			metrics.Reset()
 		})
 	}
 }
 
-// func TestPublishWithPriorities(t *testing.T) {
-// 	type test struct {
-// 		publish string
-// 		consume string
-// 	}
-//
-// 	tests := []test{
-// 		// mqtt has no concept of message priority
-// 		{publish: "stomp", consume: "stomp"},
-// 		{publish: "stomp", consume: "amqp"},
-// 		{publish: "amqp", consume: "amqp"},
-// 		{publish: "amqp", consume: "stomp"},
-// 	}
-//
-// 	for _, tc := range tests {
-// 		t.Run(tc.publish+"-"+tc.consume, func(t *testing.T) {
-// 			rootCmd := RootCmd()
-//
-// 			topic := "/topic/" + tc.publish + tc.consume
-// 			args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-t", topic, "-T", topic, "--message-priority", "13"}
-// 			rootCmd.SetArgs(args)
-// 			fmt.Println("Running test: omq", strings.Join(args, " "))
-//
-// 			err := rootCmd.Execute()
-// 			assert.Nil(t, err)
-//
-// 			assert.Eventually(t, func() bool {
-// 				return assert.Equal(t, 1.0, metrics.MessagesPublished.Get())
-//
-// 			}, 2*time.Second, 100*time.Millisecond)
-// 			assert.Eventually(t, func() bool {
-// 				return assert.Equal(t, 1.0, metrics.MessagesConsumed.Get())
-// 			}, 2*time.Second, 100*time.Millisecond)
-// 			metrics.Reset()
-// 		})
-// 	}
-// }
+func TestPublishWithPriorities(t *testing.T) {
+	type test struct {
+		publish string
+		consume string
+	}
+
+	tests := []test{
+		// mqtt has no concept of message priority
+		{publish: "stomp", consume: "stomp"},
+		{publish: "stomp", consume: "amqp"},
+		{publish: "amqp", consume: "amqp"},
+		{publish: "amqp", consume: "stomp"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.publish+"-"+tc.consume, func(t *testing.T) {
+			rootCmd := RootCmd()
+
+			topic := "/topic/" + tc.publish + tc.consume
+			args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-t", topic, "-T", topic, "--message-priority", "13", "--queue-durability", "none"}
+			rootCmd.SetArgs(args)
+			fmt.Println("Running test: omq", strings.Join(args, " "))
+
+			err := rootCmd.Execute()
+			assert.Nil(t, err)
+
+			assert.Eventually(t, func() bool {
+				return assert.Equal(t, uint64(1), metrics.MessagesPublished.Get())
+
+			}, 2*time.Second, 100*time.Millisecond)
+			assert.Eventually(t, func() bool {
+				return assert.Equal(t, uint64(1), metrics.MessagesConsumedHighPriority.Get())
+			}, 2*time.Second, 100*time.Millisecond)
+			metrics.Reset()
+		})
+	}
+}
 
 func TestLatencyCalculationA(t *testing.T) {
 	tests := []struct {

@@ -151,12 +151,12 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			}
 
 			payload := msg.GetData()
-			priority := strconv.Itoa(int(msg.Header.Priority))
+			priority := int(msg.Header.Priority)
 			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 			metrics.EndToEndLatency.UpdateDuration(timeSent)
 
 			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
-				metrics.MessagesConsumedOutOfOrder.Inc()
+				metrics.MessagesConsumedOutOfOrderMetric(priority).Inc()
 				log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
 			}
 			previousMessageTimeSent = timeSent
@@ -175,7 +175,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 				}
 				log.Error("message NOT accepted", "consumerId", c.Id, "terminus", c.Topic)
 			} else {
-				metrics.MessagesConsumed.Inc()
+				metrics.MessagesConsumedMetric(priority).Inc()
 				i++
 				log.Debug("message accepted", "consumerId", c.Id, "terminus", c.Topic)
 			}

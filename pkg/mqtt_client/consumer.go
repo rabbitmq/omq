@@ -62,13 +62,13 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 	previousMessageTimeSent := time.Unix(0, 0)
 
 	handler := func(client mqtt.Client, msg mqtt.Message) {
-		metrics.MessagesConsumed.Inc()
+		metrics.MessagesConsumedNormalPriority.Inc()
 		payload := msg.Payload()
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 		metrics.EndToEndLatency.UpdateDuration(timeSent)
 
 		if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
-			metrics.MessagesConsumedOutOfOrder.Inc()
+			metrics.MessagesConsumedOutOfOrderNormalPriority.Inc()
 			log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
 		}
 		previousMessageTimeSent = timeSent
