@@ -23,6 +23,8 @@ var AmqpDurabilityModes = map[AmqpDurabilityMode][]string{
 type AmqpOptions struct {
 	Subject     string
 	SendSettled bool
+	ReleaseRate int
+	RejectRate  int
 }
 
 type MqttOptions struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math/rand"
 	"os"
 	"strconv"
 	"time"
@@ -168,16 +169,24 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 				time.Sleep(c.Config.ConsumerLatency)
 			}
 
-			err = c.Receiver.AcceptMessage(ctx, msg)
+			outcome, pastTense := outcome(c.Config.Amqp.ReleaseRate, c.Config.Amqp.RejectRate)
+			switch outcome {
+			case "accept":
+				err = c.Receiver.AcceptMessage(ctx, msg)
+			case "release":
+				err = c.Receiver.RejectMessage(ctx, msg, nil)
+			case "reject":
+				err = c.Receiver.ReleaseMessage(ctx, msg)
+			}
 			if err != nil {
 				if err == context.Canceled {
 					return
 				}
-				log.Error("message NOT accepted", "id", c.Id, "terminus", c.Topic)
+				log.Error("failed to "+outcome+" message", "id", c.Id, "terminus", c.Topic, "error", err)
 			} else {
 				metrics.MessagesConsumedMetric(priority).Inc()
 				i++
-				log.Debug("message accepted", "id", c.Id, "terminus", c.Topic)
+				log.Debug("message "+pastTense, "id", c.Id, "terminus", c.Topic)
 			}
 		}
 	}
@@ -186,6 +195,15 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	log.Debug("consumer finished", "id", c.Id)
 }
 
+func outcome(releaseRate int, rejectRate int) (string, string) {
+	n := rand.Intn(100)
+	if n < releaseRate {
+		return "release", "released"
+	} else if n < releaseRate+rejectRate {
+		return "reject", "rejected"
+	}
+	return "accept", "accepted"
+}
 func (c *Amqp10Consumer) Stop(reason string) {
 	log.Debug("closing connection", "id", c.Id, "reason", reason)
 	_ = c.Connection.Close()

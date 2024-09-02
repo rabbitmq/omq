@@ -148,6 +148,18 @@ func RootCmd() *cobra.Command {
 				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
 				os.Exit(1)
 			}
+			if cfg.Amqp.ReleaseRate > 100 {
+				log.Error("ERROR: release rate can't be more than 100%")
+				os.Exit(1)
+			}
+			if cfg.Amqp.RejectRate > 100 {
+				log.Error("ERROR: reject rate can't be more than 100%")
+				os.Exit(1)
+			}
+			if cfg.Amqp.ReleaseRate+cfg.Amqp.RejectRate > 100 {
+				log.Error("ERROR: combined release and reject rate can't be more than 100%")
+				os.Exit(1)
+			}
 			if cmd.Use != "version" {
 				setUris(&cfg, cmd.Use)
 			}
@@ -206,6 +218,8 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&cfg.Amqp.Subject, "amqp-subject", "", "AMQP 1.0 message subject")
 	rootCmd.PersistentFlags().
 		BoolVar(&cfg.Amqp.SendSettled, "amqp-send-settled", false, "Send settled messages (fire and forget)")
+	rootCmd.PersistentFlags().IntVar(&cfg.Amqp.RejectRate, "amqp-reject-rate", 0, "Rate of messages to reject (0-100%)")
+	rootCmd.PersistentFlags().IntVar(&cfg.Amqp.ReleaseRate, "amqp-release-rate", 0, "Rate of messages to release without accepting (0-100%)")
 	rootCmd.PersistentFlags().
 		BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable")
 	rootCmd.PersistentFlags().StringVar(&cfg.MessagePriority, "message-priority", "", "Message priority (0-255, default=unset)")
