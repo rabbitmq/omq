@@ -204,6 +204,7 @@ func outcome(releaseRate int, rejectRate int) (string, string) {
 	}
 	return "accept", "accepted"
 }
+
 func (c *Amqp10Consumer) Stop(reason string) {
 	log.Debug("closing connection", "id", c.Id, "reason", reason)
 	_ = c.Connection.Close()
