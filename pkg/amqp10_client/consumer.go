@@ -169,15 +169,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 				time.Sleep(c.Config.ConsumerLatency)
 			}
 
-			outcome, pastTense := outcome(c.Config.Amqp.ReleaseRate, c.Config.Amqp.RejectRate)
-			switch outcome {
-			case "accept":
-				err = c.Receiver.AcceptMessage(ctx, msg)
-			case "release":
-				err = c.Receiver.ReleaseMessage(ctx, msg)
-			case "reject":
-				err = c.Receiver.RejectMessage(ctx, msg, nil)
-			}
+			outcome, err := c.outcome(ctx, msg, c.Config.Amqp.ReleaseRate, c.Config.Amqp.RejectRate)
 			if err != nil {
 				if err == context.Canceled {
 					return
@@ -186,7 +178,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			} else {
 				metrics.MessagesConsumedMetric(priority).Inc()
 				i++
-				log.Debug("message "+pastTense, "id", c.Id, "terminus", c.Topic)
+				log.Debug("message "+pastTense(outcome), "id", c.Id, "terminus", c.Topic)
 			}
 		}
 	}
@@ -195,20 +187,33 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	log.Debug("consumer finished", "id", c.Id)
 }
 
-func outcome(releaseRate int, rejectRate int) (string, string) {
+func (c *Amqp10Consumer) outcome(ctx context.Context, msg *amqp.Message, releaseRate int, rejectRate int) (string, error) {
 	// don't generate random numbers if not necessary
 	if releaseRate == 0 && rejectRate == 0 {
-		return "accept", "accepted"
+		return "accept", c.Receiver.AcceptMessage(ctx, msg)
 	}
 
 	n := rand.Intn(100)
 	if n < releaseRate {
-		return "release", "released"
+		return "release", c.Receiver.ReleaseMessage(ctx, msg)
 	} else if n < releaseRate+rejectRate {
-		return "reject", "rejected"
+		return "reject", c.Receiver.RejectMessage(ctx, msg, nil)
 	}
-	return "accept", "accepted"
+	return "accept", c.Receiver.AcceptMessage(ctx, msg)
 }
+
+func pastTense(outcome string) string {
+	switch outcome {
+	case "accept":
+		return "accepted"
+	case "release":
+		return "released"
+	case "reject":
+		return "rejected"
+	}
+	return "huh?"
+}
+
 func (c *Amqp10Consumer) Stop(reason string) {
 	log.Debug("closing connection", "id", c.Id, "reason", reason)
 	_ = c.Connection.Close()
