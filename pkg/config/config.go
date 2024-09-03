@@ -60,6 +60,7 @@ type Config struct {
 	MqttConsumer         MqttOptions
 	MetricTags           map[string]string
 	LogOutOfOrder        bool
+	ConsumerStartupDelay time.Duration
 }
 
 func NewConfig() Config {

@@ -215,8 +215,11 @@ func pastTense(outcome string) string {
 }
 
 func (c *Amqp10Consumer) Stop(reason string) {
-	log.Debug("closing connection", "id", c.Id, "reason", reason)
-	_ = c.Connection.Close()
+	err := c.Connection.Close()
+	if err != nil {
+		log.Info("consumer stopped with an error", "id", c.Id, "error", err.Error())
+	}
+	log.Debug("consumer stopped", "id", c.Id)
 }
 
 func buildLinkProperties(cfg config.Config) map[string]any {

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,11 +50,11 @@ func TestPublishConsume(t *testing.T) {
 			assert.Nil(t, err)
 
 			assert.Eventually(t, func() bool {
-				return assert.Equal(t, uint64(1), metrics.MessagesPublished.Get())
+				return 1 == metrics.MessagesPublished.Get()
 
 			}, 2*time.Second, 100*time.Millisecond)
 			assert.Eventually(t, func() bool {
-				return assert.Equal(t, uint64(1), metrics.MessagesConsumedNormalPriority.Get())
+				return 1 == metrics.MessagesConsumedNormalPriority.Get()
 			}, 2*time.Second, 100*time.Millisecond)
 			metrics.Reset()
 		})
@@ -87,15 +88,47 @@ func TestPublishWithPriorities(t *testing.T) {
 			assert.Nil(t, err)
 
 			assert.Eventually(t, func() bool {
-				return assert.Equal(t, uint64(1), metrics.MessagesPublished.Get())
+				return 1 == metrics.MessagesPublished.Get()
 
 			}, 2*time.Second, 100*time.Millisecond)
 			assert.Eventually(t, func() bool {
-				return assert.Equal(t, uint64(1), metrics.MessagesConsumedHighPriority.Get())
+				return 1 == metrics.MessagesConsumedHighPriority.Get()
 			}, 2*time.Second, 100*time.Millisecond)
 			metrics.Reset()
 		})
 	}
+}
+
+func TestConsumerStartupDelay(t *testing.T) {
+	rootCmd := RootCmd()
+
+	args := []string{"amqp",
+		"-z", "5s",
+		"-r", "1",
+		"-D", "1",
+		"-t", "/topic/consumer-startup-delay",
+		"-T", "/topic/consumer-startup-delay",
+		"--consumer-startup-delay", "3s"}
+	rootCmd.SetArgs(args)
+	fmt.Println("Running test: omq", strings.Join(args, " "))
+
+	var wg sync.WaitGroup
+	go func() {
+		defer wg.Done()
+		wg.Add(1)
+		err := rootCmd.Execute()
+		assert.Nil(t, err)
+	}()
+
+	time.Sleep(2 * time.Second)
+	assert.Equal(t, uint64(0), metrics.MessagesConsumedNormalPriority.Get())
+
+	assert.Eventually(t, func() bool {
+		return 1 == metrics.MessagesConsumedNormalPriority.Get()
+	}, 10*time.Second, 100*time.Millisecond)
+
+	wg.Wait()
+	metrics.Reset()
 }
 
 func TestLatencyCalculationA(t *testing.T) {
