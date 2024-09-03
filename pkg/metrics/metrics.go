@@ -149,6 +149,12 @@ func (m *MetricsServer) PrintMessageRates(ctx context.Context) {
 }
 
 func (m *MetricsServer) PrintFinalMetrics() {
+	// this might ve called before the metrics were registered
+	// eg. by `omq --help`
+	if MessagesPublished == nil {
+		return
+	}
+
 	log.Print("TOTAL PUBLISHED",
 		"messages", MessagesPublished.Get(),
 		"rate", fmt.Sprintf("%.2f/s", float64(MessagesPublished.Get())/time.Since(m.started).Seconds()))
