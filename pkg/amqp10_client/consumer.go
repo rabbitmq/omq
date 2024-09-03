@@ -196,6 +196,11 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 }
 
 func outcome(releaseRate int, rejectRate int) (string, string) {
+	// don't generate random numbers if not necessary
+	if releaseRate == 0 && rejectRate == 0 {
+		return "accept", "accepted"
+	}
+
 	n := rand.Intn(100)
 	if n < releaseRate {
 		return "release", "released"
