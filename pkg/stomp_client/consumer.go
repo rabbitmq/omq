@@ -152,13 +152,19 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 }
 
 func (c *StompConsumer) Stop(reason string) {
-	log.Debug("closing connection", "id", c.Id, "reason", reason)
 	if c.Subscription != nil {
-		_ = c.Subscription.Unsubscribe()
+		err := c.Subscription.Unsubscribe()
+		if err != nil {
+			log.Info("failed to unsubscribe", "id", c.Id, "error", err.Error())
+		}
 	}
 	if c.Connection != nil {
-		_ = c.Connection.Disconnect()
+		err := c.Connection.Disconnect()
+		if err != nil {
+			log.Info("failed to disconnect", "id", c.Id, "error", err.Error())
+		}
 	}
+	log.Debug("consumer stopped", "id", c.Id)
 }
 
 func buildSubscribeOpts(cfg config.Config) []func(*frame.Frame) error {
