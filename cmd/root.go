@@ -239,6 +239,7 @@ func RootCmd() *cobra.Command {
 		BoolVar(&cfg.LogOutOfOrder, "log-out-of-order-messages", false, "Print a log line when a message is received that is older than the previously received message")
 	rootCmd.PersistentFlags().
 		BoolVar(&cfg.SpreadConnections, "spread-connections", true, "Spread connections across URIs")
+	rootCmd.PersistentFlags().DurationVar(&cfg.ConsumerStartupDelay, "consumer-startup-delay", 0, "Delay consumer startup to allow a backlog of messages to build up (eg. 10s)")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)
@@ -255,7 +256,10 @@ func RootCmd() *cobra.Command {
 }
 
 func start(cfg config.Config, publisherProto common.Protocol, consumerProto common.Protocol) {
-	var wg sync.WaitGroup
+	if cfg.ConsumerLatency != 0 && consumerProto == common.MQTT {
+		log.Error("Consumer latency is not supported for MQTT consumers")
+		os.Exit(1)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -275,30 +279,23 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 		}
 	}()
 
-	if cfg.Consumers > 0 {
-		for i := 1; i <= cfg.Consumers; i++ {
-			subscribed := make(chan bool)
-			n := i
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				c, err := common.NewConsumer(consumerProto, cfg, n)
-				if err != nil {
-					log.Error("Error creating consumer: ", "error", err)
-					os.Exit(1)
-				}
-				c.Start(ctx, subscribed)
-			}()
+	var wg sync.WaitGroup
+	wg.Add(cfg.Publishers + cfg.Consumers)
 
-			// wait until we know the receiver has subscribed
-			<-subscribed
-		}
+	// if --consumer-startup-delay is not set, we want to start
+	// all the consumers before we start any publishers
+	if cfg.ConsumerStartupDelay == 0 {
+		startConsumers(ctx, consumerProto, &wg)
+	} else {
+		go func() {
+			time.Sleep(cfg.ConsumerStartupDelay)
+			startConsumers(ctx, consumerProto, &wg)
+		}()
 	}
 
 	if cfg.Publishers > 0 {
 		for i := 1; i <= cfg.Publishers; i++ {
 			n := i
-			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				p, err := common.NewPublisher(publisherProto, cfg, n)
@@ -311,11 +308,6 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 		}
 	}
 
-	if cfg.ConsumerLatency != 0 && consumerProto == common.MQTT {
-		log.Error("Consumer latency is not supported for MQTT consumers")
-		os.Exit(1)
-	}
-
 	if cfg.Duration > 0 {
 		log.Debug("Will stop all consumers and publishers at " + time.Now().Add(cfg.Duration).String())
 		time.AfterFunc(cfg.Duration, func() { cancel() })
@@ -325,6 +317,25 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 	m := metrics.GetMetricsServer()
 	m.PrintMessageRates(ctx)
 	wg.Wait()
+}
+
+func startConsumers(ctx context.Context, consumerProto common.Protocol, wg *sync.WaitGroup) {
+	for i := 1; i <= cfg.Consumers; i++ {
+		subscribed := make(chan bool)
+		n := i
+		go func() {
+			defer wg.Done()
+			c, err := common.NewConsumer(consumerProto, cfg, n)
+			if err != nil {
+				log.Error("Error creating consumer: ", "error", err)
+				os.Exit(1)
+			}
+			c.Start(ctx, subscribed)
+		}()
+
+		// wait until we know the receiver has subscribed
+		<-subscribed
+	}
 }
 
 func setUris(cfg *config.Config, command string) {
