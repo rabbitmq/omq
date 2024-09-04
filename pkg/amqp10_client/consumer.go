@@ -169,7 +169,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 				time.Sleep(c.Config.ConsumerLatency)
 			}
 
-			outcome, err := c.outcome(ctx, msg, c.Config.Amqp.ReleaseRate, c.Config.Amqp.RejectRate)
+			outcome, err := c.outcome(ctx, msg)
 			if err != nil {
 				if err == context.Canceled {
 					return
@@ -187,16 +187,16 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	log.Debug("consumer finished", "id", c.Id)
 }
 
-func (c *Amqp10Consumer) outcome(ctx context.Context, msg *amqp.Message, releaseRate int, rejectRate int) (string, error) {
+func (c *Amqp10Consumer) outcome(ctx context.Context, msg *amqp.Message) (string, error) {
 	// don't generate random numbers if not necessary
-	if releaseRate == 0 && rejectRate == 0 {
+	if c.Config.Amqp.ReleaseRate == 0 && c.Config.Amqp.RejectRate == 0 {
 		return "accept", c.Receiver.AcceptMessage(ctx, msg)
 	}
 
 	n := rand.Intn(100)
-	if n < releaseRate {
+	if n < c.Config.Amqp.ReleaseRate {
 		return "release", c.Receiver.ReleaseMessage(ctx, msg)
-	} else if n < releaseRate+rejectRate {
+	} else if n < c.Config.Amqp.ReleaseRate+c.Config.Amqp.RejectRate {
 		return "reject", c.Receiver.RejectMessage(ctx, msg, nil)
 	}
 	return "accept", c.Receiver.AcceptMessage(ctx, msg)
