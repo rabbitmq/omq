@@ -128,6 +128,10 @@ func (p MqttPublisher) StartRateLimited(ctx context.Context) {
 }
 
 func (p MqttPublisher) Send() {
+	if !p.Connection.IsConnected() {
+		time.Sleep(1 * time.Second)
+		return
+	}
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	startTime := time.Now()
 	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), false, p.msg)
@@ -135,11 +139,11 @@ func (p MqttPublisher) Send() {
 	latency := time.Since(startTime)
 	if token.Error() != nil {
 		log.Error("message sending failure", "id", p.Id, "error", token.Error())
-		time.Sleep(1 * time.Second)
+	} else {
+		metrics.MessagesPublished.Inc()
+		metrics.PublishingLatency.Update(latency.Seconds())
+		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 	}
-	metrics.MessagesPublished.Inc()
-	metrics.PublishingLatency.Update(latency.Seconds())
-	log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 }
 
 func (p MqttPublisher) Stop(reason string) {
