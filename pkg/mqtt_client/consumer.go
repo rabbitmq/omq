@@ -74,12 +74,15 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 		log.Info("consumer subscribed", "id", c.Id, "topic", c.Topic)
 	}
 
-	// TODO implement spreadConnections=false
-	for _, n := range utils.WrappedSequence(len(c.Config.ConsumerUri), c.Id-1) {
-		parsedUri := utils.ParseURI(c.Config.ConsumerUri[n], "mqtt", "1883")
-		opts.AddBroker(parsedUri.Broker).
-			SetUsername(parsedUri.Username).
-			SetPassword(parsedUri.Password)
+	var j int
+	for i, n := range utils.WrappedSequence(len(c.Config.ConsumerUri), c.Id-1) {
+		if c.Config.SpreadConnections {
+			j = n
+		} else {
+			j = i
+		}
+		parsedUri := utils.ParseURI(c.Config.ConsumerUri[j], "mqtt", "1883")
+		opts.AddBroker(parsedUri.Broker).SetUsername(parsedUri.Username).SetPassword(parsedUri.Password)
 	}
 
 	var token mqtt.Token

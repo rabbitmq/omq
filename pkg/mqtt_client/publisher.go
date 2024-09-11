@@ -36,11 +36,15 @@ func NewPublisher(cfg config.Config, id int) *MqttPublisher {
 		}).
 		SetProtocolVersion(4)
 
-	for _, n := range utils.WrappedSequence(len(cfg.PublisherUri), id-1) {
-		parsedUri := utils.ParseURI(cfg.PublisherUri[n], "mqtt", "1883")
-		opts.AddBroker(parsedUri.Broker).
-			SetUsername(parsedUri.Username).
-			SetPassword(parsedUri.Password)
+	var j int
+	for i, n := range utils.WrappedSequence(len(cfg.PublisherUri), id-1) {
+		if cfg.SpreadConnections {
+			j = n
+		} else {
+			j = i
+		}
+		parsedUri := utils.ParseURI(cfg.PublisherUri[j], "mqtt", "1883")
+		opts.AddBroker(parsedUri.Broker).SetUsername(parsedUri.Username).SetPassword(parsedUri.Password)
 	}
 
 	connection := mqtt.NewClient(opts)
