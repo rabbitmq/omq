@@ -32,7 +32,7 @@ func NewPublisher(cfg config.Config, id int) *MqttPublisher {
 		SetAutoReconnect(true).
 		SetCleanSession(cfg.MqttPublisher.CleanSession).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			log.Info("connection lost", "id", id)
+			log.Info("publisher connection lost", "id", id)
 		}).
 		SetProtocolVersion(4)
 
@@ -131,6 +131,7 @@ func (p MqttPublisher) Send() {
 	latency := time.Since(startTime)
 	if token.Error() != nil {
 		log.Error("message sending failure", "id", p.Id, "error", token.Error())
+		time.Sleep(1 * time.Second)
 	}
 	metrics.MessagesPublished.Inc()
 	metrics.PublishingLatency.Update(latency.Seconds())

@@ -23,26 +23,6 @@ type MqttConsumer struct {
 }
 
 func NewConsumer(cfg config.Config, id int) *MqttConsumer {
-	opts := mqtt.NewClientOptions().
-		SetClientID(fmt.Sprintf("omq-sub-%d", id)).
-		SetAutoReconnect(true).
-		SetCleanSession(cfg.MqttConsumer.CleanSession).
-		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			log.Info("connection lost", "id", id)
-		}).
-		SetProtocolVersion(4)
-
-	for _, n := range utils.WrappedSequence(len(cfg.ConsumerUri), id-1) {
-		parsedUri := utils.ParseURI(cfg.ConsumerUri[n], "mqtt", "1883")
-		opts.AddBroker(parsedUri.Broker).
-			SetUsername(parsedUri.Username).
-			SetPassword(parsedUri.Password)
-	}
-
-	var token mqtt.Token
-	c := mqtt.NewClient(opts)
-	token = c.Connect()
-	token.Wait()
 
 	topic := topic.CalculateTopic(cfg.ConsumeFrom, id)
 	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
@@ -50,7 +30,7 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 
 	return &MqttConsumer{
 		Id:         id,
-		Connection: c,
+		Connection: nil,
 		Topic:      topic,
 		Config:     cfg,
 	}
@@ -58,7 +38,6 @@ func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 
 func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 	msgsReceived := 0
-
 	previousMessageTimeSent := time.Unix(0, 0)
 
 	handler := func(client mqtt.Client, msg mqtt.Message) {
@@ -77,13 +56,41 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency)
 	}
 
-	close(subscribed)
-	token := c.Connection.Subscribe(c.Topic, byte(c.Config.MqttConsumer.QoS), handler)
+	opts := mqtt.NewClientOptions().
+		SetClientID(fmt.Sprintf("omq-sub-%d", c.Id)).
+		SetAutoReconnect(true).
+		SetCleanSession(c.Config.MqttConsumer.CleanSession).
+		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
+			log.Info("consumer connection lost", "id", c.Id)
+		}).
+		SetProtocolVersion(4)
+
+	opts.OnConnect = func(client mqtt.Client) {
+		token := client.Subscribe(c.Topic, byte(c.Config.MqttConsumer.QoS), handler)
+		token.Wait()
+		if token.Error() != nil {
+			log.Error("failed to subscribe", "id", c.Id, "error", token.Error())
+		}
+		log.Info("consumer subscribed", "id", c.Id, "topic", c.Topic)
+	}
+
+	// TODO implement spreadConnections=false
+	for _, n := range utils.WrappedSequence(len(c.Config.ConsumerUri), c.Id-1) {
+		parsedUri := utils.ParseURI(c.Config.ConsumerUri[n], "mqtt", "1883")
+		opts.AddBroker(parsedUri.Broker).
+			SetUsername(parsedUri.Username).
+			SetPassword(parsedUri.Password)
+	}
+
+	var token mqtt.Token
+	c.Connection = mqtt.NewClient(opts)
+	token = c.Connection.Connect()
 	token.Wait()
 	if token.Error() != nil {
-		log.Error("failed to subscribe", "id", c.Id, "error", token.Error())
+		log.Error("failed to connect", "id", c.Id, "error", token.Error())
 	}
-	log.Info("consumer started", "id", c.Id, "topic", c.Topic)
+
+	close(subscribed)
 
 	// TODO: currently we can consume more than ConsumerCount messages
 	for msgsReceived < c.Config.ConsumeCount {
