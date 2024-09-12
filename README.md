@@ -36,13 +36,17 @@ An [OCI image](https://hub.docker.com/r/pivotalrabbitmq/omq/tags) is also availa
 
 Both `--publisher-uri` and `--consumer-uri` can be repeated multiple times to set multiple
 endpoints. If `omq` can't establish a connection or an existing connection is terminated,
-it will try the next URI from the list.
+it will try the next URI from the list. If the endpoints are the same for publishers and consumers,
+you can use `--uri` instead (but can't mix `--uri` with `--publisher-uri` and `--consumer-uri`).
 
-Example:
+For example, here both publishers and consumers will connect to either of the 3 URIs:
 ```
-omq mqtt --consumer-uri mqtt://localhost:1883 --publisher-uri mqtt://localhost:1883 \
-         --consumer-uri mqtt://localhost:1884 --publisher-uri mqtt://localhost:1884 \
-         --consumer-uri mqtt://localhost:1885 --publisher-uri mqtt://localhost:1885
+omq mqtt --uri mqtt://localhost:1883 --uri mqtt://localhost:1884 --uri mqtt://localhost:1885
+```
+And in this case, all consumers will connect to port 1883, while publishers to 1884:
+
+```
+omq mqtt --consumer-uri mqtt://localhost:1883 --publisher-uri mqtt://localhost:1884
 ```
 
 ### Terminus/Topic/Queue/Routing Key

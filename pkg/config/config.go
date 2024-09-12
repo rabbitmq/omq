@@ -33,6 +33,7 @@ type MqttOptions struct {
 }
 
 type Config struct {
+	Uri                  []string
 	PublisherUri         []string
 	ConsumerUri          []string
 	Publishers           int

@@ -50,6 +50,9 @@ func NewPublisher(cfg config.Config, id int) *MqttPublisher {
 	connection := mqtt.NewClient(opts)
 	token = connection.Connect()
 	token.Wait()
+	if token.Error() != nil {
+		log.Error("publisher connection failed", "id", id, "error", token.Error())
+	}
 
 	topic := topic.CalculateTopic(cfg.PublishTo, id)
 	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix

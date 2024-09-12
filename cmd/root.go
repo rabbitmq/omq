@@ -201,6 +201,7 @@ func RootCmd() *cobra.Command {
 	}
 	rootCmd.PersistentFlags().
 		VarP(enumflag.New(&log.Level, "log-level", log.Levels, enumflag.EnumCaseInsensitive), "log-level", "l", "Log level (debug, info, error)")
+	rootCmd.PersistentFlags().StringSliceVarP(&cfg.Uri, "uri", "", nil, "URI for both publishers and consumers")
 	rootCmd.PersistentFlags().StringSliceVarP(&cfg.PublisherUri, "publisher-uri", "", nil, "URI for publishing")
 	rootCmd.PersistentFlags().StringSliceVarP(&cfg.ConsumerUri, "consumer-uri", "", nil, "URI for consuming")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Publishers, "publishers", "x", 1, "The number of publishers to start")
@@ -339,13 +340,23 @@ func startConsumers(ctx context.Context, consumerProto common.Protocol, wg *sync
 }
 
 func setUris(cfg *config.Config, command string) {
+	// --uri is a shortcut to set both --publisher-uri and --consumer-uri
+	if cfg.Uri != nil {
+		if cfg.PublisherUri != nil || cfg.ConsumerUri != nil {
+			log.Error("ERROR: can't specify both --uri and --publisher-uri/--consumer-uri")
+			os.Exit(1)
+		}
+		cfg.PublisherUri = cfg.Uri
+		cfg.ConsumerUri = cfg.Uri
+	}
+
 	if cfg.PublisherUri == nil {
 		log.Debug("setting default publisher uri", "uri", defaultUri(strings.Split(command, "-")[0]))
-		(*cfg).PublisherUri = []string{defaultUri(strings.Split(command, "-")[0])}
+		cfg.PublisherUri = []string{defaultUri(strings.Split(command, "-")[0])}
 	}
 	if cfg.ConsumerUri == nil {
 		log.Debug("setting default consumer uri", "uri", defaultUri(strings.Split(command, "-")[1]))
-		(*cfg).ConsumerUri = []string{defaultUri(strings.Split(command, "-")[1])}
+		cfg.ConsumerUri = []string{defaultUri(strings.Split(command, "-")[1])}
 	}
 }
 
