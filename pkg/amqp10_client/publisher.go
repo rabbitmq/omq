@@ -151,7 +151,7 @@ func (p *Amqp10Publisher) Start(ctx context.Context) {
 func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Terminus)
 
-	for i := 1; i <= p.Config.PublishCount; {
+	for msgSent := 0; msgSent < p.Config.PublishCount; {
 		select {
 		case <-ctx.Done():
 			return
@@ -160,7 +160,7 @@ func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
 			if err != nil {
 				p.Connect()
 			} else {
-				i++
+				msgSent++
 			}
 		}
 	}

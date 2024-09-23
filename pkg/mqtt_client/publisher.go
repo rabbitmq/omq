@@ -93,7 +93,7 @@ func (p MqttPublisher) Start(ctx context.Context) {
 func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Topic)
 
-	for i := 1; i <= p.Config.PublishCount; i++ {
+	for msgSent := 0; msgSent < p.Config.PublishCount; msgSent++ {
 		select {
 		case <-ctx.Done():
 			return

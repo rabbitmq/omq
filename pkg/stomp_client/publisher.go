@@ -90,7 +90,7 @@ func (p *StompPublisher) Start(ctx context.Context) {
 func (p *StompPublisher) StartFullSpeed(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Topic)
 
-	for i := 1; i <= p.Config.PublishCount; {
+	for msgSent := 0; msgSent < p.Config.PublishCount; {
 		select {
 		case <-ctx.Done():
 			return
@@ -99,7 +99,7 @@ func (p *StompPublisher) StartFullSpeed(ctx context.Context) {
 			if err != nil {
 				p.Connect()
 			} else {
-				i++
+				msgSent++
 			}
 		}
 	}
