@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -98,4 +99,8 @@ func WrappedSequence(len int, start int) []int {
 		seq[i] = (start + i) % len
 	}
 	return seq
+}
+
+func InjectId(topic string, id int) string {
+	return strings.Replace(topic, "%d", fmt.Sprintf("%d", id), -1)
 }

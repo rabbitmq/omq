@@ -9,7 +9,6 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
-	"github.com/rabbitmq/omq/pkg/topic"
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
@@ -24,7 +23,7 @@ type MqttConsumer struct {
 
 func NewConsumer(cfg config.Config, id int) *MqttConsumer {
 
-	topic := topic.CalculateTopic(cfg.ConsumeFrom, id)
+	topic := utils.InjectId(cfg.ConsumeFrom, id)
 	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
 	topic = strings.TrimPrefix(topic, "/topic/")
 

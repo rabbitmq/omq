@@ -10,7 +10,6 @@ import (
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
-	"github.com/rabbitmq/omq/pkg/topic"
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
@@ -35,7 +34,7 @@ func NewPublisher(cfg config.Config, id int) *Amqp10Publisher {
 		Connection: nil,
 		Sender:     nil,
 		Config:     cfg,
-		Terminus:   topic.CalculateTopic(cfg.PublishTo, id),
+		Terminus:   utils.InjectId(cfg.PublishTo, id),
 		whichUri:   0,
 	}
 

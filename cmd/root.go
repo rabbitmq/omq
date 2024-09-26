@@ -16,6 +16,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
+	"github.com/rabbitmq/omq/pkg/mgmt"
 	"github.com/rabbitmq/omq/pkg/version"
 
 	"github.com/spf13/cobra"
@@ -197,6 +198,7 @@ func RootCmd() *cobra.Command {
 			metricsServer.Start()
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			mgmt.DeleteDeclaredQueues()
 		},
 	}
 	rootCmd.PersistentFlags().
@@ -211,9 +213,13 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().
 		IntVarP(&cfg.ConsumeCount, "cmessages", "D", math.MaxInt, "The number of messages to consume per consumer (default=MaxInt)")
 	rootCmd.PersistentFlags().
-		StringVarP(&cfg.PublishTo, "publish-to", "t", "/topic/omq", "The topic/terminus to publish to (%d will be replaced with the publisher's id)")
+		StringVarP(&cfg.PublishTo, "publish-to", "t", "/queues/omq", "The topic/terminus to publish to (%d will be replaced with the publisher's id)")
 	rootCmd.PersistentFlags().
-		StringVarP(&cfg.ConsumeFrom, "consume-from", "T", "/topic/omq", "The queue/topic/terminus to consume from (%d will be replaced with the consumer's id)")
+		StringVarP(&cfg.ConsumeFrom, "consume-from", "T", "/queues/omq", "The queue/topic/terminus to consume from (%d will be replaced with the consumer's id)")
+	rootCmd.PersistentFlags().
+		VarP(enumflag.New(&cfg.Queues, "queues", config.QueueTypes, enumflag.EnumCaseInsensitive), "queues", "", "Type of queues to declare (or `predeclared` to use existing queues)")
+	rootCmd.PersistentFlags().
+		BoolVar(&cfg.DeleteQueues, "delete-queues", false, "Delete the queues at the end (if any were declared)")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message payload size in bytes")
 	rootCmd.PersistentFlags().Float32VarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited)")
 	rootCmd.PersistentFlags().DurationVarP(&cfg.Duration, "time", "z", 0, "Run duration (eg. 10s, 5m, 2h)")
@@ -274,7 +280,8 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 			cancel()
 			println("Received SIGTERM, shutting down...")
 			time.Sleep(500 * time.Millisecond)
-			shutdown()
+			shutdown(cfg.DeleteQueues)
+			os.Exit(0)
 		case <-ctx.Done():
 			return
 		}
@@ -373,8 +380,11 @@ func defaultUri(proto string) string {
 	return uri
 }
 
-func shutdown() {
+func shutdown(deleteQueues bool) {
+	if deleteQueues {
+		mgmt.DeleteDeclaredQueues()
+	}
+	mgmt.Disconnect()
 	metricsServer := metrics.GetMetricsServer()
 	metricsServer.PrintFinalMetrics()
-	os.Exit(1)
 }

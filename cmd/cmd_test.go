@@ -42,6 +42,7 @@ func TestPublishConsume(t *testing.T) {
 				"-D", "1",
 				"-t", topic,
 				"-T", topic,
+				"--queues", "classic",
 				"--queue-durability", "none"}
 			rootCmd.SetArgs(args)
 			fmt.Println("Running test: omq", strings.Join(args, " "))
@@ -154,21 +155,21 @@ func TestLatencyCalculationA(t *testing.T) {
 
 func TestAutoUseMillis(t *testing.T) {
 	// by default, use-millis is false
-	args := []string{"amqp", "-C", "1", "-D", "1"}
+	args := []string{"amqp", "-C", "1", "-D", "1", "--queues", "classic", "--time", "2s"}
 	rootCmd := RootCmd()
 	rootCmd.SetArgs(args)
 	_ = rootCmd.Execute()
 	assert.Equal(t, false, cfg.UseMillis)
 
 	// if -x 0, use-millis is true
-	args = []string{"amqp", "-x", "0", "-D", "0"}
+	args = []string{"amqp", "-x", "0", "-D", "0", "--queues", "classic", "--time", "2s"}
 	rootCmd = RootCmd()
 	rootCmd.SetArgs(args)
 	_ = rootCmd.Execute()
 	assert.Equal(t, true, cfg.UseMillis)
 
 	// if -y 0, use-millis is true
-	args = []string{"amqp", "-y", "0", "-C", "0"}
+	args = []string{"amqp", "-t", "/exchanges/amq.topic/foobar", "-y", "0", "-C", "0", "--queues", "classic", "--time", "2s"}
 	rootCmd = RootCmd()
 	rootCmd.SetArgs(args)
 	_ = rootCmd.Execute()

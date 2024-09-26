@@ -11,7 +11,7 @@ import (
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
-	"github.com/rabbitmq/omq/pkg/topic"
+	"github.com/rabbitmq/omq/pkg/mgmt"
 	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/relvacode/iso8601"
 
@@ -25,7 +25,7 @@ type Amqp10Consumer struct {
 	Connection *amqp.Conn
 	Session    *amqp.Session
 	Receiver   *amqp.Receiver
-	Topic      string
+	Terminus   string
 	Config     config.Config
 	whichUri   int
 }
@@ -36,7 +36,7 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 		Connection: nil,
 		Session:    nil,
 		Receiver:   nil,
-		Topic:      topic.CalculateTopic(cfg.ConsumeFrom, id),
+		Terminus:   utils.InjectId(cfg.ConsumeFrom, id),
 		Config:     cfg,
 		whichUri:   0,
 	}
@@ -111,7 +111,8 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 	}
 
 	for c.Receiver == nil {
-		receiver, err := c.Session.NewReceiver(ctx, c.Topic, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Properties: buildLinkProperties(c.Config), Filters: buildLinkFilters(c.Config)})
+		mgmt.DeclareAndBind(c.Config, c.Terminus, c.Id)
+		receiver, err := c.Session.NewReceiver(ctx, c.Terminus, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Properties: buildLinkProperties(c.Config), Filters: buildLinkFilters(c.Config)})
 		if err != nil {
 			if err == context.Canceled {
 				return
@@ -127,13 +128,13 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 	c.CreateReceiver(ctx)
 	close(subscribed)
-	log.Info("consumer started", "id", c.Id, "terminus", c.Topic)
+	log.Info("consumer started", "id", c.Id, "terminus", c.Terminus)
 	previousMessageTimeSent := time.Unix(0, 0)
 
 	for i := 1; i <= c.Config.ConsumeCount; {
 		if c.Receiver == nil {
 			c.CreateReceiver(ctx)
-			log.Debug("consumer subscribed", "id", c.Id, "terminus", c.Topic)
+			log.Debug("consumer subscribed", "id", c.Id, "terminus", c.Terminus)
 		}
 
 		select {
@@ -146,7 +147,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 				if err == context.Canceled {
 					return
 				}
-				log.Error("failed to receive a message", "id", c.Id, "terminus", c.Topic, "error", err.Error())
+				log.Error("failed to receive a message", "id", c.Id, "terminus", c.Terminus, "error", err.Error())
 				c.Connect(ctx)
 				continue
 			}
@@ -162,7 +163,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			}
 			previousMessageTimeSent = timeSent
 
-			log.Debug("message received", "id", c.Id, "terminus", c.Topic, "size", len(payload), "priority", priority, "latency", latency)
+			log.Debug("message received", "id", c.Id, "terminus", c.Terminus, "size", len(payload), "priority", priority, "latency", latency)
 
 			if c.Config.ConsumerLatency > 0 {
 				log.Debug("consumer latency", "id", c.Id, "latency", c.Config.ConsumerLatency)
@@ -174,11 +175,11 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 				if err == context.Canceled {
 					return
 				}
-				log.Error("failed to "+outcome+" message", "id", c.Id, "terminus", c.Topic, "error", err)
+				log.Error("failed to "+outcome+" message", "id", c.Id, "terminus", c.Terminus, "error", err)
 			} else {
 				metrics.MessagesConsumedMetric(priority).Inc()
 				i++
-				log.Debug("message "+pastTense(outcome), "id", c.Id, "terminus", c.Topic)
+				log.Debug("message "+pastTense(outcome), "id", c.Id, "terminus", c.Terminus)
 			}
 		}
 	}
