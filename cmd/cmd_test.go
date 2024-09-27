@@ -186,6 +186,7 @@ func TestFanInFromMQTTtoAMQP(t *testing.T) {
 		"--consume-from", "/queues/sensors",
 		"--amqp-binding-key", "sensor.#",
 		"--queues", "classic",
+		"--cleanup-queues=true",
 		"--time", "5s",
 	}
 
