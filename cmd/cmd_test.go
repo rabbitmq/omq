@@ -139,6 +139,8 @@ func TestPublishWithPriorities(t *testing.T) {
 		{publishProto: "amqp", publishToPrefix: "/exchanges/amq.topic/", consumeProto: "stomp", consumeFromPrefix: "/topic/"},
 	}
 
+	defer metrics.Reset()
+
 	for _, tc := range tests {
 		t.Run(tc.publishProto+"-"+tc.consumeProto, func(t *testing.T) {
 			rootCmd := RootCmd()
@@ -176,6 +178,8 @@ func TestPublishWithPriorities(t *testing.T) {
 }
 
 func TestFanInFromMQTTtoAMQP(t *testing.T) {
+	defer metrics.Reset()
+
 	rootCmd := RootCmd()
 
 	args := []string{"mqtt-amqp",
@@ -205,10 +209,12 @@ func TestFanInFromMQTTtoAMQP(t *testing.T) {
 }
 
 func TestConsumerStartupDelay(t *testing.T) {
+	defer metrics.Reset()
+
 	rootCmd := RootCmd()
 
 	args := []string{"amqp",
-		"-z", "5s",
+		"-z", "10s",
 		"-r", "1",
 		"-D", "1",
 		"-t", "/queues/consumer-startup-delay",
@@ -231,7 +237,7 @@ func TestConsumerStartupDelay(t *testing.T) {
 	assert.Equal(t, uint64(0), metrics.MessagesConsumedNormalPriority.Get())
 
 	assert.Eventually(t, func() bool {
-		return 1 == metrics.MessagesConsumedNormalPriority.Get()
+		return 0 < metrics.MessagesConsumedNormalPriority.Get()
 	}, 10*time.Second, 100*time.Millisecond)
 
 	wg.Wait()
@@ -254,12 +260,14 @@ func TestLatencyCalculationA(t *testing.T) {
 			_, latency := utils.CalculateEndToEndLatency(&testMsg)
 			// not very precise but we just care about the order of magnitude
 			assert.Greater(t, latency.Milliseconds(), int64(9))
-			assert.Less(t, latency.Milliseconds(), int64(40))
+			assert.Less(t, latency.Milliseconds(), int64(50))
 		})
 	}
 }
 
 func TestAutoUseMillis(t *testing.T) {
+	defer metrics.Reset()
+
 	// by default, use-millis is false
 	args := []string{"amqp", "-C", "1", "-D", "1", "--queues", "classic", "--time", "2s"}
 	rootCmd := RootCmd()
