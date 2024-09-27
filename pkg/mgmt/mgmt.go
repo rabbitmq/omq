@@ -53,7 +53,7 @@ func DeclareAndBind(cfg config.Config, queue string, id int) rmq.IQueueInfo {
 	}
 	log.Debug("queue declared", "name", qi.GetName(), "type", qi.Type())
 
-	if cfg.DeleteQueues {
+	if cfg.CleanupQueues {
 		// if we don't need to delete at the end, there's no point in tracking declared queues
 		// note: DeleteAll() is always called, so the empty list serves as the mechanism to skip deletion
 		declaredQueues = append(declaredQueues, queue)

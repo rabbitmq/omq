@@ -102,6 +102,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
       --amqp-reject-rate int                Rate of messages to reject (0-100%)
       --amqp-release-rate int               Rate of messages to release without accepting (0-100%)
       --amqp-subject string                 AMQP 1.0 message subject
+      --cleanup-queues                      Delete the queues at the end (only explicitly declared queues, not STOMP subscriptions)
   -D, --cmessages int                       The number of messages to consume per consumer (default=MaxInt) (default 9223372036854775807)
   -T, --consume-from string                 The queue/topic/terminus to consume from (%d will be replaced with the consumer's id) (default "/topic/omq")
       --consumer-credits int                AMQP-1.0 consumer credits / STOMP prefetch count (default 1)
@@ -119,6 +120,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
   -t, --publish-to string                   The topic/terminus to publish to (%d will be replaced with the publisher's id) (default "/topic/omq")
       --publisher-uri strings               URI for publishing
   -x, --publishers int                      The number of publishers to start (default 1)
+      --queues predeclared                  Type of queues to declare (or predeclared to use existing queues) (default predeclared)
       --queue-durability queue-durability   Queue durability (default: configuration - the queue definition is durable) (default configuration)
   -r, --rate float                          Messages per second (-1 = unlimited) (default -1)
   -s, --size int                            Message payload size in bytes (default 12)

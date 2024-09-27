@@ -60,7 +60,7 @@ type Config struct {
 	PublishTo            string
 	ConsumeFrom          string
 	Queues               QueueType
-	DeleteQueues         bool
+	CleanupQueues        bool
 	ConsumerCredits      int
 	ConsumerLatency      time.Duration
 	Size                 int

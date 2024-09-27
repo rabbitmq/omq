@@ -219,7 +219,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().
 		VarP(enumflag.New(&cfg.Queues, "queues", config.QueueTypes, enumflag.EnumCaseInsensitive), "queues", "", "Type of queues to declare (or `predeclared` to use existing queues)")
 	rootCmd.PersistentFlags().
-		BoolVar(&cfg.DeleteQueues, "delete-queues", false, "Delete the queues at the end (if any were declared)")
+		BoolVar(&cfg.CleanupQueues, "cleanup-queues", false, "Delete the queues at the end (only explicitly declared queues, not STOMP subscriptions)")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message payload size in bytes")
 	rootCmd.PersistentFlags().Float32VarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited)")
 	rootCmd.PersistentFlags().DurationVarP(&cfg.Duration, "time", "z", 0, "Run duration (eg. 10s, 5m, 2h)")
@@ -280,7 +280,7 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 			cancel()
 			println("Received SIGTERM, shutting down...")
 			time.Sleep(500 * time.Millisecond)
-			shutdown(cfg.DeleteQueues)
+			shutdown(cfg.CleanupQueues)
 			os.Exit(0)
 		case <-ctx.Done():
 			return
