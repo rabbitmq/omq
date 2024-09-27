@@ -17,6 +17,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/mgmt"
+	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/rabbitmq/omq/pkg/version"
 
 	"github.com/spf13/cobra"
@@ -54,21 +55,27 @@ func RootCmd() *cobra.Command {
 		Use:     "amqp-amqp",
 		Aliases: []string{"amqp"},
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, common.AMQP, common.AMQP)
+			cfg.PublisherProto = config.AMQP
+			cfg.ConsumerProto = config.AMQP
+			start(cfg)
 		},
 	}
 
 	amqp_stomp = &cobra.Command{
 		Use: "amqp-stomp",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, common.AMQP, common.STOMP)
+			cfg.PublisherProto = config.AMQP
+			cfg.ConsumerProto = config.STOMP
+			start(cfg)
 		},
 	}
 
 	amqp_mqtt = &cobra.Command{
 		Use: "amqp-mqtt",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, common.AMQP, common.MQTT)
+			cfg.PublisherProto = config.AMQP
+			cfg.ConsumerProto = config.MQTT
+			start(cfg)
 		},
 	}
 	amqp_mqtt.Flags().IntVar(&cfg.MqttConsumer.QoS, "mqtt-consumer-qos", 0, "MQTT consumer QoS level (0, 1 or 2; default=0)")
@@ -79,21 +86,27 @@ func RootCmd() *cobra.Command {
 		Use:     "stomp-stomp",
 		Aliases: []string{"stomp"},
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, common.STOMP, common.STOMP)
+			cfg.PublisherProto = config.STOMP
+			cfg.ConsumerProto = config.STOMP
+			start(cfg)
 		},
 	}
 
 	stomp_amqp = &cobra.Command{
 		Use: "stomp-amqp",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, common.STOMP, common.AMQP)
+			cfg.PublisherProto = config.STOMP
+			cfg.ConsumerProto = config.AMQP
+			start(cfg)
 		},
 	}
 
 	stomp_mqtt = &cobra.Command{
 		Use: "stomp-mqtt",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, common.STOMP, common.MQTT)
+			cfg.PublisherProto = config.STOMP
+			cfg.ConsumerProto = config.MQTT
+			start(cfg)
 		},
 	}
 	stomp_mqtt.Flags().IntVar(&cfg.MqttConsumer.QoS, "mqtt-consumer-qos", 0, "MQTT consumer QoS level (0, 1 or 2; default=0)")
@@ -104,7 +117,9 @@ func RootCmd() *cobra.Command {
 		Use:     "mqtt-mqtt",
 		Aliases: []string{"mqtt"},
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, common.MQTT, common.MQTT)
+			cfg.PublisherProto = config.MQTT
+			cfg.ConsumerProto = config.MQTT
+			start(cfg)
 		},
 	}
 	mqtt_mqtt.Flags().IntVar(&cfg.MqttPublisher.QoS, "mqtt-publisher-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
@@ -117,7 +132,9 @@ func RootCmd() *cobra.Command {
 	mqtt_amqp = &cobra.Command{
 		Use: "mqtt-amqp",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, common.MQTT, common.AMQP)
+			cfg.PublisherProto = config.MQTT
+			cfg.ConsumerProto = config.AMQP
+			start(cfg)
 		},
 	}
 	mqtt_amqp.Flags().IntVar(&cfg.MqttPublisher.QoS, "mqtt-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
@@ -127,7 +144,9 @@ func RootCmd() *cobra.Command {
 	mqtt_stomp = &cobra.Command{
 		Use: "mqtt-stomp",
 		Run: func(cmd *cobra.Command, args []string) {
-			start(cfg, common.MQTT, common.STOMP)
+			cfg.PublisherProto = config.MQTT
+			cfg.ConsumerProto = config.STOMP
+			start(cfg)
 		},
 	}
 	mqtt_stomp.Flags().IntVar(&cfg.MqttPublisher.QoS, "mqtt-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
@@ -213,9 +232,9 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().
 		IntVarP(&cfg.ConsumeCount, "cmessages", "D", math.MaxInt, "The number of messages to consume per consumer (default=MaxInt)")
 	rootCmd.PersistentFlags().
-		StringVarP(&cfg.PublishTo, "publish-to", "t", "/queues/omq", "The topic/terminus to publish to (%d will be replaced with the publisher's id)")
+		StringVarP(&cfg.PublishTo, "publish-to", "t", "/queues/omq-%d", "The topic/terminus to publish to (%d will be replaced with the publisher's id)")
 	rootCmd.PersistentFlags().
-		StringVarP(&cfg.ConsumeFrom, "consume-from", "T", "/queues/omq", "The queue/topic/terminus to consume from (%d will be replaced with the consumer's id)")
+		StringVarP(&cfg.ConsumeFrom, "consume-from", "T", "/queues/omq-%d", "The queue/topic/terminus to consume from (%d will be replaced with the consumer's id)")
 	rootCmd.PersistentFlags().
 		VarP(enumflag.New(&cfg.Queues, "queues", config.QueueTypes, enumflag.EnumCaseInsensitive), "queues", "", "Type of queues to declare (or `predeclared` to use existing queues)")
 	rootCmd.PersistentFlags().
@@ -262,8 +281,8 @@ func RootCmd() *cobra.Command {
 	return rootCmd
 }
 
-func start(cfg config.Config, publisherProto common.Protocol, consumerProto common.Protocol) {
-	if cfg.ConsumerLatency != 0 && consumerProto == common.MQTT {
+func start(cfg config.Config) {
+	if cfg.ConsumerLatency != 0 && cfg.ConsumerProto == config.MQTT {
 		log.Error("Consumer latency is not supported for MQTT consumers")
 		os.Exit(1)
 	}
@@ -293,11 +312,16 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 	// if --consumer-startup-delay is not set, we want to start
 	// all the consumers before we start any publishers
 	if cfg.ConsumerStartupDelay == 0 {
-		startConsumers(ctx, consumerProto, &wg)
+		startConsumers(ctx, cfg.ConsumerProto, &wg)
 	} else {
+		// when consumers start with a delay, we still want the queues
+		// to be present so that publishers can create message backlogs
+		for i := 1; i <= cfg.Consumers; i++ {
+			mgmt.DeclareAndBind(cfg, utils.InjectId(cfg.ConsumeFrom, i), i)
+		}
 		go func() {
 			time.Sleep(cfg.ConsumerStartupDelay)
-			startConsumers(ctx, consumerProto, &wg)
+			startConsumers(ctx, cfg.ConsumerProto, &wg)
 		}()
 	}
 
@@ -306,7 +330,7 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 			n := i
 			go func() {
 				defer wg.Done()
-				p, err := common.NewPublisher(publisherProto, cfg, n)
+				p, err := common.NewPublisher(cfg.PublisherProto, cfg, n)
 				if err != nil {
 					log.Error("Error creating publisher: ", "error", err)
 					os.Exit(1)
@@ -327,7 +351,7 @@ func start(cfg config.Config, publisherProto common.Protocol, consumerProto comm
 	wg.Wait()
 }
 
-func startConsumers(ctx context.Context, consumerProto common.Protocol, wg *sync.WaitGroup) {
+func startConsumers(ctx context.Context, consumerProto config.Protocol, wg *sync.WaitGroup) {
 	for i := 1; i <= cfg.Consumers; i++ {
 		subscribed := make(chan bool)
 		n := i

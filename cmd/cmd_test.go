@@ -15,35 +15,96 @@ import (
 
 func TestPublishConsume(t *testing.T) {
 	type test struct {
-		publish  string
-		consume  string
-		priority string // expected/default message priority
+		publishProto      string
+		publishToPrefix   string
+		consumeProto      string
+		consumeFromPrefix string
+		msgPriority       string // expected/default message priority
 	}
 
 	tests := []test{
-		{publish: "stomp", consume: "stomp", priority: ""},
-		{publish: "stomp", consume: "amqp", priority: "4"},
-		{publish: "stomp", consume: "mqtt", priority: ""},
-		{publish: "amqp", consume: "amqp", priority: "0"},  // https://github.com/Azure/go-amqp/issues/313
-		{publish: "amqp", consume: "stomp", priority: "0"}, // https://github.com/Azure/go-amqp/issues/313
-		{publish: "amqp", consume: "mqtt", priority: ""},
-		{publish: "mqtt", consume: "mqtt", priority: ""},
-		{publish: "mqtt", consume: "stomp", priority: ""},
-		{publish: "mqtt", consume: "amqp", priority: "4"},
+		{
+			publishProto:      "amqp",
+			publishToPrefix:   "/queues/",
+			consumeProto:      "amqp",
+			consumeFromPrefix: "/queues/",
+			msgPriority:       "0", // https://github.com/Azure/go-amqp/issues/313
+		},
+		{
+			publishProto:      "stomp",
+			publishToPrefix:   "/topic/",
+			consumeProto:      "amqp",
+			consumeFromPrefix: "/queues/",
+			msgPriority:       "4",
+		},
+		{
+			publishProto:      "mqtt",
+			publishToPrefix:   "/topic/",
+			consumeProto:      "amqp",
+			consumeFromPrefix: "/queues/",
+			msgPriority:       "4",
+		},
+		{
+			publishProto:      "amqp",
+			publishToPrefix:   "/exchanges/amq.topic/",
+			consumeProto:      "stomp",
+			consumeFromPrefix: "/topic/",
+			msgPriority:       "0", // https://github.com/Azure/go-amqp/issues/313
+		},
+		{
+			publishProto:      "amqp",
+			publishToPrefix:   "/exchanges/amq.topic/",
+			consumeProto:      "mqtt",
+			consumeFromPrefix: "/topic/",
+			msgPriority:       "",
+		},
+		{
+			publishProto:      "stomp",
+			publishToPrefix:   "/topic/",
+			consumeProto:      "stomp",
+			consumeFromPrefix: "/topic/",
+			msgPriority:       "",
+		},
+		{
+			publishProto:      "stomp",
+			publishToPrefix:   "/topic/",
+			consumeProto:      "mqtt",
+			consumeFromPrefix: "/topic/",
+			msgPriority:       "",
+		},
+		{
+			publishProto:      "mqtt",
+			publishToPrefix:   "/topic/",
+			consumeProto:      "mqtt",
+			consumeFromPrefix: "/topic/",
+			msgPriority:       "",
+		},
+		{
+			publishProto:      "mqtt",
+			publishToPrefix:   "/topic/",
+			consumeProto:      "stomp",
+			consumeFromPrefix: "/topic/",
+			msgPriority:       "",
+		},
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.publish+"-"+tc.consume, func(t *testing.T) {
+		t.Run(tc.publishProto+"-"+tc.consumeProto, func(t *testing.T) {
 			rootCmd := RootCmd()
 
-			topic := "/topic/" + tc.publish + tc.consume
-			args := []string{tc.publish + "-" + tc.consume,
+			publishTo := tc.publishToPrefix + tc.publishProto + tc.consumeProto
+			consumeFrom := tc.consumeFromPrefix + tc.publishProto + tc.consumeProto
+			args := []string{tc.publishProto + "-" + tc.consumeProto,
 				"-C", "1",
 				"-D", "1",
-				"-t", topic,
-				"-T", topic,
-				"--queues", "classic",
-				"--queue-durability", "none"}
+				"-t", publishTo,
+				"-T", consumeFrom,
+				"--queue-durability", "none",
+				"--time", "3s", // don't want to long in case of issues
+			}
+			if tc.consumeProto == "amqp" {
+				args = append(args, "--queues", "classic", "--cleanup-queues=true")
+			}
 			rootCmd.SetArgs(args)
 			fmt.Println("Running test: omq", strings.Join(args, " "))
 
@@ -64,24 +125,38 @@ func TestPublishConsume(t *testing.T) {
 
 func TestPublishWithPriorities(t *testing.T) {
 	type test struct {
-		publish string
-		consume string
+		publishProto      string
+		publishToPrefix   string
+		consumeProto      string
+		consumeFromPrefix string
 	}
 
 	tests := []test{
 		// mqtt has no concept of message priority
-		{publish: "stomp", consume: "stomp"},
-		{publish: "stomp", consume: "amqp"},
-		{publish: "amqp", consume: "amqp"},
-		{publish: "amqp", consume: "stomp"},
+		{publishProto: "stomp", publishToPrefix: "/topic/", consumeProto: "stomp", consumeFromPrefix: "/topic/"},
+		{publishProto: "stomp", publishToPrefix: "/topic/", consumeProto: "amqp", consumeFromPrefix: "/queues/"},
+		{publishProto: "amqp", publishToPrefix: "/queues/", consumeProto: "amqp", consumeFromPrefix: "/queues/"},
+		{publishProto: "amqp", publishToPrefix: "/exchanges/amq.topic/", consumeProto: "stomp", consumeFromPrefix: "/topic/"},
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.publish+"-"+tc.consume, func(t *testing.T) {
+		t.Run(tc.publishProto+"-"+tc.consumeProto, func(t *testing.T) {
 			rootCmd := RootCmd()
 
-			topic := "/topic/" + tc.publish + tc.consume
-			args := []string{tc.publish + "-" + tc.consume, "-C", "1", "-D", "1", "-t", topic, "-T", topic, "--message-priority", "13", "--queue-durability", "none"}
+			publishTo := tc.publishToPrefix + tc.publishProto + tc.consumeProto
+			consumeFrom := tc.consumeFromPrefix + tc.publishProto + tc.consumeProto
+			args := []string{
+				tc.publishProto + "-" + tc.consumeProto,
+				"-C", "1",
+				"-D", "1",
+				"-t", publishTo,
+				"-T", consumeFrom,
+				"--message-priority", "13",
+				"--queue-durability", "none",
+				"--time", "3s"}
+			if tc.consumeProto == "amqp" {
+				args = append(args, "--queues", "classic", "--cleanup-queues=true")
+			}
 			rootCmd.SetArgs(args)
 			fmt.Println("Running test: omq", strings.Join(args, " "))
 
@@ -107,8 +182,10 @@ func TestConsumerStartupDelay(t *testing.T) {
 		"-z", "5s",
 		"-r", "1",
 		"-D", "1",
-		"-t", "/topic/consumer-startup-delay",
-		"-T", "/topic/consumer-startup-delay",
+		"-t", "/queues/consumer-startup-delay",
+		"-T", "/queues/consumer-startup-delay",
+		"--queues", "classic",
+		"--cleanup-queues=true",
 		"--consumer-startup-delay", "3s"}
 	rootCmd.SetArgs(args)
 	fmt.Println("Running test: omq", strings.Join(args, " "))

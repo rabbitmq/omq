@@ -6,6 +6,14 @@ import (
 	"github.com/thediveo/enumflag/v2"
 )
 
+type Protocol int
+
+const (
+	AMQP Protocol = iota
+	STOMP
+	MQTT
+)
+
 type QueueType enumflag.Flag
 
 type AmqpDurabilityMode enumflag.Flag
@@ -49,6 +57,8 @@ type MqttOptions struct {
 }
 
 type Config struct {
+	ConsumerProto        Protocol
+	PublisherProto       Protocol
 	Uri                  []string
 	PublisherUri         []string
 	ConsumerUri          []string

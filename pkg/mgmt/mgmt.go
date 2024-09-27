@@ -43,8 +43,7 @@ func DeclareAndBind(cfg config.Config, queue string, id int) rmq.IQueueInfo {
 		queueType = rmq.Stream
 	}
 
-	queue = strings.TrimPrefix(queue, "/queues/") // AMQP 1.0
-	queue = strings.TrimPrefix(queue, "/queue/")  // STOMP
+	queue = strings.TrimPrefix(queue, "/queues/")
 	queueSpec := mgmt.Queue(queue).QueueType(rmq.QueueType{Type: queueType})
 	qi, err := queueSpec.Declare(context.Background())
 	if err != nil {
