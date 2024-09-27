@@ -54,13 +54,13 @@ func NewConsumer(protocol config.Protocol, cfg config.Config, id int) (Consumer,
 	case config.STOMP:
 		c := stomp_client.NewConsumer(cfg, id)
 		if c == nil {
-			return nil, fmt.Errorf("failed to create an AMQP-1.0 consumer")
+			return nil, fmt.Errorf("failed to create a STOMP consumer")
 		}
 		return c, nil
 	case config.MQTT:
 		c := mqtt_client.NewConsumer(cfg, id)
 		if c == nil {
-			return nil, fmt.Errorf("failed to create an AMQP-1.0 consumer")
+			return nil, fmt.Errorf("failed to create an MQTT consumer")
 		}
 		return c, nil
 	}
