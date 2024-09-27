@@ -61,6 +61,7 @@ func DeclareAndBind(cfg config.Config, queue string, id int) rmq.IQueueInfo {
 	var exchangeName, routingKey string
 	if cfg.PublisherProto == config.MQTT {
 		exchangeName = "amq.topic"
+		routingKey = utils.InjectId(cfg.PublishTo, id)
 	} else {
 		exchangeName, routingKey = parsePublishTo(cfg.PublishTo, id)
 	}
