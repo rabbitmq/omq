@@ -43,29 +43,33 @@ func DeclareAndBind(cfg config.Config, queue string, id int) rmq.IQueueInfo {
 		queueType = rmq.Stream
 	}
 
-	queue = strings.TrimPrefix(queue, "/queues/")
+	queue = strings.TrimPrefix(queue, "/queues/") // AMQP 1.0
+	queue = strings.TrimPrefix(queue, "/queue/")  // STOMP
 	queueSpec := mgmt.Queue(queue).QueueType(rmq.QueueType{Type: queueType})
 	qi, err := queueSpec.Declare(context.Background())
 	if err != nil {
 		log.Error("Failed to declare queue", "name", queue, "error", err)
 		os.Exit(1)
 	}
+	log.Debug("queue declared", "name", qi.GetName(), "type", qi.Type())
+
 	if cfg.DeleteQueues {
-		// if we don't need to delete at the end, there's no point in tracking them
+		// if we don't need to delete at the end, there's no point in tracking declared queues
 		// note: DeleteAll() is always called, so the empty list serves as the mechanism to skip deletion
 		declaredQueues = append(declaredQueues, queue)
 	}
 
-	exchange, routingKey := parsePublishTo(cfg.PublishTo, id)
+	exchangeName, routingKey := parsePublishTo(cfg.PublishTo, id)
 
-	if exchange != "amq.default" {
-		exchange := mgmt.Exchange(exchange)
-		bindingSpec := mgmt.Binding().SourceExchange(exchange).DestinationQueue(queueSpec).Key(routingKey)
+	if exchangeName != "amq.default" {
+		exchangeSpec := mgmt.Exchange(exchangeName)
+		bindingSpec := mgmt.Binding().SourceExchange(exchangeSpec).DestinationQueue(queueSpec).Key(routingKey)
 		err = bindingSpec.Bind(context.Background())
 		if err != nil {
-			log.Error("Failed to bind a queue", "exchange", exchange, "queue", queue, "key", routingKey, "error", err)
+			log.Error("Failed to bind a queue", "exchange", exchangeName, "queue", queue, "key", routingKey, "error", err)
 			os.Exit(1)
 		}
+		log.Debug("binding declared", "exchange", exchangeName, "queue", queue, "key", routingKey)
 	}
 
 	return qi
@@ -77,7 +81,7 @@ func parsePublishTo(publishTo string, id int) (string, string) {
 	exchange := ""
 	routingKey := ""
 
-	if parts[1] == "/queues/" {
+	if parts[1] == "queues" {
 		exchange = "amq.default"
 		routingKey = parts[2]
 	}
@@ -87,6 +91,23 @@ func parsePublishTo(publishTo string, id int) (string, string) {
 	}
 
 	if parts[1] == "exchanges" && len(parts) == 4 {
+		exchange = parts[2]
+		routingKey = parts[3]
+	}
+
+	// STOMP publishing to /topic/:key
+	if parts[1] == "topic" && len(parts) == 3 {
+		exchange = "amq.topic"
+		routingKey = parts[2]
+	}
+
+	// STOMP publishing to /exchange/:exchange
+	if parts[1] == "exchange" && len(parts) == 3 {
+		exchange = parts[2]
+	}
+
+	// STOMP publishing to /exchange/:exchange/:key
+	if parts[1] == "exchange" && len(parts) == 4 {
 		exchange = parts[2]
 		routingKey = parts[3]
 	}

@@ -32,3 +32,12 @@ func TestDeclareAndBindWithId(t *testing.T) {
 	err := Get().Queue("foobar-123").Delete(context.Background())
 	assert.Nil(t, err)
 }
+
+func TestDeclareAndBindStompAmqp(t *testing.T) {
+	log.Setup()
+	cfg := config.Config{Queues: config.Classic, PublishTo: "/topic/stompstomp", ConsumeFrom: "/topic/stompamqp"}
+	q := DeclareAndBind(cfg, "foobar-123", 123)
+	assert.Equal(t, "foobar-123", q.GetName())
+	err := Get().Queue("foobar-123").Delete(context.Background())
+	assert.Nil(t, err)
+}
