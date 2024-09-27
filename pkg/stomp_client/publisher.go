@@ -8,7 +8,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
-	"github.com/rabbitmq/omq/pkg/topic"
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/go-stomp/stomp/v3"
@@ -28,7 +27,7 @@ func NewPublisher(cfg config.Config, id int) *StompPublisher {
 	publisher := &StompPublisher{
 		Id:         id,
 		Connection: nil,
-		Topic:      topic.CalculateTopic(cfg.PublishTo, id),
+		Topic:      utils.InjectId(cfg.PublishTo, id),
 		Config:     cfg,
 	}
 

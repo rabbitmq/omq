@@ -159,7 +159,7 @@ func (m *MetricsServer) PrintFinalMetrics() {
 		"messages", MessagesPublished.Get(),
 		"rate", fmt.Sprintf("%.2f/s", float64(MessagesPublished.Get())/time.Since(m.started).Seconds()))
 	log.Print("TOTAL CONSUMED",
-		"consumed", MessagesConsumedNormalPriority.Get(),
+		"consumed", MessagesConsumedNormalPriority.Get()+MessagesConsumedHighPriority.Get(),
 		"rate", fmt.Sprintf("%.2f/s", float64(MessagesConsumedNormalPriority.Get()+MessagesConsumedHighPriority.Get())/time.Since(m.started).Seconds()))
 
 }

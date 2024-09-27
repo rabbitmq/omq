@@ -12,14 +12,18 @@ a different protocol than the consumers.
 ```
 ./omq stomp-amqp
 ```
-will publish via STOMP and consume via AMQP 1.0 (see below for the topic/queue/routing key details). A more complex example:
+will publish via STOMP and consume via AMQP 1.0. Note that starting with RabbitMQ 4.0, RabbitMQ doesn't automatically
+declare queues for AMQP-1.0 subscriber, so a queue would need to exist for this example to work; if you want `omq` to
+declare a queue, use `--queues`; see below for more about topic/queue/routing key details).
+
+A more complex example:
 ```
-./omq mqtt-amqp --publishers 10 --consumers 1 --rate 1 --size 100 \
-                --publish-to 'sensor/%d' --consume-from '/topic/sensor.#'
+./omq mqtt-amqp --publishers 10 --publish-to 'sensor/%d' --rate 1 --size 100 \
+                --consumers 1 --consume-from /queues/sensors --amqp-binding-key 'sensor.#' --queues classic
 ```
 will start 10 MQTT publishers, each publishing 1 message a second, with 100 bytes of payload, to the `amq.topic` exchange (default for the MQTT plugin)
 with the topic/routing key of `sensor/%d`, where the `%d` is the ID of the publisher (from 1 to 10). It will also start a single AMQP 1.0 consumer that
-consumes all those messages thanks to a wildcard subscription.
+consumes all those messages by declaring a classic queue `sensors` with a wildcard subscription.
 
 If the publishing and consuming protocol is the same, you can use abbreviated commands: `amqp` instead of `amqp-amqp`, `stomp` instead of `stomp-stomp`
 and `mqtt` instead of `mqtt-mqtt`.
@@ -58,13 +62,11 @@ Different protocols refer to the targets / sources of messages differently and R
 
 For convenience, if either `--publish-to` or `--consume-from` starts with `/exchange/amq.topic/` or `/topic/`, MQTT publisher/consumer
 will remove that prefix. RabbitMQ only allows using a single topic exchange with MQTT (`amq.topic` by default), so this prefix doesn't make
-much sense. Removing it makes it easier to use the same parameters across protocols - for example unit tests run all protocol combinations
-with `--publish-to /topic/<protocol1><protocol2> --consume-from /topic/<protocol1><protocol2>`, which wouldn't work with MQTT without
-this special handling ("/topic/" would be a part of the topic/binding key).
+much sense. Removing it makes it easier to use the same parameters across protocols.
 
 Read more about how RabbitMQ handles sources and targets in different protocols:
-* [AMQP 1.0](https://www.rabbitmq.com/docs/next/amqp#address-v1) format used by RabbitMQ 3.x
-* [AMQP 1.0](https://www.rabbitmq.com/docs/next/amqp#address-v2) format used by RabbitMQ 4.0+ (the old format is still supported but deprecated)
+* [AMQP 1.0](https://www.rabbitmq.com/docs/amqp#address-v1) format used by RabbitMQ 3.x
+* [AMQP 1.0](https://www.rabbitmq.com/docs/amqp#address-v2) format used by RabbitMQ 4.0+ (the old format is still supported but deprecated)
 * [MQTT](https://www.rabbitmq.com/docs/mqtt#topic-level-separator-and-wildcards)
 * [STOMP](https://www.rabbitmq.com/docs/stomp#d)
 
@@ -99,9 +101,11 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
 ### Options
 
 ```
+      --amqp-binding-key string             AMQP 1.0 consumer binding key
       --amqp-reject-rate int                Rate of messages to reject (0-100%)
       --amqp-release-rate int               Rate of messages to release without accepting (0-100%)
       --amqp-subject string                 AMQP 1.0 message subject
+      --cleanup-queues                      Delete the queues at the end (only explicitly declared queues, not STOMP subscriptions)
   -D, --cmessages int                       The number of messages to consume per consumer (default=MaxInt) (default 9223372036854775807)
   -T, --consume-from string                 The queue/topic/terminus to consume from (%d will be replaced with the consumer's id) (default "/topic/omq")
       --consumer-credits int                AMQP-1.0 consumer credits / STOMP prefetch count (default 1)
@@ -119,6 +123,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
   -t, --publish-to string                   The topic/terminus to publish to (%d will be replaced with the publisher's id) (default "/topic/omq")
       --publisher-uri strings               URI for publishing
   -x, --publishers int                      The number of publishers to start (default 1)
+      --queues predeclared                  Type of queues to declare (or predeclared to use existing queues) (default predeclared)
       --queue-durability queue-durability   Queue durability (default: configuration - the queue definition is durable) (default configuration)
   -r, --rate float                          Messages per second (-1 = unlimited) (default -1)
   -s, --size int                            Message payload size in bytes (default 12)

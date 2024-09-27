@@ -10,7 +10,6 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
-	"github.com/rabbitmq/omq/pkg/topic"
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
@@ -54,7 +53,7 @@ func NewPublisher(cfg config.Config, id int) *MqttPublisher {
 		log.Error("publisher connection failed", "id", id, "error", token.Error())
 	}
 
-	topic := topic.CalculateTopic(cfg.PublishTo, id)
+	topic := utils.InjectId(cfg.PublishTo, id)
 	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix
 	// since MQTT has no concept of exchanges, we need to remove it
 	// this should get more flexible in the future

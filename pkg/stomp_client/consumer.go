@@ -8,7 +8,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
-	"github.com/rabbitmq/omq/pkg/topic"
 	"github.com/rabbitmq/omq/pkg/utils"
 
 	"github.com/go-stomp/stomp/v3"
@@ -30,7 +29,7 @@ func NewConsumer(cfg config.Config, id int) *StompConsumer {
 		Id:           id,
 		Connection:   nil,
 		Subscription: nil,
-		Topic:        topic.CalculateTopic(cfg.ConsumeFrom, id),
+		Topic:        utils.InjectId(cfg.ConsumeFrom, id),
 		Config:       cfg,
 		whichUri:     0,
 	}

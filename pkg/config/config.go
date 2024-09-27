@@ -6,6 +6,16 @@ import (
 	"github.com/thediveo/enumflag/v2"
 )
 
+type Protocol int
+
+const (
+	AMQP Protocol = iota
+	STOMP
+	MQTT
+)
+
+type QueueType enumflag.Flag
+
 type AmqpDurabilityMode enumflag.Flag
 
 const (
@@ -14,10 +24,24 @@ const (
 	UnsettledState
 )
 
+const (
+	Predeclared = iota
+	Classic
+	Quorum
+	Stream
+)
+
 var AmqpDurabilityModes = map[AmqpDurabilityMode][]string{
 	None:           {"none"},
 	Configuration:  {"configuration"},
 	UnsettledState: {"unsettled-state"},
+}
+
+var QueueTypes = map[QueueType][]string{
+	Predeclared: {"predeclared"},
+	Classic:     {"classic"},
+	Quorum:      {"quorum"},
+	Stream:      {"stream"},
 }
 
 type AmqpOptions struct {
@@ -25,6 +49,7 @@ type AmqpOptions struct {
 	SendSettled bool
 	ReleaseRate int
 	RejectRate  int
+	BindingKey  string
 }
 
 type MqttOptions struct {
@@ -33,6 +58,8 @@ type MqttOptions struct {
 }
 
 type Config struct {
+	ConsumerProto        Protocol
+	PublisherProto       Protocol
 	Uri                  []string
 	PublisherUri         []string
 	ConsumerUri          []string
@@ -43,6 +70,8 @@ type Config struct {
 	ConsumeCount         int
 	PublishTo            string
 	ConsumeFrom          string
+	Queues               QueueType
+	CleanupQueues        bool
 	ConsumerCredits      int
 	ConsumerLatency      time.Duration
 	Size                 int
