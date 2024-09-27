@@ -49,6 +49,7 @@ type AmqpOptions struct {
 	SendSettled bool
 	ReleaseRate int
 	RejectRate  int
+	BindingKey  string
 }
 
 type MqttOptions struct {

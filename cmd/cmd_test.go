@@ -175,6 +175,34 @@ func TestPublishWithPriorities(t *testing.T) {
 	}
 }
 
+func TestFanInFromMQTTtoAMQP(t *testing.T) {
+	rootCmd := RootCmd()
+
+	args := []string{"mqtt-amqp",
+		"--publishers", "3",
+		"--consumers", "1",
+		"-C", "5",
+		"--publish-to", "sensor/%d",
+		"--consume-from", "/queues/sensors",
+		"--amqp-binding-key", "sensor.#",
+		"--queues", "classic",
+		"--time", "5s",
+	}
+
+	rootCmd.SetArgs(args)
+	fmt.Println("Running test: omq", strings.Join(args, " "))
+	err := rootCmd.Execute()
+	assert.Nil(t, err)
+
+	assert.Eventually(t, func() bool {
+		return 15 == metrics.MessagesPublished.Get()
+
+	}, 2*time.Second, 100*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return 15 == metrics.MessagesConsumedNormalPriority.Get()
+	}, 2*time.Second, 100*time.Millisecond)
+}
+
 func TestConsumerStartupDelay(t *testing.T) {
 	rootCmd := RootCmd()
 
