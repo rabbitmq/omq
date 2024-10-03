@@ -247,6 +247,8 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 	if cfg.StreamFilterValues != "" {
 		filters = append(filters, amqp.NewLinkFilter("rabbitmq:stream-filter", 0, cfg.StreamFilterValues))
 	}
+
+	filters = append(filters, amqp.NewLinkFilter("amqp:properties-filter", 0, map[string]any{"subject": "foo"}))
 	return filters
 }
 
