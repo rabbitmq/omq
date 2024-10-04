@@ -10,7 +10,7 @@ a different protocol than the consumers.
 
 `omq` has subcommands for all protocol combinations. For example:
 ```shell
-omq stomp-amqp
+$ omq stomp-amqp
 ```
 will publish via STOMP and consume via AMQP 1.0. Note that starting with RabbitMQ 4.0, RabbitMQ doesn't automatically
 declare queues for AMQP-1.0 subscriber, so a queue would need to exist for this example to work; if you want `omq` to
@@ -18,7 +18,7 @@ declare a queue, use `--queues`; see below for more about topic/queue/routing ke
 
 A more complex example:
 ```shell
-omq mqtt-amqp --publishers 10 --publish-to 'sensor/%d' --rate 1 --size 100 \
+$ omq mqtt-amqp --publishers 10 --publish-to 'sensor/%d' --rate 1 --size 100 \
                 --consumers 1 --consume-from /queues/sensors --amqp-binding-key 'sensor.#' --queues classic
 ```
 will start 10 MQTT publishers, each publishing 1 message a second, with 100 bytes of payload, to the `amq.topic` exchange (default for the MQTT plugin)
@@ -31,7 +31,7 @@ and `mqtt` instead of `mqtt-mqtt`.
 ### Installation
 
 ```shell
-go install github.com/rabbitmq/omq@main
+$ go install github.com/rabbitmq/omq@main
 ```
 
 An [OCI image](https://hub.docker.com/r/pivotalrabbitmq/omq/tags) is also available: `pivotalrabbitmq/omq`.
@@ -45,13 +45,13 @@ you can use `--uri` instead (but can't mix `--uri` with `--publisher-uri` and `-
 
 For example, here both publishers and consumers will connect to either of the 3 URIs:
 ```shell
-omq mqtt --uri mqtt://localhost:1883 --uri mqtt://localhost:1884 --uri mqtt://localhost:1885
+$ omq mqtt --uri mqtt://localhost:1883 --uri mqtt://localhost:1884 --uri mqtt://localhost:1885
 ```
 
 And in this case, all consumers will connect to port 1883, while publishers to 1884:
 
 ```shell
-omq mqtt --consumer-uri mqtt://localhost:1883 --publisher-uri mqtt://localhost:1884
+$ omq mqtt --consumer-uri mqtt://localhost:1883 --publisher-uri mqtt://localhost:1884
 ```
 
 ### Terminus/Topic/Queue/Routing Key
@@ -86,7 +86,7 @@ Note that this is a separate feature from stream filtering of the Stream protoco
 
 Here's a full example, where we can see this in action:
 ```shell
-omq amqp --queues stream -t /queues/stream -T /queues/stream --rate 100 --amqp-app-property key=foo,bar,baz --amqp-app-property-filter key=foo
+$ omq amqp --queues stream -t /queues/stream -T /queues/stream --rate 100 --amqp-app-property key=foo,bar,baz --amqp-app-property-filter key=foo
 2024/10/04 13:48:26 INFO consumer started id=1 terminus=/queues/stream
 2024/10/04 13:48:26 INFO publisher started id=1 rate=100 destination=/queues/stream
 2024/10/04 13:48:27 published=95/s consumed=32/s
