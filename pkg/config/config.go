@@ -45,11 +45,13 @@ var QueueTypes = map[QueueType][]string{
 }
 
 type AmqpOptions struct {
-	Subject     string
-	SendSettled bool
-	ReleaseRate int
-	RejectRate  int
-	BindingKey  string
+	Subject            string
+	SendSettled        bool
+	ReleaseRate        int
+	RejectRate         int
+	BindingKey         string
+	AppProperties      map[string][]string
+	AppPropertyFilters map[string]string
 }
 
 type MqttOptions struct {

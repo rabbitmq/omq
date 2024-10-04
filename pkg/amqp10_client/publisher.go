@@ -199,6 +199,14 @@ func (p *Amqp10Publisher) StartRateLimited(ctx context.Context) {
 func (p *Amqp10Publisher) Send() error {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	msg := amqp.NewMessage(p.msg)
+
+	if len(p.Config.Amqp.AppProperties) > 0 {
+		msg.ApplicationProperties = make(map[string]any)
+		for key, val := range p.Config.Amqp.AppProperties {
+			msg.ApplicationProperties[key] = val[metrics.MessagesPublished.Get()%uint64(len(val))]
+		}
+	}
+
 	if p.Config.Amqp.Subject != "" {
 		msg.Properties = &amqp.MessageProperties{Subject: &p.Config.Amqp.Subject}
 	}
@@ -232,7 +240,7 @@ func (p *Amqp10Publisher) Send() error {
 	// rejected messages are not counted as published, maybe they should be?
 	metrics.MessagesPublished.Inc()
 	metrics.PublishingLatency.Update(latency.Seconds())
-	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency)
+	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
 	return nil
 }
 

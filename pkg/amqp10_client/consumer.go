@@ -163,7 +163,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			}
 			previousMessageTimeSent = timeSent
 
-			log.Debug("message received", "id", c.Id, "terminus", c.Terminus, "size", len(payload), "priority", priority, "latency", latency)
+			log.Debug("message received", "id", c.Id, "terminus", c.Terminus, "size", len(payload), "priority", priority, "latency", latency, "appProps", msg.ApplicationProperties)
 
 			if c.Config.ConsumerLatency > 0 {
 				log.Debug("consumer latency", "id", c.Id, "latency", c.Config.ConsumerLatency)
@@ -248,7 +248,9 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 		filters = append(filters, amqp.NewLinkFilter("rabbitmq:stream-filter", 0, cfg.StreamFilterValues))
 	}
 
-	filters = append(filters, amqp.NewLinkFilter("amqp:properties-filter", 0, map[string]any{"subject": "foo"}))
+	for appProperty, filterExpression := range cfg.Amqp.AppPropertyFilters {
+		filters = append(filters, amqp.NewLinkFilter("amqp:application-properties-filter", 0, map[string]any{appProperty: filterExpression}))
+	}
 	return filters
 }
 

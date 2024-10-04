@@ -177,6 +177,36 @@ func TestPublishWithPriorities(t *testing.T) {
 	}
 }
 
+func TestAMQPStreamFilters(t *testing.T) {
+	defer metrics.Reset()
+
+	rootCmd := RootCmd()
+
+	args := []string{"amqp",
+		"-C", "6",
+		"--publish-to", "/queues/stream-with-filters",
+		"--consume-from", "/queues/stream-with-filters",
+		"--amqp-app-property", "key1=foo,bar,baz",
+		"--amqp-app-property-filter", "key1=$p:ba",
+		"--queues", "stream",
+		"--cleanup-queues=true",
+		"--time", "2s",
+	}
+
+	rootCmd.SetArgs(args)
+	fmt.Println("Running test: omq", strings.Join(args, " "))
+	err := rootCmd.Execute()
+	assert.Nil(t, err)
+
+	assert.Eventually(t, func() bool {
+		return 6 == metrics.MessagesPublished.Get()
+
+	}, 2*time.Second, 100*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return 4 == metrics.MessagesConsumedNormalPriority.Get()
+	}, 2*time.Second, 100*time.Millisecond)
+}
+
 func TestFanInFromMQTTtoAMQP(t *testing.T) {
 	defer metrics.Reset()
 
