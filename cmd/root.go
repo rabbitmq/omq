@@ -39,6 +39,8 @@ var (
 )
 
 var metricTags []string
+var amqpAppProperties []string
+var amqpAppPropertyFilters []string
 
 func Execute() {
 	rootCmd := RootCmd()
@@ -202,6 +204,28 @@ func RootCmd() *cobra.Command {
 				}
 			}
 
+			// AMQP application properties
+			cfg.Amqp.AppProperties = make(map[string][]string)
+			for _, val := range amqpAppProperties {
+				parts := strings.Split(val, "=")
+				if len(parts) != 2 {
+					_, _ = fmt.Fprintf(os.Stderr, "ERROR: invalid AMQP application property: %s, use key=v1,v2 format\n", val)
+					os.Exit(1)
+				}
+				cfg.Amqp.AppProperties[parts[0]] = strings.Split(parts[1], ",")
+			}
+
+			// AMQP application property filters
+			cfg.Amqp.AppPropertyFilters = make(map[string]string)
+			for _, filter := range amqpAppPropertyFilters {
+				parts := strings.SplitN(filter, "=", 2)
+				if len(parts) != 2 {
+					_, _ = fmt.Fprintf(os.Stderr, "ERROR: invalid AMQP application property filter: %s, use key=filterExpression format\n", filter)
+					os.Exit(1)
+				}
+				cfg.Amqp.AppPropertyFilters[parts[0]] = parts[1]
+			}
+
 			// split metric tags into key-value pairs
 			cfg.MetricTags = make(map[string]string)
 			for _, tag := range metricTags {
@@ -267,6 +291,8 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().
 		BoolVar(&cfg.SpreadConnections, "spread-connections", true, "Spread connections across URIs")
 	rootCmd.PersistentFlags().DurationVar(&cfg.ConsumerStartupDelay, "consumer-startup-delay", 0, "Delay consumer startup to allow a backlog of messages to build up (eg. 10s)")
+	rootCmd.PersistentFlags().StringArrayVar(&amqpAppProperties, "amqp-app-property", []string{}, "AMQP application properties, eg. key1=val1,val2")
+	rootCmd.PersistentFlags().StringArrayVar(&amqpAppPropertyFilters, "amqp-app-property-filter", []string{}, "AMQP application property filters, eg. key1=$p:prefix")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)
