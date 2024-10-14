@@ -41,6 +41,7 @@ var (
 var metricTags []string
 var amqpAppProperties []string
 var amqpAppPropertyFilters []string
+var amqpPropertyFilters []string
 
 func Execute() {
 	rootCmd := RootCmd()
@@ -226,6 +227,17 @@ func RootCmd() *cobra.Command {
 				cfg.Amqp.AppPropertyFilters[parts[0]] = parts[1]
 			}
 
+			// AMQP property filters
+			cfg.Amqp.PropertyFilters = make(map[string]string)
+			for _, filter := range amqpPropertyFilters {
+				parts := strings.SplitN(filter, "=", 2)
+				if len(parts) != 2 {
+					_, _ = fmt.Fprintf(os.Stderr, "ERROR: invalid AMQP property filter: %s, use key=filterExpression format\n", filter)
+					os.Exit(1)
+				}
+				cfg.Amqp.PropertyFilters[parts[0]] = parts[1]
+			}
+
 			// split metric tags into key-value pairs
 			cfg.MetricTags = make(map[string]string)
 			for _, tag := range metricTags {
@@ -270,7 +282,7 @@ func RootCmd() *cobra.Command {
 		BoolVarP(&cfg.UseMillis, "use-millis", "m", false, "Use milliseconds for timestamps (automatically enabled when no publishers or no consumers)")
 	rootCmd.PersistentFlags().
 		VarP(enumflag.New(&cfg.QueueDurability, "queue-durability", config.AmqpDurabilityModes, enumflag.EnumCaseInsensitive), "queue-durability", "", "Queue durability (default: configuration - the queue definition is durable)")
-	rootCmd.PersistentFlags().StringVar(&cfg.Amqp.Subject, "amqp-subject", "", "AMQP 1.0 message subject")
+	rootCmd.PersistentFlags().StringSliceVar(&cfg.Amqp.Subjects, "amqp-subject", []string{}, "AMQP 1.0 message subject(s)")
 	rootCmd.PersistentFlags().StringVar(&cfg.Amqp.BindingKey, "amqp-binding-key", "", "AMQP 1.0 consumer binding key")
 	rootCmd.PersistentFlags().
 		BoolVar(&cfg.Amqp.SendSettled, "amqp-send-settled", false, "Send settled messages (fire and forget)")
@@ -293,6 +305,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().DurationVar(&cfg.ConsumerStartupDelay, "consumer-startup-delay", 0, "Delay consumer startup to allow a backlog of messages to build up (eg. 10s)")
 	rootCmd.PersistentFlags().StringArrayVar(&amqpAppProperties, "amqp-app-property", []string{}, "AMQP application properties, eg. key1=val1,val2")
 	rootCmd.PersistentFlags().StringArrayVar(&amqpAppPropertyFilters, "amqp-app-property-filter", []string{}, "AMQP application property filters, eg. key1=$p:prefix")
+	rootCmd.PersistentFlags().StringArrayVar(&amqpPropertyFilters, "amqp-property-filter", []string{}, "AMQP property filters, eg. key1=$p:prefix")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)

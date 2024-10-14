@@ -2,6 +2,8 @@ module github.com/rabbitmq/omq
 
 go 1.23.0
 
+replace github.com/Azure/go-amqp => github.com/mkuratczyk/go-amqp v0.0.0-20241014095613-d9376f5f2d9f
+
 require (
 	github.com/Azure/go-amqp v1.2.0
 	github.com/VictoriaMetrics/metrics v1.35.1
@@ -31,16 +33,16 @@ require (
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/histogram v1.2.0 // indirect
-	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect
-	golang.org/x/net v0.29.0 // indirect
+	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
+	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
 	github.com/go-stomp/stomp/v3 v3.1.2
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/rabbitmq/rabbitmq-amqp-go-client v0.0.0-20240924141749-6d8aaeb2b8f7
+	github.com/rabbitmq/rabbitmq-amqp-go-client v0.0.0-20241001222512-5fc29f4968d0
 	github.com/spf13/pflag v1.0.5 // indirect
 )

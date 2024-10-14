@@ -112,7 +112,14 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 
 	for c.Receiver == nil {
 		mgmt.DeclareAndBind(c.Config, c.Terminus, c.Id)
-		receiver, err := c.Session.NewReceiver(ctx, c.Terminus, &amqp.ReceiverOptions{SourceDurability: durability, Credit: int32(c.Config.ConsumerCredits), Properties: buildLinkProperties(c.Config), Filters: buildLinkFilters(c.Config)})
+		receiver, err := c.Session.NewReceiver(ctx,
+			c.Terminus,
+			&amqp.ReceiverOptions{
+				SourceDurability: durability,
+				Credit:           int32(c.Config.ConsumerCredits),
+				Properties:       buildLinkProperties(c.Config),
+				Filters:          buildLinkFilters(c.Config),
+			})
 		if err != nil {
 			if err == context.Canceled {
 				return
@@ -159,11 +166,19 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 
 			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
 				metrics.MessagesConsumedOutOfOrderMetric(priority).Inc()
-				log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
+				log.Info("Out of order message received. This message was sent before the previous message",
+					"this messsage", timeSent,
+					"previous message", previousMessageTimeSent)
 			}
 			previousMessageTimeSent = timeSent
 
-			log.Debug("message received", "id", c.Id, "terminus", c.Terminus, "size", len(payload), "priority", priority, "latency", latency, "appProps", msg.ApplicationProperties)
+			log.Debug("message received",
+				"id", c.Id,
+				"terminus", c.Terminus,
+				"size", len(payload),
+				"priority", priority,
+				"latency", latency,
+				"appProps", msg.ApplicationProperties)
 
 			if c.Config.ConsumerLatency > 0 {
 				log.Debug("consumer latency", "id", c.Id, "latency", c.Config.ConsumerLatency)
@@ -249,7 +264,18 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 	}
 
 	for appProperty, filterExpression := range cfg.Amqp.AppPropertyFilters {
-		filters = append(filters, amqp.NewLinkFilter("amqp:application-properties-filter", 0, map[string]any{appProperty: filterExpression}))
+		filters = append(filters, amqp.NewLinkFilter("amqp:application-properties-filter",
+			0,
+			map[string]any{
+				appProperty: filterExpression}))
+	}
+
+	for property, filterExpression := range cfg.Amqp.PropertyFilters {
+		filters = append(filters,
+			amqp.NewLinkFilter("amqp:properties-filter",
+				0,
+				map[amqp.Symbol]any{
+					amqp.Symbol(property): filterExpression}))
 	}
 	return filters
 }
