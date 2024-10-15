@@ -177,7 +177,7 @@ func TestPublishWithPriorities(t *testing.T) {
 	}
 }
 
-func TestAMQPStreamFilters(t *testing.T) {
+func TestAMQPStreamAppPropertyFilters(t *testing.T) {
 	defer metrics.Reset()
 
 	rootCmd := RootCmd()
@@ -204,6 +204,36 @@ func TestAMQPStreamFilters(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond)
 	assert.Eventually(t, func() bool {
 		return 4 == metrics.MessagesConsumedNormalPriority.Get()
+	}, 2*time.Second, 100*time.Millisecond)
+}
+
+func TestAMQPStreamPropertyFilters(t *testing.T) {
+	defer metrics.Reset()
+
+	rootCmd := RootCmd()
+
+	args := []string{"amqp",
+		"-C", "3",
+		"--publish-to", "/queues/stream-with-property-filters",
+		"--consume-from", "/queues/stream-with-property-filters",
+		"--amqp-subject", "foo,bar,baz",
+		"--amqp-property-filter", "subject=baz",
+		"--queues", "stream",
+		"--cleanup-queues=true",
+		"--time", "2s",
+	}
+
+	rootCmd.SetArgs(args)
+	fmt.Println("Running test: omq", strings.Join(args, " "))
+	err := rootCmd.Execute()
+	assert.Nil(t, err)
+
+	assert.Eventually(t, func() bool {
+		return 3 == metrics.MessagesPublished.Get()
+
+	}, 2*time.Second, 100*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return 1 == metrics.MessagesConsumedNormalPriority.Get()
 	}, 2*time.Second, 100*time.Millisecond)
 }
 

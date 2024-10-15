@@ -207,8 +207,8 @@ func (p *Amqp10Publisher) Send() error {
 		}
 	}
 
-	if p.Config.Amqp.Subject != "" {
-		msg.Properties = &amqp.MessageProperties{Subject: &p.Config.Amqp.Subject}
+	if len(p.Config.Amqp.Subjects) > 0 {
+		msg.Properties = &amqp.MessageProperties{Subject: &p.Config.Amqp.Subjects[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.Subjects))]}
 	}
 
 	if p.Config.StreamFilterValueSet != "" {
