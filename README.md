@@ -82,7 +82,7 @@ Note that this is a separate feature from stream filtering of the Stream protoco
    with `key=foo`, some with `key=bar` and some with `key=baz` (in roughly equal proportions).
 2. When consuming, you can apply a filter, for example, `--amqp-app-property-filter key=$p:ba` will tell RabbitMQ to only deliver
    messages where the `key` property starts with `ba` (`$p:` means that what follows is a prefix), so it'll return roughly 66%
-   of the messages in the stream.
+   of the messages in the stream. You can filter on properties (eg. `subject`) or application properties.
 
 Here's a full example, where we can see this in action:
 ```shell
@@ -131,9 +131,10 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
       --amqp-app-property stringArray           AMQP application properties, eg. key1=val1,val2
       --amqp-app-property-filter stringArray    AMQP application property filters, eg. key1=$p:prefix
       --amqp-binding-key string                 AMQP 1.0 consumer binding key
+      --amqp-property-filter stringArray        AMQP property filters, eg. subject=foo
       --amqp-reject-rate int                    Rate of messages to reject (0-100%)
       --amqp-release-rate int                   Rate of messages to release without accepting (0-100%)
-      --amqp-subject string                     AMQP 1.0 message subject
+      --amqp-subject strings                    AMQP 1.0 message subject(s), eg. foo,bar,baz
       --cleanup-queues                          Delete the queues at the end (only explicitly declared queues, not STOMP subscriptions)
   -D, --cmessages int                           The number of messages to consume per consumer (default=MaxInt) (default 9223372036854775807)
   -T, --consume-from string                     The queue/topic/terminus to consume from (%d will be replaced with the consumer's id) (default "/topic/omq")
