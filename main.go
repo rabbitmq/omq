@@ -1,8 +1,11 @@
 package main
 
 import (
+	"net/http"
 	"os"
 	"runtime/pprof"
+
+	"github.com/felixge/fgprof"
 
 	"github.com/rabbitmq/omq/cmd"
 	"github.com/rabbitmq/omq/pkg/log"
@@ -17,6 +20,12 @@ func main() {
 		}
 		defer pprof.StopCPUProfile()
 		_ = pprof.StartCPUProfile(cpuFile)
+	}
+	if os.Getenv("OMQ_FGROF") == "true" {
+		http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
+		go func() {
+			http.ListenAndServe(":6060", nil)
+		}()
 	}
 
 	defer metrics.GetMetricsServer().PrintFinalMetrics()

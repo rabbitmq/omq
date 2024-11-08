@@ -9,6 +9,7 @@ require (
 	github.com/VictoriaMetrics/metrics v1.35.1
 	github.com/charmbracelet/log v0.4.0
 	github.com/eclipse/paho.mqtt.golang v1.5.0
+	github.com/felixge/fgprof v0.9.5
 	github.com/relvacode/iso8601 v1.5.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
@@ -21,6 +22,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.4.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/google/pprof v0.0.0-20240910150728-a0b0bb1d4134 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
