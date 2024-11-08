@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,4 +104,15 @@ func WrappedSequence(len int, start int) []int {
 
 func InjectId(topic string, id int) string {
 	return strings.Replace(topic, "%d", fmt.Sprintf("%d", id), -1)
+}
+
+func Rate(rate float32) string {
+	switch rate {
+	case -1:
+		return "unlimited"
+	case 0:
+		return "idle"
+	default:
+		return strconv.FormatFloat(float64(rate), 'f', -1, 64)
+	}
 }

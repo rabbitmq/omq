@@ -88,6 +88,8 @@ func TestPublishConsume(t *testing.T) {
 		},
 	}
 
+	defer metrics.Reset()
+
 	for _, tc := range tests {
 		t.Run(tc.publishProto+"-"+tc.consumeProto, func(t *testing.T) {
 			rootCmd := RootCmd()
@@ -301,7 +303,39 @@ func TestConsumerStartupDelay(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond)
 
 	wg.Wait()
+}
+
+func TestAMQPMaxInFlight(t *testing.T) {
+	defer metrics.Reset()
+
+	publishWithMaxInFlight := func(maxInFlight string) error {
+
+		rootCmd := RootCmd()
+
+		args := []string{"amqp",
+			"-z", "3s",
+			"-t", "/queues/amqp-max-in-flight",
+			"-T", "/queues/amqp-max-in-flight",
+			"--queues", "stream",
+			"--cleanup-queues=true",
+			"--max-in-flight", maxInFlight}
+
+		rootCmd.SetArgs(args)
+		fmt.Println("Running test: omq", strings.Join(args, " "))
+		return rootCmd.Execute()
+	}
+
+	err := publishWithMaxInFlight("1")
+	assert.Nil(t, err)
+	publishedWithMaxInFlight1 := metrics.MessagesPublished.Get()
+
 	metrics.Reset()
+
+	err = publishWithMaxInFlight("8")
+	assert.Nil(t, err)
+	publishedWithMaxInFlight8 := metrics.MessagesPublished.Get()
+
+	assert.Greater(t, publishedWithMaxInFlight8, publishedWithMaxInFlight1*2)
 }
 
 func TestLatencyCalculationA(t *testing.T) {
