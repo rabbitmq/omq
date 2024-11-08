@@ -146,6 +146,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
   -h, --help                                    help for omq
   -l, --log-level log-level                     Log level (debug, info, error) (default info)
       --log-out-of-order-messages               Print a log line when a message is received that is older than the previously received message
+  -c, --max-in-flight int                       Maximum number of in-flight messages per publisher (default 1)
   -d, --message-durability                      Mark messages as durable (default true)
       --message-priority string                 Message priority (0-255, default=unset)
       --metric-tags strings                     Prometheus label-value pairs, eg. l1=v1,l2=v2
