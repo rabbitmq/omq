@@ -9,7 +9,7 @@ require (
 	github.com/VictoriaMetrics/metrics v1.35.1
 	github.com/charmbracelet/log v0.4.0
 	github.com/eclipse/paho.mqtt.golang v1.5.0
-	github.com/relvacode/iso8601 v1.4.0
+	github.com/relvacode/iso8601 v1.5.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
 	github.com/thediveo/enumflag/v2 v2.0.5
@@ -17,8 +17,8 @@ require (
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/lipgloss v0.13.0 // indirect
-	github.com/charmbracelet/x/ansi v0.3.2 // indirect
+	github.com/charmbracelet/lipgloss v1.0.0 // indirect
+	github.com/charmbracelet/x/ansi v0.4.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -35,13 +35,13 @@ require (
 	github.com/valyala/histogram v1.2.0 // indirect
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
 	golang.org/x/net v0.30.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/sync v0.9.0 // indirect
+	golang.org/x/sys v0.27.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
-	github.com/go-stomp/stomp/v3 v3.1.2
+	github.com/go-stomp/stomp/v3 v3.1.3
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/rabbitmq/rabbitmq-amqp-go-client v0.0.0-20241001222512-5fc29f4968d0
 	github.com/spf13/pflag v1.0.5 // indirect
