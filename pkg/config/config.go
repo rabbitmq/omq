@@ -79,6 +79,7 @@ type Config struct {
 	ConsumerLatency      time.Duration
 	Size                 int
 	Rate                 float32
+	MaxInFlight          int
 	Duration             time.Duration
 	UseMillis            bool
 	QueueDurability      AmqpDurabilityMode

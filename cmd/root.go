@@ -178,11 +178,6 @@ func RootCmd() *cobra.Command {
 				setUris(&cfg, cmd.Use)
 			}
 
-			if err != nil {
-				log.Error("ERROR: ", "error", err)
-				os.Exit(1)
-			}
-
 			metrics.RegisterMetrics(cfg.MetricTags)
 			metricsServer := metrics.GetMetricsServer()
 			metricsServer.Start()
@@ -212,6 +207,7 @@ func RootCmd() *cobra.Command {
 		BoolVar(&cfg.CleanupQueues, "cleanup-queues", false, "Delete the queues at the end (only explicitly declared queues, not STOMP subscriptions)")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message payload size in bytes")
 	rootCmd.PersistentFlags().Float32VarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited)")
+	rootCmd.PersistentFlags().IntVarP(&cfg.MaxInFlight, "max-in-flight", "c", 1, "Maximum number of in-flight messages per publisher")
 	rootCmd.PersistentFlags().DurationVarP(&cfg.Duration, "time", "z", 0, "Run duration (eg. 10s, 5m, 2h)")
 	rootCmd.PersistentFlags().
 		BoolVarP(&cfg.UseMillis, "use-millis", "m", false, "Use milliseconds for timestamps (automatically enabled when no publishers or no consumers)")
@@ -258,7 +254,12 @@ func RootCmd() *cobra.Command {
 
 func start(cfg config.Config) {
 	if cfg.ConsumerLatency != 0 && cfg.ConsumerProto == config.MQTT {
-		log.Error("Consumer latency is not supported for MQTT consumers")
+		fmt.Printf("Consumer latency is not supported for MQTT consumers")
+		os.Exit(1)
+	}
+
+	if cfg.MaxInFlight > 1 && cfg.PublisherProto != config.AMQP {
+		fmt.Printf("max-in-flight > 1 is only supported for AMQP publishers")
 		os.Exit(1)
 	}
 
@@ -349,7 +350,7 @@ func setUris(cfg *config.Config, command string) {
 	// --uri is a shortcut to set both --publisher-uri and --consumer-uri
 	if cfg.Uri != nil {
 		if cfg.PublisherUri != nil || cfg.ConsumerUri != nil {
-			log.Error("ERROR: can't specify both --uri and --publisher-uri/--consumer-uri")
+			fmt.Printf("ERROR: can't specify both --uri and --publisher-uri/--consumer-uri")
 			os.Exit(1)
 		}
 		cfg.PublisherUri = cfg.Uri
@@ -403,6 +404,10 @@ func sanitizeConfig(cfg *config.Config) error {
 
 	if cfg.Amqp.ReleaseRate+cfg.Amqp.RejectRate > 100 {
 		return fmt.Errorf("combined release and reject rate can't be more than 100%%")
+	}
+
+	if cfg.MaxInFlight < 1 || cfg.MaxInFlight > 256 {
+		return fmt.Errorf("max-in-flight must be between 1 and 256")
 	}
 
 	// go-amqp treats `0` as if the value was not set and uses 1 credit

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math/rand"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -137,19 +138,34 @@ func (p *Amqp10Publisher) Start(ctx context.Context) {
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
+	var wg sync.WaitGroup
+
 	switch p.Config.Rate {
 	case -1:
-		p.StartFullSpeed(ctx)
+		wg.Add(p.Config.MaxInFlight)
+		for i := 1; i <= p.Config.MaxInFlight; i++ {
+			go func() {
+				defer wg.Done()
+				p.StartFullSpeed(ctx)
+			}()
+		}
 	case 0:
 		p.StartIdle(ctx)
 	default:
-		p.StartRateLimited(ctx)
+		wg.Add(p.Config.MaxInFlight)
+		for i := 1; i <= p.Config.MaxInFlight; i++ {
+			go func() {
+				defer wg.Done()
+				p.StartRateLimited(ctx)
+			}()
+		}
 	}
+
+	log.Info("publisher started", "id", p.Id, "rate", utils.Rate(p.Config.Rate), "destination", p.Terminus)
+	wg.Wait()
 }
 
 func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
-	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Terminus)
-
 	for msgSent := 0; msgSent < p.Config.PublishCount; {
 		select {
 		case <-ctx.Done():
@@ -166,13 +182,10 @@ func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
 }
 
 func (p *Amqp10Publisher) StartIdle(ctx context.Context) {
-	log.Info("publisher started", "id", p.Id, "rate", "-", "destination", p.Terminus)
-
 	_ = ctx.Done()
 }
 
 func (p *Amqp10Publisher) StartRateLimited(ctx context.Context) {
-	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Terminus)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
 
 	msgSent := 0
@@ -247,5 +260,4 @@ func (p *Amqp10Publisher) Send() error {
 func (p *Amqp10Publisher) Stop(reason string) {
 	log.Debug("closing connection", "id", p.Id, "reason", reason)
 	_ = p.Connection.Close()
-	log.Info("publisher stopped", "id", p.Id, "messagesPublished", metrics.MessagesPublished.Get())
 }
