@@ -167,87 +167,22 @@ func RootCmd() *cobra.Command {
 		Use: "omq",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			log.Setup()
-			if cfg.Size < 12 {
-				_, _ = fmt.Fprintf(os.Stderr, "ERROR: size can't be less than 12 bytes\n")
+
+			err := sanitizeConfig(&cfg)
+			if err != nil {
+				fmt.Printf("ERROR: %s\n", err)
 				os.Exit(1)
 			}
-			if cfg.Amqp.ReleaseRate > 100 {
-				log.Error("ERROR: release rate can't be more than 100%")
-				os.Exit(1)
-			}
-			if cfg.Amqp.RejectRate > 100 {
-				log.Error("ERROR: reject rate can't be more than 100%")
-				os.Exit(1)
-			}
-			if cfg.Amqp.ReleaseRate+cfg.Amqp.RejectRate > 100 {
-				log.Error("ERROR: combined release and reject rate can't be more than 100%")
-				os.Exit(1)
-			}
-			// go-amqp treats `0` as if the value was not set and uses 1 credit
-			// this is confusing, so here we treat 0 as -1 (which go-amqp trets as 0...)
-			if cfg.ConsumerCredits == 0 {
-				cfg.ConsumerCredits = -1
-			}
+
 			if cmd.Use != "version" {
 				setUris(&cfg, cmd.Use)
 			}
 
-			// nanoseconds shouldn't be used across processes
-			if cfg.Publishers == 0 || cfg.Consumers == 0 {
-				cfg.UseMillis = true
+			if err != nil {
+				log.Error("ERROR: ", "error", err)
+				os.Exit(1)
 			}
 
-			if cfg.MessagePriority != "" {
-				_, err := strconv.ParseUint(cfg.MessagePriority, 10, 8)
-				if err != nil {
-					_, _ = fmt.Fprintf(os.Stderr, "ERROR: invalid message priority: %s\n", cfg.MessagePriority)
-					os.Exit(1)
-				}
-			}
-
-			// AMQP application properties
-			cfg.Amqp.AppProperties = make(map[string][]string)
-			for _, val := range amqpAppProperties {
-				parts := strings.Split(val, "=")
-				if len(parts) != 2 {
-					_, _ = fmt.Fprintf(os.Stderr, "ERROR: invalid AMQP application property: %s, use key=v1,v2 format\n", val)
-					os.Exit(1)
-				}
-				cfg.Amqp.AppProperties[parts[0]] = strings.Split(parts[1], ",")
-			}
-
-			// AMQP application property filters
-			cfg.Amqp.AppPropertyFilters = make(map[string]string)
-			for _, filter := range amqpAppPropertyFilters {
-				parts := strings.SplitN(filter, "=", 2)
-				if len(parts) != 2 {
-					_, _ = fmt.Fprintf(os.Stderr, "ERROR: invalid AMQP application property filter: %s, use key=filterExpression format\n", filter)
-					os.Exit(1)
-				}
-				cfg.Amqp.AppPropertyFilters[parts[0]] = parts[1]
-			}
-
-			// AMQP property filters
-			cfg.Amqp.PropertyFilters = make(map[string]string)
-			for _, filter := range amqpPropertyFilters {
-				parts := strings.SplitN(filter, "=", 2)
-				if len(parts) != 2 {
-					_, _ = fmt.Fprintf(os.Stderr, "ERROR: invalid AMQP property filter: %s, use key=filterExpression format\n", filter)
-					os.Exit(1)
-				}
-				cfg.Amqp.PropertyFilters[parts[0]] = parts[1]
-			}
-
-			// split metric tags into key-value pairs
-			cfg.MetricTags = make(map[string]string)
-			for _, tag := range metricTags {
-				parts := strings.Split(tag, "=")
-				if len(parts) != 2 {
-					_, _ = fmt.Fprintf(os.Stderr, "ERROR: invalid metric tags: %s, use label=value format\n", tag)
-					os.Exit(1)
-				}
-				cfg.MetricTags[parts[0]] = parts[1]
-			}
 			metrics.RegisterMetrics(cfg.MetricTags)
 			metricsServer := metrics.GetMetricsServer()
 			metricsServer.Start()
@@ -451,4 +386,81 @@ func shutdown(deleteQueues bool) {
 	mgmt.Disconnect()
 	metricsServer := metrics.GetMetricsServer()
 	metricsServer.PrintFinalMetrics()
+}
+
+func sanitizeConfig(cfg *config.Config) error {
+	if cfg.Size < 12 {
+		return fmt.Errorf("size can't be less than 12 bytes")
+	}
+
+	if cfg.Amqp.ReleaseRate > 100 {
+		return fmt.Errorf("release rate can't be more than 100%%")
+	}
+
+	if cfg.Amqp.RejectRate > 100 {
+		return fmt.Errorf("reject rate can't be more than 100%%")
+	}
+
+	if cfg.Amqp.ReleaseRate+cfg.Amqp.RejectRate > 100 {
+		return fmt.Errorf("combined release and reject rate can't be more than 100%%")
+	}
+
+	// go-amqp treats `0` as if the value was not set and uses 1 credit
+	// this is confusing, so here we treat 0 as -1 (which go-amqp trets as 0...)
+	if cfg.ConsumerCredits == 0 {
+		cfg.ConsumerCredits = -1
+	}
+	// nanoseconds shouldn't be used across processes
+	if cfg.Publishers == 0 || cfg.Consumers == 0 {
+		cfg.UseMillis = true
+	}
+
+	if cfg.MessagePriority != "" {
+		_, err := strconv.ParseUint(cfg.MessagePriority, 10, 8)
+		if err != nil {
+			return fmt.Errorf("invalid message priority: %s", cfg.MessagePriority)
+		}
+	}
+
+	// AMQP application properties
+	cfg.Amqp.AppProperties = make(map[string][]string)
+	for _, val := range amqpAppProperties {
+		parts := strings.Split(val, "=")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid AMQP application property: %s, use key=v1,v2 format", val)
+		}
+		cfg.Amqp.AppProperties[parts[0]] = strings.Split(parts[1], ",")
+	}
+
+	// AMQP application property filters
+	cfg.Amqp.AppPropertyFilters = make(map[string]string)
+	for _, filter := range amqpAppPropertyFilters {
+		parts := strings.SplitN(filter, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid AMQP application property filter: %s, use key=filterExpression format", filter)
+		}
+		cfg.Amqp.AppPropertyFilters[parts[0]] = parts[1]
+	}
+
+	// AMQP property filters
+	cfg.Amqp.PropertyFilters = make(map[string]string)
+	for _, filter := range amqpPropertyFilters {
+		parts := strings.SplitN(filter, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid AMQP property filter: %s, use key=filterExpression format", filter)
+		}
+		cfg.Amqp.PropertyFilters[parts[0]] = parts[1]
+	}
+
+	// split metric tags into key-value pairs
+	cfg.MetricTags = make(map[string]string)
+	for _, tag := range metricTags {
+		parts := strings.Split(tag, "=")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid metric tags: %s, use label=value format", tag)
+		}
+		cfg.MetricTags[parts[0]] = parts[1]
+	}
+
+	return nil
 }
