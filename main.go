@@ -24,7 +24,7 @@ func main() {
 	if os.Getenv("OMQ_FGROF") == "true" {
 		http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
 		go func() {
-			http.ListenAndServe(":6060", nil)
+			_ = http.ListenAndServe(":6060", nil)
 		}()
 	}
 
