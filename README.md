@@ -149,6 +149,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
   -c, --max-in-flight int                       Maximum number of in-flight messages per publisher (default 1)
   -d, --message-durability                      Mark messages as durable (default true)
       --message-priority string                 Message priority (0-255, default=unset)
+      --message-ttl int                         Message TTL (milliseconds) (default -1; no TTL)
       --metric-tags strings                     Prometheus label-value pairs, eg. l1=v1,l2=v2
   -C, --pmessages int                           The number of messages to send per publisher (default 9223372036854775807)
   -t, --publish-to string                       The topic/terminus to publish to (%d will be replaced with the publisher's id) (default "/topic/omq")

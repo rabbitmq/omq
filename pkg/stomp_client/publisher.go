@@ -2,6 +2,7 @@ package stomp_client
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -171,6 +172,9 @@ func buildHeaders(cfg config.Config) []func(*frame.Frame) error {
 	headers = append(headers, stomp.SendOpt.Header("persistent", msgDurability))
 	if cfg.MessagePriority != "" {
 		headers = append(headers, stomp.SendOpt.Header("priority", cfg.MessagePriority))
+	}
+	if cfg.MessageTTL >= 0 {
+		headers = append(headers, stomp.SendOpt.Header("expiration", fmt.Sprint(cfg.MessageTTL)))
 	}
 
 	if cfg.StreamFilterValueSet != "" {

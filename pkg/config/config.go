@@ -85,6 +85,7 @@ type Config struct {
 	QueueDurability      AmqpDurabilityMode
 	MessageDurability    bool
 	MessagePriority      string // to allow for "unset" value and STOMP takes strings anyway
+	MessageTTL           int
 	StreamOffset         string
 	StreamFilterValues   string
 	StreamFilterValueSet string
