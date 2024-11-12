@@ -235,7 +235,7 @@ func (p *Amqp10Publisher) Send() error {
 		priority, _ := strconv.ParseUint(p.Config.MessagePriority, 10, 8)
 		msg.Header.Priority = uint8(priority)
 	}
-	if p.Config.MessageTTL.Microseconds() >= 0 {
+	if p.Config.MessageTTL.Microseconds() > 0 {
 		msg.Header.TTL = p.Config.MessageTTL
 	}
 
