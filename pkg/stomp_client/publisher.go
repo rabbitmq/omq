@@ -174,7 +174,7 @@ func buildHeaders(cfg config.Config) []func(*frame.Frame) error {
 		headers = append(headers, stomp.SendOpt.Header("priority", cfg.MessagePriority))
 	}
 	if cfg.MessageTTL >= 0 {
-		headers = append(headers, stomp.SendOpt.Header("expiration", fmt.Sprint(cfg.MessageTTL)))
+		headers = append(headers, stomp.SendOpt.Header("expiration", fmt.Sprint(cfg.MessageTTL.Milliseconds())))
 	}
 
 	if cfg.StreamFilterValueSet != "" {
