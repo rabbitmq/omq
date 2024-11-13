@@ -33,7 +33,7 @@ func NewPublisher(cfg config.Config, id int) *MqttPublisher {
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
 			log.Info("publisher connection lost", "id", id)
 		}).
-		SetProtocolVersion(4)
+		SetProtocolVersion(uint(cfg.MqttPublisher.Version))
 
 	var j int
 	for i, n := range utils.WrappedSequence(len(cfg.PublisherUri), id-1) {

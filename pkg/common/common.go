@@ -6,6 +6,7 @@ import (
 
 	"github.com/rabbitmq/omq/pkg/amqp10_client"
 	"github.com/rabbitmq/omq/pkg/config"
+	"github.com/rabbitmq/omq/pkg/mqtt5_client"
 	"github.com/rabbitmq/omq/pkg/mqtt_client"
 	"github.com/rabbitmq/omq/pkg/stomp_client"
 )
@@ -33,7 +34,12 @@ func NewPublisher(protocol config.Protocol, cfg config.Config, id int) (Publishe
 		}
 		return p, nil
 	case config.MQTT:
-		p := mqtt_client.NewPublisher(cfg, id)
+		var p Publisher
+		if cfg.MqttPublisher.Version == 5 {
+			p = mqtt5_client.NewPublisher(cfg, id)
+		} else {
+			p = mqtt_client.NewPublisher(cfg, id)
+		}
 		if p == nil {
 			return nil, fmt.Errorf("failed to create an MQTT publisher")
 		}
@@ -58,7 +64,12 @@ func NewConsumer(protocol config.Protocol, cfg config.Config, id int) (Consumer,
 		}
 		return c, nil
 	case config.MQTT:
-		c := mqtt_client.NewConsumer(cfg, id)
+		var c Consumer
+		if cfg.MqttConsumer.Version == 5 {
+			c = mqtt5_client.NewConsumer(cfg, id)
+		} else {
+			c = mqtt_client.NewConsumer(cfg, id)
+		}
 		if c == nil {
 			return nil, fmt.Errorf("failed to create an MQTT consumer")
 		}

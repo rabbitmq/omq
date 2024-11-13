@@ -12,6 +12,7 @@ const (
 	AMQP Protocol = iota
 	STOMP
 	MQTT
+	MQTT5
 )
 
 type QueueType enumflag.Flag
@@ -56,6 +57,7 @@ type AmqpOptions struct {
 }
 
 type MqttOptions struct {
+	Version      int
 	QoS          int
 	CleanSession bool
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/version"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/thediveo/enumflag/v2"
 )
 
@@ -54,6 +55,16 @@ func Execute() {
 func RootCmd() *cobra.Command {
 	cfg = config.NewConfig()
 
+	mqttConsumerFlags := pflag.NewFlagSet("mqtt-consumer", pflag.ContinueOnError)
+	mqttConsumerFlags.IntVar(&cfg.MqttConsumer.Version, "mqtt-consumer-version", 5, "MQTT consumer protocol version (3, 4 or 5; default=5)")
+	mqttConsumerFlags.IntVar(&cfg.MqttConsumer.QoS, "mqtt-consumer-qos", 0, "MQTT consumer QoS level (0, 1 or 2; default=0)")
+	mqttConsumerFlags.BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true, "MQTT consumer clean session")
+
+	mqttPublisherFlags := pflag.NewFlagSet("mqtt-publisher", pflag.ContinueOnError)
+	mqttPublisherFlags.IntVar(&cfg.MqttPublisher.Version, "mqtt-publisher-version", 5, "MQTT consumer protocol version (3, 4 or 5; default=5)")
+	mqttPublisherFlags.IntVar(&cfg.MqttPublisher.QoS, "mqtt-publisher-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
+	mqttPublisherFlags.BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session")
+
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",
 		Aliases: []string{"amqp"},
@@ -81,9 +92,7 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
-	amqp_mqtt.Flags().IntVar(&cfg.MqttConsumer.QoS, "mqtt-consumer-qos", 0, "MQTT consumer QoS level (0, 1 or 2; default=0)")
-	amqp_mqtt.Flags().
-		BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true, "MQTT consumer clean session")
+	amqp_mqtt.Flags().AddFlagSet(mqttConsumerFlags)
 
 	stomp_stomp = &cobra.Command{
 		Use:     "stomp-stomp",
@@ -112,9 +121,7 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
-	stomp_mqtt.Flags().IntVar(&cfg.MqttConsumer.QoS, "mqtt-consumer-qos", 0, "MQTT consumer QoS level (0, 1 or 2; default=0)")
-	stomp_mqtt.Flags().
-		BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true, "MQTT consumer clean session")
+	stomp_mqtt.Flags().AddFlagSet(mqttConsumerFlags)
 
 	mqtt_mqtt = &cobra.Command{
 		Use:     "mqtt-mqtt",
@@ -125,12 +132,8 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
-	mqtt_mqtt.Flags().IntVar(&cfg.MqttPublisher.QoS, "mqtt-publisher-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
-	mqtt_mqtt.Flags().IntVar(&cfg.MqttConsumer.QoS, "mqtt-consumer-qos", 0, "MQTT consumer QoS level (0, 1 or 2; default=0)")
-	mqtt_mqtt.Flags().
-		BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session")
-	mqtt_mqtt.Flags().
-		BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true, "MQTT consumer clean session")
+	mqtt_mqtt.Flags().AddFlagSet(mqttPublisherFlags)
+	mqtt_mqtt.Flags().AddFlagSet(mqttConsumerFlags)
 
 	mqtt_amqp = &cobra.Command{
 		Use: "mqtt-amqp",
@@ -140,9 +143,7 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
-	mqtt_amqp.Flags().IntVar(&cfg.MqttPublisher.QoS, "mqtt-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
-	mqtt_amqp.Flags().
-		BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session")
+	mqtt_amqp.Flags().AddFlagSet(mqttPublisherFlags)
 
 	mqtt_stomp = &cobra.Command{
 		Use: "mqtt-stomp",
@@ -152,9 +153,7 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
-	mqtt_stomp.Flags().IntVar(&cfg.MqttPublisher.QoS, "mqtt-qos", 0, "MQTT publisher QoS level (0, 1 or 2; default=0)")
-	mqtt_stomp.Flags().
-		BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true, "MQTT publisher clean session")
+	mqtt_stomp.Flags().AddFlagSet(mqttPublisherFlags)
 
 	versionCmd = &cobra.Command{
 		Use: "version",
