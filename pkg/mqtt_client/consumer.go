@@ -3,7 +3,6 @@ package mqtt_client
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -21,27 +20,14 @@ type MqttConsumer struct {
 	Config     config.Config
 }
 
-func NewConsumer(cfg config.Config, id int) *MqttConsumer {
-
-	topic := utils.InjectId(cfg.ConsumeFrom, id)
-	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
-	topic = strings.TrimPrefix(topic, "/topic/")
-
-	return &MqttConsumer{
-		Id:         id,
-		Connection: nil,
-		Topic:      topic,
-		Config:     cfg,
-	}
-}
-
 func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 	msgsReceived := 0
 	previousMessageTimeSent := time.Unix(0, 0)
 
 	handler := func(client mqtt.Client, msg mqtt.Message) {
-		metrics.MessagesConsumedNormalPriority.Inc()
 		payload := msg.Payload()
+		handleMessage(payload)
+		metrics.MessagesConsumedNormalPriority.Inc()
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 		metrics.EndToEndLatency.UpdateDuration(timeSent)
 
@@ -62,7 +48,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
 			log.Info("consumer connection lost", "id", c.Id)
 		}).
-		SetProtocolVersion(4)
+		SetProtocolVersion(uint(c.Config.MqttConsumer.Version))
 
 	opts.OnConnect = func(client mqtt.Client) {
 		token := client.Subscribe(c.Topic, byte(c.Config.MqttConsumer.QoS), handler)
@@ -111,4 +97,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 func (c MqttConsumer) Stop(reason string) {
 	log.Debug("closing connection", "id", c.Id, "reason", reason)
 	c.Connection.Disconnect(250)
+}
+
+func handleMessage(msg []byte) {
 }

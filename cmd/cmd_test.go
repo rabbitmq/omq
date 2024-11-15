@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	rabbithole "github.com/michaelklishin/rabbit-hole/v2"
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/utils"
 
@@ -336,6 +339,75 @@ func TestAMQPMaxInFlight(t *testing.T) {
 	publishedWithMaxInFlight8 := metrics.MessagesPublished.Get()
 
 	assert.Greater(t, publishedWithMaxInFlight8, publishedWithMaxInFlight1*2)
+}
+
+func TestMQTTVersion(t *testing.T) {
+	type test struct {
+		versionFlag       string
+		connectionVersion string
+	}
+
+	tests := []test{
+		{
+			versionFlag:       "3",
+			connectionVersion: "MQTT 3-1",
+		},
+		{
+			versionFlag:       "4",
+			connectionVersion: "MQTT 3-1-1",
+		},
+		{
+			versionFlag:       "5",
+			connectionVersion: "MQTT 5-0",
+		},
+	}
+	defer metrics.Reset()
+
+	rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+	if err != nil {
+		t.Fatalf("Error creating RabbitMQ client: %v", err)
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.connectionVersion, func(t *testing.T) {
+			rootCmd := RootCmd()
+
+			args := []string{"mqtt",
+				"-z", "7s",
+				"-r", "1"}
+			if tc.versionFlag != "" {
+				args = append(args, "--mqtt-publisher-version", tc.versionFlag)
+				args = append(args, "--mqtt-consumer-version", tc.versionFlag)
+			}
+			rootCmd.SetArgs(args)
+			fmt.Println("Running test: omq", strings.Join(args, " "))
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			go func() {
+				defer wg.Done()
+				err := rootCmd.ExecuteContext(ctx)
+				assert.Nil(t, err)
+			}()
+
+			assert.Eventually(t, func() bool {
+				conns, err := rmqc.ListConnections()
+				return err == nil &&
+					len(conns) >= 2 &&
+					slices.ContainsFunc(conns, func(conn rabbithole.ConnectionInfo) bool {
+						return conn.Protocol == tc.connectionVersion
+					})
+			}, 7*time.Second, 500*time.Millisecond)
+
+			cancel()
+			wg.Wait()
+			time.Sleep(3 * time.Second)
+		})
+	}
+
 }
 
 func TestLatencyCalculationA(t *testing.T) {

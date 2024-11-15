@@ -5,7 +5,8 @@ import (
 	"math/rand"
 	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/eclipse/paho.golang/autopaho"
+	"github.com/eclipse/paho.golang/paho"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
@@ -13,20 +14,22 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 )
 
-type MqttPublisher struct {
+type Mqtt5Publisher struct {
 	Id         int
-	Connection mqtt.Client
+	Connection *autopaho.ConnectionManager
 	Topic      string
 	Config     config.Config
 	msg        []byte
 }
 
-func (p MqttPublisher) Start(ctx context.Context) {
+func (p Mqtt5Publisher) Start(ctx context.Context) {
 	// sleep random interval to avoid all publishers publishing at the same time
 	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
 
-	defer p.Connection.Disconnect(250)
+	defer func() {
+		_ = p.Connection.Disconnect(context.TODO())
+	}()
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
@@ -41,7 +44,7 @@ func (p MqttPublisher) Start(ctx context.Context) {
 	log.Debug("publisher stopped", "id", p.Id)
 }
 
-func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
+func (p Mqtt5Publisher) StartFullSpeed(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Topic)
 
 	for msgSent := 0; msgSent < p.Config.PublishCount; msgSent++ {
@@ -54,13 +57,13 @@ func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
 	}
 }
 
-func (p MqttPublisher) StartIdle(ctx context.Context) {
+func (p Mqtt5Publisher) StartIdle(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", "-", "destination", p.Topic)
 
 	_ = ctx.Done()
 }
 
-func (p MqttPublisher) StartRateLimited(ctx context.Context) {
+func (p Mqtt5Publisher) StartRateLimited(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
 
@@ -81,26 +84,29 @@ func (p MqttPublisher) StartRateLimited(ctx context.Context) {
 	}
 }
 
-func (p MqttPublisher) Send() {
-	if !p.Connection.IsConnected() {
-		time.Sleep(1 * time.Second)
-		return
-	}
+func (p Mqtt5Publisher) Send() {
+	// if !p.Connection.IsConnected() {
+	// 	time.Sleep(1 * time.Second)
+	// 	return
+	// }
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	startTime := time.Now()
-	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), false, p.msg)
-	token.Wait()
-	latency := time.Since(startTime)
-	if token.Error() != nil {
-		log.Error("message sending failure", "id", p.Id, "error", token.Error())
-	} else {
-		metrics.MessagesPublished.Inc()
-		metrics.PublishingLatency.Update(latency.Seconds())
-		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+	_, err := p.Connection.Publish(context.TODO(), &paho.Publish{
+		QoS:     byte(p.Config.MqttPublisher.QoS),
+		Topic:   p.Topic,
+		Payload: p.msg,
+	})
+	if err != nil {
+		log.Error("message sending failure", "id", p.Id, "error", err)
+		return
 	}
+	latency := time.Since(startTime)
+	metrics.MessagesPublished.Inc()
+	metrics.PublishingLatency.Update(latency.Seconds())
+	log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 }
 
-func (p MqttPublisher) Stop(reason string) {
+func (p Mqtt5Publisher) Stop(reason string) {
 	log.Debug("closing connection", "id", p.Id, "reason", reason)
-	p.Connection.Disconnect(250)
+	_ = p.Connection.Disconnect(context.TODO())
 }
