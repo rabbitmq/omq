@@ -3,7 +3,6 @@ package mqtt_client
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -19,20 +18,6 @@ type MqttConsumer struct {
 	Connection mqtt.Client
 	Topic      string
 	Config     config.Config
-}
-
-func NewConsumer(cfg config.Config, id int) *MqttConsumer {
-
-	topic := utils.InjectId(cfg.ConsumeFrom, id)
-	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
-	topic = strings.TrimPrefix(topic, "/topic/")
-
-	return &MqttConsumer{
-		Id:         id,
-		Connection: nil,
-		Topic:      topic,
-		Config:     cfg,
-	}
 }
 
 func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {

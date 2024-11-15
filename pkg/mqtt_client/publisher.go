@@ -2,9 +2,7 @@ package mqtt_client
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
-	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -21,52 +19,6 @@ type MqttPublisher struct {
 	Topic      string
 	Config     config.Config
 	msg        []byte
-}
-
-func NewPublisher(cfg config.Config, id int) *MqttPublisher {
-	var token mqtt.Token
-
-	opts := mqtt.NewClientOptions().
-		SetClientID(fmt.Sprintf("omq-pub-%d", id)).
-		SetAutoReconnect(true).
-		SetCleanSession(cfg.MqttPublisher.CleanSession).
-		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			log.Info("publisher connection lost", "id", id)
-		}).
-		SetProtocolVersion(uint(cfg.MqttPublisher.Version))
-
-	var j int
-	for i, n := range utils.WrappedSequence(len(cfg.PublisherUri), id-1) {
-		if cfg.SpreadConnections {
-			j = n
-		} else {
-			j = i
-		}
-		parsedUri := utils.ParseURI(cfg.PublisherUri[j], "mqtt", "1883")
-		opts.AddBroker(parsedUri.Broker).SetUsername(parsedUri.Username).SetPassword(parsedUri.Password)
-	}
-
-	connection := mqtt.NewClient(opts)
-	token = connection.Connect()
-	token.Wait()
-	if token.Error() != nil {
-		log.Error("publisher connection failed", "id", id, "error", token.Error())
-	}
-
-	topic := utils.InjectId(cfg.PublishTo, id)
-	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix
-	// since MQTT has no concept of exchanges, we need to remove it
-	// this should get more flexible in the future
-	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
-	topic = strings.TrimPrefix(topic, "/topic/")
-
-	return &MqttPublisher{
-		Id:         id,
-		Connection: connection,
-		Topic:      topic,
-		Config:     cfg,
-	}
-
 }
 
 func (p MqttPublisher) Start(ctx context.Context) {

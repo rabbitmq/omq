@@ -1,11 +1,8 @@
-package mqtt5_client
+package mqtt_client
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/eclipse/paho.golang/autopaho"
@@ -23,54 +20,6 @@ type Mqtt5Publisher struct {
 	Topic      string
 	Config     config.Config
 	msg        []byte
-}
-
-func NewPublisher(cfg config.Config, id int) *Mqtt5Publisher {
-	u, err := url.Parse("mqtt://localhost:1883")
-	if err != nil {
-		panic(err)
-	}
-	opts := autopaho.ClientConfig{
-		ServerUrls:                    []*url.URL{u},
-		CleanStartOnInitialConnection: cfg.MqttPublisher.CleanSession,
-		KeepAlive:                     20,
-		ConnectRetryDelay:             1 * time.Second,
-		OnConnectionUp: func(*autopaho.ConnectionManager, *paho.Connack) {
-			log.Info("publisher connected", "id", id)
-		},
-		OnConnectError: func(err error) {
-			log.Info("publisher failed to connect ", "id", id, "error", err)
-		},
-		ClientConfig: paho.ClientConfig{
-			ClientID: fmt.Sprintf("omq-publisher-%d", id),
-			OnClientError: func(err error) {
-				log.Error("publisher error", "id", id, "error", err)
-			},
-			OnServerDisconnect: func(d *paho.Disconnect) {
-				log.Error("publisher disconnected", "id", id, "reasonCode", d.ReasonCode, "reasonString", d.Properties.ReasonString)
-			},
-		},
-	}
-
-	connection, err := autopaho.NewConnection(context.TODO(), opts)
-	if err != nil {
-		log.Error("publisher connection failed", "id", id, "error", err)
-	}
-
-	topic := utils.InjectId(cfg.PublishTo, id)
-	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix
-	// since MQTT has no concept of exchanges, we need to remove it
-	// this should get more flexible in the future
-	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
-	topic = strings.TrimPrefix(topic, "/topic/")
-
-	return &Mqtt5Publisher{
-		Id:         id,
-		Connection: connection,
-		Topic:      topic,
-		Config:     cfg,
-	}
-
 }
 
 func (p Mqtt5Publisher) Start(ctx context.Context) {

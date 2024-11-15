@@ -1,9 +1,8 @@
-package mqtt5_client
+package mqtt_client
 
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"net/url"
@@ -21,20 +20,6 @@ type Mqtt5Consumer struct {
 	Connection *autopaho.ConnectionManager
 	Topic      string
 	Config     config.Config
-}
-
-func NewConsumer(cfg config.Config, id int) *Mqtt5Consumer {
-
-	topic := utils.InjectId(cfg.ConsumeFrom, id)
-	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
-	topic = strings.TrimPrefix(topic, "/topic/")
-
-	return &Mqtt5Consumer{
-		Id:         id,
-		Connection: nil,
-		Topic:      topic,
-		Config:     cfg,
-	}
 }
 
 func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
