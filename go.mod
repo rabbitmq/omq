@@ -8,9 +8,10 @@ require (
 	github.com/Azure/go-amqp v1.2.0
 	github.com/VictoriaMetrics/metrics v1.35.1
 	github.com/charmbracelet/log v0.4.0
-	github.com/eclipse/paho.golang v0.21.0
+	github.com/eclipse/paho.golang v0.22.0
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/felixge/fgprof v0.9.5
+	github.com/michaelklishin/rabbit-hole v1.5.0
 	github.com/onsi/ginkgo/v2 v2.20.2
 	github.com/onsi/gomega v1.34.2
 	github.com/relvacode/iso8601 v1.5.0
@@ -33,10 +34,11 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
-	github.com/michaelklishin/rabbit-hole v1.5.0 // indirect
 	github.com/muesli/termenv v0.15.2 // indirect
+	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
+	github.com/streadway/amqp v1.1.0 // indirect
 	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/histogram v1.2.0 // indirect
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
