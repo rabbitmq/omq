@@ -65,6 +65,8 @@ type MqttOptions struct {
 type Config struct {
 	ConsumerProto        Protocol
 	PublisherProto       Protocol
+	PublisherId          string
+	ConsumerId           string
 	Uri                  []string
 	PublisherUri         []string
 	ConsumerUri          []string
@@ -97,6 +99,7 @@ type Config struct {
 	MqttConsumer         MqttOptions
 	MetricTags           map[string]string
 	LogOutOfOrder        bool
+	PrintAllMetrics      bool
 	ConsumerStartupDelay time.Duration
 }
 

@@ -2,7 +2,7 @@ package utils
 
 import (
 	"encoding/binary"
-	"fmt"
+	"math/rand/v2"
 	"net/url"
 	"os"
 	"strconv"
@@ -102,8 +102,9 @@ func WrappedSequence(len int, start int) []int {
 	return seq
 }
 
-func InjectId(topic string, id int) string {
-	return strings.Replace(topic, "%d", fmt.Sprintf("%d", id), -1)
+func InjectId(s string, id int) string {
+	s = strings.Replace(s, "%d", strconv.Itoa(id), -1)
+	return strings.Replace(s, "%r", strconv.Itoa(rand.Int()), -1)
 }
 
 func Rate(rate float32) string {

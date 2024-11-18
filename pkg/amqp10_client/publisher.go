@@ -71,8 +71,9 @@ func (p *Amqp10Publisher) Connect() {
 		p.whichUri++
 		hostname, vhost := hostAndVHost(uri)
 		conn, err = amqp.Dial(context.TODO(), uri, &amqp.ConnOptions{
-			SASLType: amqp.SASLTypeAnonymous(),
-			HostName: vhost,
+			ContainerID: utils.InjectId(p.Config.PublisherId, p.Id),
+			SASLType:    amqp.SASLTypeAnonymous(),
+			HostName:    vhost,
 			TLSConfig: &tls.Config{
 				ServerName: hostname,
 			},

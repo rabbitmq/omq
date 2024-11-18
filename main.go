@@ -9,7 +9,6 @@ import (
 
 	"github.com/rabbitmq/omq/cmd"
 	"github.com/rabbitmq/omq/pkg/log"
-	"github.com/rabbitmq/omq/pkg/metrics"
 )
 
 func main() {
@@ -27,8 +26,6 @@ func main() {
 			_ = http.ListenAndServe(":6060", nil)
 		}()
 	}
-
-	defer metrics.GetMetricsServer().PrintFinalMetrics()
 
 	cmd.Execute()
 

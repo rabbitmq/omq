@@ -67,7 +67,7 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 			log.Info("consumer failed to connect ", "id", c.Id, "error", err)
 		},
 		ClientConfig: paho.ClientConfig{
-			ClientID: fmt.Sprintf("omq-sub-%d", c.Id),
+			ClientID: utils.InjectId(c.Config.ConsumerId, c.Id),
 			OnClientError: func(err error) {
 				log.Error("consumer error", "id", c.Id, "error", err)
 			},
