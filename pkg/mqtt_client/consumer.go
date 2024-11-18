@@ -2,7 +2,6 @@ package mqtt_client
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -42,7 +41,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 	}
 
 	opts := mqtt.NewClientOptions().
-		SetClientID(fmt.Sprintf("omq-sub-%d", c.Id)).
+		SetClientID(utils.InjectId(c.Config.ConsumerId, c.Id)).
 		SetAutoReconnect(true).
 		SetCleanSession(c.Config.MqttConsumer.CleanSession).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {

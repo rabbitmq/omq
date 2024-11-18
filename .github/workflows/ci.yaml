@@ -6,8 +6,8 @@ env:
   TEST_STATS_DELAY: 5000
 
 jobs:
-  golangci:
-    name: lint
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
 
     steps:
@@ -49,4 +49,4 @@ jobs:
         run: OMQ_RABBITMQCTL=DOCKER:${{job.services.rabbitmq.id}} bin/ci/before_build.sh
 
       - name: Run go test
-        run: go test -count=1 -p 1 -v ./...
+        run: go run github.com/onsi/ginkgo/v2/ginkgo -r --randomize-all --randomize-suites --fail-on-pending --fail-on-empty --keep-going --race --trace

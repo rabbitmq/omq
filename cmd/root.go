@@ -183,10 +183,16 @@ func RootCmd() *cobra.Command {
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			mgmt.DeleteDeclaredQueues()
+			metrics.GetMetricsServer().PrintSummary()
+			if cfg.PrintAllMetrics {
+				metrics.GetMetricsServer().PrintAll()
+			}
 		},
 	}
 	rootCmd.PersistentFlags().
 		VarP(enumflag.New(&log.Level, "log-level", log.Levels, enumflag.EnumCaseInsensitive), "log-level", "l", "Log level (debug, info, error)")
+	rootCmd.PersistentFlags().
+		BoolVar(&cfg.PrintAllMetrics, "print-all-metrics", false, "Print all metrics before exiting")
 	rootCmd.PersistentFlags().StringSliceVarP(&cfg.Uri, "uri", "", nil, "URI for both publishers and consumers")
 	rootCmd.PersistentFlags().StringSliceVarP(&cfg.PublisherUri, "publisher-uri", "", nil, "URI for publishing")
 	rootCmd.PersistentFlags().StringSliceVarP(&cfg.ConsumerUri, "consumer-uri", "", nil, "URI for consuming")
@@ -202,6 +208,10 @@ func RootCmd() *cobra.Command {
 		StringVarP(&cfg.ConsumeFrom, "consume-from", "T", "/queues/omq-%d", "The queue/topic/terminus to consume from (%d will be replaced with the consumer's id)")
 	rootCmd.PersistentFlags().
 		VarP(enumflag.New(&cfg.Queues, "queues", config.QueueTypes, enumflag.EnumCaseInsensitive), "queues", "", "Type of queues to declare (or `predeclared` to use existing queues)")
+	rootCmd.PersistentFlags().
+		StringVar(&cfg.ConsumerId, "consumer-id", "omq-consumer-%d", "Client ID for AMQP and MQTT consumers (%d => consumer's id, %r => random)")
+	rootCmd.PersistentFlags().
+		StringVar(&cfg.PublisherId, "publisher-id", "omq-publisher-%d", "Client ID for AMQP and MQTT publishers (%d => consumer's id, %r => random)")
 	rootCmd.PersistentFlags().
 		BoolVar(&cfg.CleanupQueues, "cleanup-queues", false, "Delete the queues at the end (only explicitly declared queues, not STOMP subscriptions)")
 	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message payload size in bytes")
@@ -275,7 +285,7 @@ func start(cfg config.Config) {
 			cancel()
 			println("Received SIGTERM, shutting down...")
 			time.Sleep(500 * time.Millisecond)
-			shutdown(cfg.CleanupQueues)
+			shutdown(cfg.CleanupQueues, cfg.PrintAllMetrics)
 			os.Exit(0)
 		case <-ctx.Done():
 			return
@@ -284,6 +294,9 @@ func start(cfg config.Config) {
 
 	var wg sync.WaitGroup
 	wg.Add(cfg.Publishers + cfg.Consumers)
+
+	// TODO
+	// refactor; make consumer startup delay more accurate
 
 	// if --consumer-startup-delay is not set, we want to start
 	// all the consumers before we start any publishers
@@ -380,13 +393,17 @@ func defaultUri(proto string) string {
 	return uri
 }
 
-func shutdown(deleteQueues bool) {
+func shutdown(deleteQueues bool, printAllMetrics bool) {
 	if deleteQueues {
 		mgmt.DeleteDeclaredQueues()
 	}
 	mgmt.Disconnect()
 	metricsServer := metrics.GetMetricsServer()
-	metricsServer.PrintFinalMetrics()
+	metricsServer.PrintSummary()
+
+	if printAllMetrics {
+		metricsServer.PrintAll()
+	}
 }
 
 func sanitizeConfig(cfg *config.Config) error {

@@ -2,7 +2,6 @@ package mqtt_client
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -79,7 +78,7 @@ func newMqtt34Connection(cfg config.Config, id int) mqtt.Client {
 	var token mqtt.Token
 
 	opts := mqtt.NewClientOptions().
-		SetClientID(fmt.Sprintf("omq-pub-%d", id)).
+		SetClientID(utils.InjectId(cfg.PublisherId, id)).
 		SetAutoReconnect(true).
 		SetCleanSession(cfg.MqttPublisher.CleanSession).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
@@ -124,7 +123,7 @@ func newMqtt5Connection(cfg config.Config, id int) *autopaho.ConnectionManager {
 			log.Info("publisher failed to connect ", "id", id, "error", err)
 		},
 		ClientConfig: paho.ClientConfig{
-			ClientID: fmt.Sprintf("omq-publisher-%d", id),
+			ClientID: utils.InjectId(cfg.PublisherId, id),
 			OnClientError: func(err error) {
 				log.Error("publisher error", "id", id, "error", err)
 			},

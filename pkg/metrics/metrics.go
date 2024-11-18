@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"runtime"
@@ -148,7 +149,7 @@ func (m *MetricsServer) PrintMessageRates(ctx context.Context) {
 	}()
 }
 
-func (m *MetricsServer) PrintFinalMetrics() {
+func (m *MetricsServer) PrintSummary() {
 	// this might ve called before the metrics were registered
 	// eg. by `omq --help`
 	if MessagesPublished == nil {
@@ -159,9 +160,30 @@ func (m *MetricsServer) PrintFinalMetrics() {
 		"messages", MessagesPublished.Get(),
 		"rate", fmt.Sprintf("%.2f/s", float64(MessagesPublished.Get())/time.Since(m.started).Seconds()))
 	log.Print("TOTAL CONSUMED",
-		"consumed", MessagesConsumedNormalPriority.Get()+MessagesConsumedHighPriority.Get(),
+		"messages", MessagesConsumedNormalPriority.Get()+MessagesConsumedHighPriority.Get(),
 		"rate", fmt.Sprintf("%.2f/s", float64(MessagesConsumedNormalPriority.Get()+MessagesConsumedHighPriority.Get())/time.Since(m.started).Seconds()))
+}
 
+func (m MetricsServer) PrintAll() {
+	endpoint := fmt.Sprintf("http://%s/metrics", m.httpServer.Addr)
+	resp, err := http.Get(endpoint)
+	if err != nil {
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Error("Error reading metrics", "error", err)
+		return
+	}
+
+	metrics := strings.Split(string(body), "\n")
+	for _, metric := range metrics {
+		if strings.HasPrefix(metric, "omq_") {
+			fmt.Println(metric)
+		}
+	}
 }
 
 func get_metrics_ip() string {

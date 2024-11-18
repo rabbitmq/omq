@@ -1,43 +1,52 @@
-package mgmt
+package mgmt_test
 
 import (
 	"context"
-	"testing"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
-	"github.com/stretchr/testify/assert"
+	"github.com/rabbitmq/omq/pkg/mgmt"
 )
 
-func TestDeclareAndBindPredeclared(t *testing.T) {
-	cfg := config.Config{Queues: config.Predeclared, PublishTo: "foobar"}
-	q := DeclareAndBind(cfg, "test", 0)
-	assert.Nil(t, q)
-}
+var _ = Describe("DeclareAndBind", func() {
+	It("should not declare anything when using predeclared queues", func() {
+		cfg := config.Config{Queues: config.Predeclared, PublishTo: "foobar"}
+		q := mgmt.DeclareAndBind(cfg, "test", 0)
+		Expect(q).To(BeNil())
+	})
 
-func TestDeclareAndBindNoId(t *testing.T) {
-	log.Setup()
-	cfg := config.Config{Queues: config.Classic, PublishTo: "/queues/foobar"}
-	q := DeclareAndBind(cfg, "foobar", 0)
-	assert.Equal(t, "foobar", q.GetName())
-	err := Get().Queue("foobar").Delete(context.Background())
-	assert.Nil(t, err)
-}
+	It("should declare and bind a classic queue", func() {
+		log.Setup()
+		cfg := config.Config{Queues: config.Classic, PublishTo: "/queues/mgmt-classic"}
+		q := mgmt.DeclareAndBind(cfg, "mgmt-classic", 0)
+		Expect(q.GetName()).To(Equal("mgmt-classic"))
+		Expect(string(q.Type())).To(Equal("classic"))
+		err := mgmt.Get().Queue("mgmt-classic").Delete(context.Background())
+		Expect(err).To(BeNil())
+		// TOOD assert the binding
+	})
 
-func TestDeclareAndBindWithId(t *testing.T) {
-	log.Setup()
-	cfg := config.Config{Queues: config.Classic, PublishTo: "/queues/foobar"}
-	q := DeclareAndBind(cfg, "foobar-123", 123)
-	assert.Equal(t, "foobar-123", q.GetName())
-	err := Get().Queue("foobar-123").Delete(context.Background())
-	assert.Nil(t, err)
-}
+	It("should declare and bind a quorum queue", func() {
+		log.Setup()
+		cfg := config.Config{Queues: config.Quorum, PublishTo: "/queues/mgmt-quorum"}
+		q := mgmt.DeclareAndBind(cfg, "mgmt-quorum", 0)
+		Expect(q.GetName()).To(Equal("mgmt-quorum"))
+		Expect(string(q.Type())).To(Equal("quorum"))
+		err := mgmt.Get().Queue("mgmt-quorum").Delete(context.Background())
+		Expect(err).To(BeNil())
+		// TOOD assert the binding
+	})
 
-func TestDeclareAndBindStompAmqp(t *testing.T) {
-	log.Setup()
-	cfg := config.Config{Queues: config.Classic, PublishTo: "/topic/stompstomp", ConsumeFrom: "/topic/stompamqp"}
-	q := DeclareAndBind(cfg, "foobar-123", 123)
-	assert.Equal(t, "foobar-123", q.GetName())
-	err := Get().Queue("foobar-123").Delete(context.Background())
-	assert.Nil(t, err)
-}
+	It("should declare and bind a stream queue", func() {
+		log.Setup()
+		cfg := config.Config{Queues: config.Stream, PublishTo: "/queues/mgmt-stream"}
+		q := mgmt.DeclareAndBind(cfg, "mgmt-stream", 0)
+		Expect(q.GetName()).To(Equal("mgmt-stream"))
+		Expect(string(q.Type())).To(Equal("stream"))
+		err := mgmt.Get().Queue("mgmt-stream").Delete(context.Background())
+		Expect(err).To(BeNil())
+		// TOOD assert the binding
+	})
+})
