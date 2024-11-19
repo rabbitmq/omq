@@ -12,8 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/schollz/peerdiscovery"
-
 	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
@@ -249,7 +247,6 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringArrayVar(&amqpAppProperties, "amqp-app-property", []string{}, "AMQP application properties, eg. key1=val1,val2")
 	rootCmd.PersistentFlags().StringArrayVar(&amqpAppPropertyFilters, "amqp-app-property-filter", []string{}, "AMQP application property filters, eg. key1=$p:prefix")
 	rootCmd.PersistentFlags().StringArrayVar(&amqpPropertyFilters, "amqp-property-filter", []string{}, "AMQP property filters, eg. key1=$p:prefix")
-	rootCmd.PersistentFlags().IntVar(&cfg.ExpectedInstances, "expected-instances", 1, "Don't start until this number of other omq instances is discovered")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)
@@ -276,13 +273,6 @@ func start(cfg config.Config) {
 		os.Exit(1)
 	}
 
-	discoveries, _ := peerdiscovery.Discover(peerdiscovery.Settings{
-		Limit:     cfg.ExpectedInstances - 1,
-		TimeLimit: 1 * time.Hour,
-		// Payload
-		// Notify
-	})
-	log.Info("discovered the expected number of peers", "expected-instance", len(discoveries))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
