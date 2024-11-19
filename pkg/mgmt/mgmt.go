@@ -26,36 +26,38 @@ func Get() rmq.IManagement {
 	return management
 }
 
-func DeclareAndBind(cfg config.Config, queue string, id int) rmq.IQueueInfo {
+func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo {
 	if cfg.Queues == config.Predeclared {
 		return nil
 	}
 
 	mgmt := Get()
 
-	var queueType rmq.TQueueType
+	var queueType rmq.QueueType
 	switch cfg.Queues {
 	case config.Classic:
-		queueType = rmq.Classic
+		queueType = rmq.QueueType{Type: rmq.Classic}
 	case config.Quorum:
-		queueType = rmq.Quorum
+		queueType = rmq.QueueType{Type: rmq.Quorum}
 	case config.Stream:
-		queueType = rmq.Stream
+		queueType = rmq.QueueType{Type: rmq.Stream}
 	}
 
-	queue = strings.TrimPrefix(queue, "/queues/")
-	queueSpec := mgmt.Queue(queue).QueueType(rmq.QueueType{Type: queueType})
-	qi, err := queueSpec.Declare(context.Background())
+	queueName = strings.TrimPrefix(queueName, "/queues/")
+	qi, err := mgmt.DeclareQueue(context.TODO(), &rmq.QueueSpecification{
+		Name:      queueName,
+		QueueType: queueType,
+	})
 	if err != nil {
-		log.Error("Failed to declare queue", "name", queue, "error", err)
+		log.Error("Failed to declare queue", "name", queueName, "error", err)
 		os.Exit(1)
 	}
-	log.Debug("queue declared", "name", qi.GetName(), "type", qi.Type())
+	log.Debug("queue declared", "name", qi.Name(), "type", qi.Type())
 
 	if cfg.CleanupQueues {
 		// if we don't need to delete at the end, there's no point in tracking declared queues
 		// note: DeleteAll() is always called, so the empty list serves as the mechanism to skip deletion
-		declaredQueues = append(declaredQueues, queue)
+		declaredQueues = append(declaredQueues, queueName)
 	}
 
 	var exchangeName, routingKey string
@@ -72,14 +74,16 @@ func DeclareAndBind(cfg config.Config, queue string, id int) rmq.IQueueInfo {
 	}
 
 	if exchangeName != "amq.default" {
-		exchangeSpec := mgmt.Exchange(exchangeName)
-		bindingSpec := mgmt.Binding().SourceExchange(exchangeSpec).DestinationQueue(queueSpec).Key(routingKey)
-		err = bindingSpec.Bind(context.Background())
+		_, err = mgmt.Bind(context.TODO(), &rmq.BindingSpecification{
+			SourceExchange:   exchangeName,
+			DestinationQueue: queueName,
+			BindingKey:       routingKey,
+		})
 		if err != nil {
-			log.Error("Failed to bind a queue", "exchange", exchangeName, "queue", queue, "key", routingKey, "error", err)
+			log.Error("Failed to bind a queue", "exchange", exchangeName, "queue", queueName, "key", routingKey, "error", err)
 			os.Exit(1)
 		}
-		log.Debug("binding declared", "exchange", exchangeName, "queue", queue, "key", routingKey)
+		log.Debug("binding declared", "exchange", exchangeName, "queue", queueName, "key", routingKey)
 	}
 
 	return qi
@@ -130,10 +134,9 @@ func parsePublishTo(publishTo string, id int) (string, string) {
 }
 
 func DeleteDeclaredQueues() {
-	for _, queue := range declaredQueues {
-		queueSpec := Get().Queue(queue)
-		err := queueSpec.Delete(context.Background())
-		log.Debug("Deleted queue", "name", queue, "error", err)
+	for _, queueName := range declaredQueues {
+		err := Get().DeleteQueue(context.TODO(), queueName)
+		log.Debug("Deleted queue", "name", queueName, "error", err)
 	}
 }
 

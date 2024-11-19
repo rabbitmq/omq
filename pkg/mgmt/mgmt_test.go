@@ -21,9 +21,9 @@ var _ = Describe("DeclareAndBind", func() {
 		log.Setup()
 		cfg := config.Config{Queues: config.Classic, PublishTo: "/queues/mgmt-classic"}
 		q := mgmt.DeclareAndBind(cfg, "mgmt-classic", 0)
-		Expect(q.GetName()).To(Equal("mgmt-classic"))
+		Expect(q.Name()).To(Equal("mgmt-classic"))
 		Expect(string(q.Type())).To(Equal("classic"))
-		err := mgmt.Get().Queue("mgmt-classic").Delete(context.Background())
+		err := mgmt.Get().DeleteQueue(context.TODO(), "mgmt-classic")
 		Expect(err).To(BeNil())
 		// TOOD assert the binding
 	})
@@ -32,9 +32,9 @@ var _ = Describe("DeclareAndBind", func() {
 		log.Setup()
 		cfg := config.Config{Queues: config.Quorum, PublishTo: "/queues/mgmt-quorum"}
 		q := mgmt.DeclareAndBind(cfg, "mgmt-quorum", 0)
-		Expect(q.GetName()).To(Equal("mgmt-quorum"))
+		Expect(q.Name()).To(Equal("mgmt-quorum"))
 		Expect(string(q.Type())).To(Equal("quorum"))
-		err := mgmt.Get().Queue("mgmt-quorum").Delete(context.Background())
+		err := mgmt.Get().DeleteQueue(context.TODO(), "mgmt-quorum")
 		Expect(err).To(BeNil())
 		// TOOD assert the binding
 	})
@@ -43,9 +43,9 @@ var _ = Describe("DeclareAndBind", func() {
 		log.Setup()
 		cfg := config.Config{Queues: config.Stream, PublishTo: "/queues/mgmt-stream"}
 		q := mgmt.DeclareAndBind(cfg, "mgmt-stream", 0)
-		Expect(q.GetName()).To(Equal("mgmt-stream"))
+		Expect(q.Name()).To(Equal("mgmt-stream"))
 		Expect(string(q.Type())).To(Equal("stream"))
-		err := mgmt.Get().Queue("mgmt-stream").Delete(context.Background())
+		err := mgmt.Get().DeleteQueue(context.TODO(), "mgmt-stream")
 		Expect(err).To(BeNil())
 		// TOOD assert the binding
 	})
