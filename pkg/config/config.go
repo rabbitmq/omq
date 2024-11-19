@@ -63,6 +63,7 @@ type MqttOptions struct {
 }
 
 type Config struct {
+	ExpectedInstances    int
 	ConsumerProto        Protocol
 	PublisherProto       Protocol
 	PublisherId          string

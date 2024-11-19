@@ -38,6 +38,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
+	github.com/schollz/peerdiscovery v1.7.5 // indirect
 	github.com/streadway/amqp v1.1.0 // indirect
 	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/histogram v1.2.0 // indirect
