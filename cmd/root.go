@@ -276,13 +276,14 @@ func start(cfg config.Config) {
 		os.Exit(1)
 	}
 
+	log.Info("waiting for peers", "expected-instances", cfg.ExpectedInstances)
 	discoveries, _ := peerdiscovery.Discover(peerdiscovery.Settings{
 		Limit:     cfg.ExpectedInstances - 1,
 		TimeLimit: 1 * time.Hour,
 		// Payload
 		// Notify
 	})
-	log.Info("discovered the expected number of peers", "expected-instance", len(discoveries))
+	log.Info("discovered the expected number of peers", "peers found", len(discoveries))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
