@@ -88,6 +88,10 @@ func DeclareAndBind(cfg config.Config, queue string, id int) rmq.IQueueInfo {
 func parsePublishTo(publishTo string, id int) (string, string) {
 	parts := strings.Split(publishTo, "/")
 
+	if len(parts) < 2 {
+		return "amq.direct", utils.InjectId(parts[0], id)
+	}
+
 	exchange := ""
 	routingKey := ""
 
