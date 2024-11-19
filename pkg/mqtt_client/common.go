@@ -107,12 +107,8 @@ func newMqtt34Connection(cfg config.Config, id int) mqtt.Client {
 }
 
 func newMqtt5Connection(cfg config.Config, id int) *autopaho.ConnectionManager {
-	u, err := url.Parse("mqtt://localhost:1883")
-	if err != nil {
-		panic(err)
-	}
 	opts := autopaho.ClientConfig{
-		ServerUrls:                    []*url.URL{u},
+		ServerUrls:                    stringsToUrls(cfg.PublisherUri),
 		CleanStartOnInitialConnection: cfg.MqttPublisher.CleanSession,
 		KeepAlive:                     20,
 		ConnectRetryDelay:             1 * time.Second,
@@ -138,4 +134,16 @@ func newMqtt5Connection(cfg config.Config, id int) *autopaho.ConnectionManager {
 		log.Error("publisher connection failed", "id", id, "error", err)
 	}
 	return connection
+}
+
+func stringsToUrls(connectionStrings []string) []*url.URL {
+	var serverUrls []*url.URL
+	for _, uri := range connectionStrings {
+		parsedUrl, err := url.Parse(uri)
+		if err != nil {
+			panic(err)
+		}
+		serverUrls = append(serverUrls, parsedUrl)
+	}
+	return serverUrls
 }

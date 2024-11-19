@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"net/url"
-
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/rabbitmq/omq/pkg/config"
@@ -43,12 +41,8 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 		return true, nil
 	}
 
-	u, err := url.Parse("mqtt://localhost:1883")
-	if err != nil {
-		panic(err)
-	}
 	opts := autopaho.ClientConfig{
-		ServerUrls:                    []*url.URL{u},
+		ServerUrls:                    stringsToUrls(c.Config.ConsumerUri),
 		CleanStartOnInitialConnection: c.Config.MqttConsumer.CleanSession,
 		KeepAlive:                     20,
 		ConnectRetryDelay:             1 * time.Second,
@@ -79,6 +73,7 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 		},
 	}
 
+	var err error
 	c.Connection, err = autopaho.NewConnection(context.TODO(), opts)
 	if err != nil {
 		log.Error("consumer connection failed", "id", c.Id, "error", err)
