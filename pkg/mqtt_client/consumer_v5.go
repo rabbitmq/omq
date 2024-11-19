@@ -16,17 +16,15 @@ import (
 )
 
 type Mqtt5Consumer struct {
-	Id                int
-	Connection        *autopaho.ConnectionManager
-	Topic             string
-	Config            config.Config
-	initialConnection bool
+	Id         int
+	Connection *autopaho.ConnectionManager
+	Topic      string
+	Config     config.Config
 }
 
 func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 	msgsReceived := 0
 	previousMessageTimeSent := time.Unix(0, 0)
-	c.initialConnection = true
 
 	handler := func(rcv paho.PublishReceived) (bool, error) {
 		metrics.MessagesConsumedNormalPriority.Inc()
@@ -63,10 +61,6 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 			}); err != nil {
 				fmt.Printf("failed to subscribe (%s). This is likely to mean no messages will be received.", err)
 			}
-			if c.initialConnection {
-				close(subscribed)
-				c.initialConnection = false
-			}
 		},
 		OnConnectError: func(err error) {
 			log.Info("consumer failed to connect ", "id", c.Id, "error", err)
@@ -89,6 +83,7 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 	if err != nil {
 		log.Error("consumer connection failed", "id", c.Id, "error", err)
 	}
+	close(subscribed)
 
 	// TODO: currently we can consume more than ConsumerCount messages
 	for msgsReceived < c.Config.ConsumeCount {
