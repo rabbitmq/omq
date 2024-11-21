@@ -12,24 +12,28 @@ import (
 	rmq "github.com/rabbitmq/rabbitmq-amqp-go-client/rabbitmq_amqp"
 )
 
-var management rmq.IManagement
+var mgmtConn *rmq.IConnection
 var declaredQueues []string
 var mgmtUri string
 
 func Get() rmq.IManagement {
-	var mgmtConn rmq.IConnection
+	var conn rmq.IConnection
 	var err error
-	for {
-		if management == nil {
-			mgmtConn, err = rmq.Dial(context.TODO(), mgmtUri, nil)
-			if err == nil {
-				break
-			}
-			log.Error("can't establish a management connection", "error", err)
-			time.Sleep(time.Second)
-		}
+	if mgmtConn != nil && (*mgmtConn).Status() == rmq.Open {
+		return (*mgmtConn).Management()
 	}
-	return mgmtConn.Management()
+
+	for {
+		conn, err = rmq.Dial(context.TODO(), mgmtUri, nil)
+		if err == nil {
+			break
+		}
+		log.Error("can't establish a management connection; retrying...", "error", err)
+		time.Sleep(time.Second)
+	}
+	log.Debug("management connection established", "uri", mgmtUri)
+	mgmtConn = &conn
+	return conn.Management()
 }
 
 func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo {
@@ -143,13 +147,16 @@ func parsePublishTo(publishTo string, id int) (string, string) {
 
 func DeleteDeclaredQueues() {
 	for _, queueName := range declaredQueues {
+		log.Debug("Deleting queue...", "name", queueName)
 		err := Get().DeleteQueue(context.TODO(), queueName)
-		log.Debug("Deleted queue", "name", queueName, "error", err)
+		if err != nil {
+			log.Info("Failed to delete a queue", "queue", queueName, "error", err)
+		}
 	}
 }
 
 func Disconnect() {
-	if management != nil {
-		management.Close(context.Background())
+	if mgmtConn != nil && (*mgmtConn).Status() == rmq.Open {
+		(*mgmtConn).Close(context.Background())
 	}
 }
