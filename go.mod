@@ -22,7 +22,7 @@ require (
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/lipgloss v1.0.0 // indirect
-	github.com/charmbracelet/x/ansi v0.4.5 // indirect
+	github.com/charmbracelet/x/ansi v0.5.0 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
@@ -53,6 +53,6 @@ require (
 require (
 	github.com/go-stomp/stomp/v3 v3.1.3
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/rabbitmq/rabbitmq-amqp-go-client v0.0.0-20241115073728-60e006b2a387
+	github.com/rabbitmq/rabbitmq-amqp-go-client v0.0.0-20241121093408-1a6679a20123
 	github.com/spf13/pflag v1.0.5
 )

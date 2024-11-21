@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
@@ -13,17 +14,22 @@ import (
 
 var management rmq.IManagement
 var declaredQueues []string
+var mgmtUri string
 
 func Get() rmq.IManagement {
-	if management == nil {
-		mgmtConn := rmq.NewAmqpConnection()
-		err := mgmtConn.Open(context.Background(), rmq.NewConnectionSettings())
-		if err != nil {
-			panic(err)
+	var mgmtConn rmq.IConnection
+	var err error
+	for {
+		if management == nil {
+			mgmtConn, err = rmq.Dial(context.TODO(), mgmtUri, nil)
+			if err == nil {
+				break
+			}
+			log.Error("can't establish a management connection", "error", err)
+			time.Sleep(time.Second)
 		}
-		management = mgmtConn.Management()
 	}
-	return management
+	return mgmtConn.Management()
 }
 
 func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo {
@@ -31,6 +37,8 @@ func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo 
 		return nil
 	}
 
+	// we should allow multiple mgmt uris
+	mgmtUri = cfg.ConsumerUri[0]
 	mgmt := Get()
 
 	var queueType rmq.QueueType

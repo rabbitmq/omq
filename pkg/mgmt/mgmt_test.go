@@ -19,7 +19,7 @@ var _ = Describe("DeclareAndBind", func() {
 
 	It("should declare and bind a classic queue", func() {
 		log.Setup()
-		cfg := config.Config{Queues: config.Classic, PublishTo: "/queues/mgmt-classic"}
+		cfg := config.Config{Queues: config.Classic, PublishTo: "/queues/mgmt-classic", ConsumerUri: []string{"amqp://guest:guest@localhost:5672/"}}
 		q := mgmt.DeclareAndBind(cfg, "mgmt-classic", 0)
 		Expect(q.Name()).To(Equal("mgmt-classic"))
 		Expect(string(q.Type())).To(Equal("classic"))
@@ -30,7 +30,7 @@ var _ = Describe("DeclareAndBind", func() {
 
 	It("should declare and bind a quorum queue", func() {
 		log.Setup()
-		cfg := config.Config{Queues: config.Quorum, PublishTo: "/queues/mgmt-quorum"}
+		cfg := config.Config{Queues: config.Quorum, PublishTo: "/queues/mgmt-quorum", ConsumerUri: []string{"amqp://guest:guest@localhost:5672/"}}
 		q := mgmt.DeclareAndBind(cfg, "mgmt-quorum", 0)
 		Expect(q.Name()).To(Equal("mgmt-quorum"))
 		Expect(string(q.Type())).To(Equal("quorum"))
@@ -41,7 +41,8 @@ var _ = Describe("DeclareAndBind", func() {
 
 	It("should declare and bind a stream queue", func() {
 		log.Setup()
-		cfg := config.Config{Queues: config.Stream, PublishTo: "/queues/mgmt-stream"}
+		cfg := config.Config{Queues: config.Stream, PublishTo: "/queues/mgmt-stream", ConsumerUri: []string{"amqp://guest:guest@localhost:5672/"}}
+
 		q := mgmt.DeclareAndBind(cfg, "mgmt-stream", 0)
 		Expect(q.Name()).To(Equal("mgmt-stream"))
 		Expect(string(q.Type())).To(Equal("stream"))
