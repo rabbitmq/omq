@@ -18,6 +18,15 @@ import (
 )
 
 var _ = Describe("OMQ CLI", func() {
+	Describe("executed without any commands/flags, displays its usage", func() {
+		It("should print help", func() {
+			session := omq([]string{})
+			Eventually(session).Should(gexec.Exit(0))
+			Eventually(session.Out).Should(gbytes.Say(`Available Commands:`))
+			Eventually(session.Out).Should(gbytes.Say(`Flags:`))
+		})
+	})
+
 	DescribeTable("supports any combination of protocols",
 		func(publishProto string, publishToPrefix string, consumeProto string, consumeFromPrefix string) {
 			publishTo := publishToPrefix + publishProto + consumeProto
