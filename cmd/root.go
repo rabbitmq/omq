@@ -23,6 +23,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/thediveo/enumflag/v2"
+
+	"github.com/hashicorp/memberlist"
 )
 
 var cfg config.Config
@@ -247,6 +249,8 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringArrayVar(&amqpAppProperties, "amqp-app-property", []string{}, "AMQP application properties, eg. key1=val1,val2")
 	rootCmd.PersistentFlags().StringArrayVar(&amqpAppPropertyFilters, "amqp-app-property-filter", []string{}, "AMQP application property filters, eg. key1=$p:prefix")
 	rootCmd.PersistentFlags().StringArrayVar(&amqpPropertyFilters, "amqp-property-filter", []string{}, "AMQP property filters, eg. key1=$p:prefix")
+	rootCmd.PersistentFlags().IntVar(&cfg.ExpectedInstances, "expected-instances", 1, "The number of instances to synchronize")
+	rootCmd.PersistentFlags().StringVar(&cfg.SyncName, "expected-instances-dns", "", "The DNS name that will return members to synchronize with")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)
@@ -263,6 +267,8 @@ func RootCmd() *cobra.Command {
 }
 
 func start(cfg config.Config) {
+	join_cluster(cfg.ExpectedInstances, cfg.SyncName)
+
 	if cfg.ConsumerLatency != 0 && cfg.ConsumerProto == config.MQTT {
 		fmt.Printf("Consumer latency is not supported for MQTT consumers")
 		os.Exit(1)
@@ -338,6 +344,44 @@ func start(cfg config.Config) {
 	m := metrics.GetMetricsServer()
 	m.PrintMessageRates(ctx)
 	wg.Wait()
+}
+
+func join_cluster(expectedInstance int, serviceName string) {
+	if expectedInstance == 1 {
+		return
+	}
+
+	if serviceName == "" {
+		log.Error("when --expected-instances is set, --expected-instances-dns must be set")
+		os.Exit(1)
+	}
+
+	list, err := memberlist.Create(memberlist.DefaultLANConfig())
+	if err != nil {
+		panic("Failed to create memberlist: " + err.Error())
+	}
+
+	// join the cluster
+	for {
+		_, err = list.Join([]string{serviceName})
+		if err == nil {
+			break
+		}
+		log.Info("failed to join cluster; retrying...", "error", err)
+		time.Sleep(time.Second)
+	}
+
+	// wait until the expected number of members is reached
+	for {
+		members := list.Members()
+		if len(members) >= expectedInstance {
+			log.Info("reached the expected number of instances", "expected instances", expectedInstance, "current cluster size", len(members))
+			break
+		}
+		log.Info("waiting for more instances to join the cluster", "expected instances", expectedInstance, "current cluster size", len(members))
+		time.Sleep(time.Second)
+	}
+
 }
 
 func startConsumers(ctx context.Context, consumerProto config.Protocol, wg *sync.WaitGroup) {
