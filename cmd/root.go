@@ -330,7 +330,7 @@ func start(cfg config.Config) {
 	}
 
 	if cfg.Duration > 0 {
-		log.Debug("Will stop all consumers and publishers at " + time.Now().Add(cfg.Duration).String())
+		log.Debug("will stop all consumers and publishers at " + time.Now().Add(cfg.Duration).String())
 		time.AfterFunc(cfg.Duration, func() { cancel() })
 	}
 

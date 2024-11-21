@@ -147,7 +147,7 @@ func parsePublishTo(publishTo string, id int) (string, string) {
 
 func DeleteDeclaredQueues() {
 	for _, queueName := range declaredQueues {
-		log.Debug("Deleting queue...", "name", queueName)
+		log.Debug("deleting queue...", "name", queueName)
 		err := Get().DeleteQueue(context.TODO(), queueName)
 		if err != nil {
 			log.Info("Failed to delete a queue", "queue", queueName, "error", err)

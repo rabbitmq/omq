@@ -77,7 +77,7 @@ func (p Mqtt5Publisher) StartRateLimited(ctx context.Context) {
 			p.Send()
 			msgSent++
 			if msgSent >= p.Config.PublishCount {
-				p.Stop("publish count reached")
+				p.Stop("--pmessages value reached")
 				return
 			}
 		}

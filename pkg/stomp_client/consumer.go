@@ -118,7 +118,7 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 
 			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
 				metrics.MessagesConsumedOutOfOrderMetric(priority).Inc()
-				log.Info("Out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
+				log.Info("out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
 			}
 			previousMessageTimeSent = timeSent
 
@@ -145,7 +145,7 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 
 	}
 
-	c.Stop("message count reached")
+	c.Stop("--cmessages value reached")
 	log.Debug("consumer finished", "id", c.Id)
 
 }

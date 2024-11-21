@@ -129,7 +129,7 @@ func (p *StompPublisher) StartRateLimited(ctx context.Context) {
 			} else {
 				msgSent++
 				if msgSent >= p.Config.PublishCount {
-					p.Stop("publish count reached")
+					p.Stop("--pmessages value reached")
 					return
 				}
 			}

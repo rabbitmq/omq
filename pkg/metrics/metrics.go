@@ -112,12 +112,12 @@ func (m *MetricsServer) Start() {
 			})
 			m.started = time.Now()
 			m.running = true
-			log.Debug("Starting Prometheus metrics server", "address", m.httpServer.Addr)
+			log.Debug("starting Prometheus metrics server", "address", m.httpServer.Addr)
 			err := m.httpServer.ListenAndServe()
 			if errors.Is(err, syscall.EADDRINUSE) {
 				port, _ := strconv.Atoi(strings.Split(m.httpServer.Addr, ":")[1])
 				m.httpServer.Addr = get_metrics_ip() + ":" + fmt.Sprint(port+1)
-				log.Info("Prometheus metrics: port already in use, trying the next one", "port", m.httpServer.Addr)
+				log.Info("prometheus metrics: port already in use, trying the next one", "port", m.httpServer.Addr)
 			}
 		}
 	}()

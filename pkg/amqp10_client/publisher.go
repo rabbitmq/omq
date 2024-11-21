@@ -202,7 +202,7 @@ func (p *Amqp10Publisher) StartRateLimited(ctx context.Context) {
 			} else {
 				msgSent++
 				if msgSent >= p.Config.PublishCount {
-					p.Stop("publish count reached")
+					p.Stop("--pmessages value reached")
 					return
 				}
 			}
@@ -243,13 +243,14 @@ func (p *Amqp10Publisher) Send() error {
 	startTime := time.Now()
 	err := p.Sender.Send(context.TODO(), msg, nil)
 	latency := time.Since(startTime)
+	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
 	var connErr *amqp.ConnError
 	var linkErr *amqp.LinkError
 	if errors.As(err, &connErr) {
-		log.Error("Publisher connection failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+		log.Error("publisher connection failure; reconnecting...", "id", p.Id, "error", connErr.Error())
 		return err
 	} else if errors.As(err, &linkErr) {
-		log.Error("Publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+		log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
 		return err
 	} else if err != nil {
 		log.Error("message sending failure", "id", p.Id, "error", err)
@@ -257,7 +258,6 @@ func (p *Amqp10Publisher) Send() error {
 	// rejected messages are not counted as published, maybe they should be?
 	metrics.MessagesPublished.Inc()
 	metrics.PublishingLatency.Update(latency.Seconds())
-	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
 	return nil
 }
 
