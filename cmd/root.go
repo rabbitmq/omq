@@ -6,11 +6,17 @@ import (
 	"math"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
@@ -250,7 +256,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringArrayVar(&amqpAppPropertyFilters, "amqp-app-property-filter", []string{}, "AMQP application property filters, eg. key1=$p:prefix")
 	rootCmd.PersistentFlags().StringArrayVar(&amqpPropertyFilters, "amqp-property-filter", []string{}, "AMQP property filters, eg. key1=$p:prefix")
 	rootCmd.PersistentFlags().IntVar(&cfg.ExpectedInstances, "expected-instances", 1, "The number of instances to synchronize")
-	rootCmd.PersistentFlags().StringVar(&cfg.SyncName, "expected-instances-dns", "", "The DNS name that will return members to synchronize with")
+	rootCmd.PersistentFlags().StringVar(&cfg.SyncName, "expected-instances-endpoint", "", "The DNS name that will return members to synchronize with")
 
 	rootCmd.AddCommand(amqp_amqp)
 	rootCmd.AddCommand(amqp_stomp)
@@ -352,10 +358,49 @@ func join_cluster(expectedInstance int, serviceName string) {
 	}
 
 	if serviceName == "" {
-		log.Error("when --expected-instances is set, --expected-instances-dns must be set")
+		log.Error("when --expected-instances is set, --expected-instances-endpoint must be set")
 		os.Exit(1)
 	}
 
+	// creates the in-cluster config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+	// creates the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	namespace := os.Getenv("MY_POD_NAMESPACE")
+	var endpoints *v1.Endpoints
+	var nodeCount int
+	for {
+		// wait until endpoints returns the expected number of instances
+		log.Info("getting endpoints", "name", serviceName)
+		endpoints, err = clientset.CoreV1().Endpoints(namespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+		if err != nil || len(endpoints.Subsets) == 0 {
+			log.Error("failed to retrieve endpoints; retrying...", "name", serviceName, "error", err)
+			time.Sleep(time.Second)
+			continue
+		}
+		nodeCount = len(endpoints.Subsets[0].Addresses)
+		if nodeCount >= expectedInstance {
+			log.Info("reached the expected number of instances", "expected instances", expectedInstance, "current instances", nodeCount)
+			break
+		}
+		log.Info("waiting for the expected number of IPs to be returned from the endpoint", "exepcted", expectedInstance, "current", nodeCount)
+		time.Sleep(time.Second)
+	}
+
+	ips := make([]string, len(endpoints.Subsets[0].Addresses))
+	for i, node := range endpoints.Subsets[0].Addresses {
+		ips[i] = node.IP
+	}
+	sort.Strings(ips)
+
+	log.Info("IPs found", "all", ips, "selected", ips[0])
 	list, err := memberlist.Create(memberlist.DefaultLANConfig())
 	if err != nil {
 		panic("Failed to create memberlist: " + err.Error())
@@ -363,7 +408,7 @@ func join_cluster(expectedInstance int, serviceName string) {
 
 	// join the cluster
 	for {
-		_, err = list.Join([]string{serviceName})
+		_, err = list.Join([]string{ips[0]})
 		if err == nil {
 			break
 		}
@@ -382,6 +427,12 @@ func join_cluster(expectedInstance int, serviceName string) {
 		time.Sleep(time.Second)
 	}
 
+	go func() {
+		time.Sleep(30 * time.Second)
+		log.Info("leaving the cluster")
+		_ = list.Leave(time.Second)
+		_ = list.Shutdown()
+	}()
 }
 
 func startConsumers(ctx context.Context, consumerProto config.Protocol, wg *sync.WaitGroup) {
