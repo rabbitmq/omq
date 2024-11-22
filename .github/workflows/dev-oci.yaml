@@ -1,0 +1,16 @@
+name: Publish dev OCI
+
+on: [push, pull_request]
+
+jobs:
+  publish:
+    name: Publish dev OCI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - uses: actions/checkout@v4
+
+      - uses: ko-build/setup-ko@v0.6
+      - run: ko build
