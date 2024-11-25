@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"os"
 	"os/signal"
 	"sort"
@@ -255,6 +256,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringArrayVar(&amqpAppPropertyFilters, "amqp-app-property-filter", []string{}, "AMQP application property filters, eg. key1=$p:prefix")
 	rootCmd.PersistentFlags().StringArrayVar(&amqpPropertyFilters, "amqp-property-filter", []string{}, "AMQP property filters, eg. key1=$p:prefix")
 	rootCmd.PersistentFlags().IntVar(&cfg.ExpectedInstances, "expected-instances", 1, "The number of instances to synchronize")
+	rootCmd.PersistentFlags().BoolVar(&cfg.SyncAll, "sync-all", true, "EXPERIMENTAL: use all IPs when joining memberlist cluster")
 	rootCmd.PersistentFlags().StringVar(&cfg.SyncName, "expected-instances-endpoint", "", "The DNS name that will return members to synchronize with")
 
 	rootCmd.AddCommand(amqp_amqp)
@@ -396,16 +398,29 @@ func join_cluster(expectedInstance int, serviceName string) {
 	}
 	sort.Strings(ips)
 
-	log.Info("IPs found", "all", ips, "selected", ips[0])
 	list, err := memberlist.Create(memberlist.DefaultLANConfig())
 	if err != nil {
 		panic("Failed to create memberlist: " + err.Error())
 	}
 
+	if cfg.SyncAll {
+		log.Info("joining all IPs found", "IPs", ips)
+	} else {
+		log.Info("IPs found", "all", ips, "selected", ips[0])
+	}
+
+	time.Sleep(time.Duration(1000+rand.IntN(1000)) * time.Millisecond)
+
 	// join the cluster
 	for {
-		_, err = list.Join([]string{ips[0]})
+		var n int
+		if cfg.SyncAll {
+			n, err = list.Join(ips)
+		} else {
+			n, err = list.Join([]string{ips[0]})
+		}
 		if err == nil {
+			log.Info("successfully joined a cluster", "cluster size", n)
 			break
 		}
 		log.Info("failed to join cluster; retrying...", "error", err)
