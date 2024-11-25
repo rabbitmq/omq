@@ -23,7 +23,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/mgmt"
-	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/rabbitmq/omq/pkg/version"
 
 	"github.com/spf13/cobra"
@@ -309,17 +308,14 @@ func start(cfg config.Config) {
 
 	// TODO
 	// refactor; make consumer startup delay more accurate
+	// clarfiy when queues are declared
 
+	mgmt.DeclareQueues(cfg)
 	// if --consumer-startup-delay is not set, we want to start
 	// all the consumers before we start any publishers
 	if cfg.ConsumerStartupDelay == 0 {
 		startConsumers(ctx, cfg.ConsumerProto, &wg)
 	} else {
-		// when consumers start with a delay, we still want the queues
-		// to be present so that publishers can create message backlogs
-		for i := 1; i <= cfg.Consumers; i++ {
-			mgmt.DeclareAndBind(cfg, utils.InjectId(cfg.ConsumeFrom, i), i)
-		}
 		go func() {
 			time.Sleep(cfg.ConsumerStartupDelay)
 			startConsumers(ctx, cfg.ConsumerProto, &wg)

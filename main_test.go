@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"os"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -133,7 +134,7 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 
-	Describe("Fan-In from MQTT to AMQP", func() {
+	Describe("supports Fan-In from MQTT to AMQP", func() {
 		It("should fan-in messages from MQTT to AMQP", func() {
 			args := []string{"mqtt-amqp",
 				"--publishers=3",
@@ -242,6 +243,95 @@ var _ = Describe("OMQ CLI", func() {
 		Entry("MQTT v5.0", "5", "MQTT 5-0"),
 		Entry("default to MQTT v5.0", "", "MQTT 5-0"),
 	)
+
+	Describe("declares queues for AMQP and STOMP clients", func() {
+		It("declares queues for AMQP consumers with /queues/ address", func() {
+			args := []string{"amqp",
+				"-y", "2",
+				"-x", "0",
+				"-T", "/queues/declare-without-publishers-%d",
+				"--queues", "classic",
+				"--cleanup-queues=true",
+				"--time", "10s",
+			}
+
+			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			Expect(err).ShouldNot(HaveOccurred())
+			session := omq(args)
+			Eventually(func() bool {
+				q1, err1 := rmqc.GetQueue("/", "declare-without-publishers-1")
+				q2, err2 := rmqc.GetQueue("/", "declare-without-publishers-2")
+				return err1 == nil && q1.Name == "declare-without-publishers-1" &&
+					err2 == nil && q2.Name == "declare-without-publishers-2"
+			}).WithTimeout(3 * time.Second).Should(BeTrue())
+
+			session.Signal(os.Signal(os.Interrupt))
+
+			// eventually the queue should be deleted
+			Eventually(func() bool {
+				_, err1 := rmqc.GetQueue("/", "declare-without-publishers-1")
+				_, err2 := rmqc.GetQueue("/", "declare-without-publishers-2")
+				return err1 != nil && strings.Contains(err1.Error(), "Object Not Found") &&
+					err2 != nil && strings.Contains(err2.Error(), "Object Not Found")
+			}).WithTimeout(3 * time.Second).Should(BeTrue())
+		})
+		It("declares queues for AMQP publishers with /queues/... address", func() {
+			args := []string{"amqp",
+				"-y", "0",
+				"-r", "1",
+				"-t", "/queues/declare-without-consumers",
+				"--queues", "classic",
+				"--cleanup-queues=true",
+				"--time", "10s",
+			}
+
+			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			Expect(err).ShouldNot(HaveOccurred())
+			session := omq(args)
+			Eventually(func() bool {
+				q, err := rmqc.GetQueue("/", "declare-without-consumers")
+				return err == nil && q.Name == "declare-without-consumers"
+			}).WithTimeout(3 * time.Second).Should(BeTrue())
+
+			session.Signal(os.Signal(os.Interrupt))
+
+			// eventually the queue should be deleted
+			Eventually(func() bool {
+				_, err := rmqc.GetQueue("/", "declare-without-consumers")
+				return err != nil
+			}).WithTimeout(3 * time.Second).Should(BeTrue())
+		})
+		It("declares queues for STOMP publishers and consumers with /amq/queue/... addresses", func() {
+			args := []string{"stomp",
+				"-r", "1",
+				"-t", "/amq/queue/stomp-declare-for-publisher",
+				"-T", "/amq/queue/stomp-declare-for-consumer",
+				"--queues", "quorum",
+				"--cleanup-queues=true",
+				"--time", "10s",
+			}
+
+			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			Expect(err).ShouldNot(HaveOccurred())
+			session := omq(args)
+			Eventually(func() bool {
+				q1, err1 := rmqc.GetQueue("/", "stomp-declare-for-consumer")
+				q2, err2 := rmqc.GetQueue("/", "stomp-declare-for-publisher")
+				return err1 == nil && q1.Name == "stomp-declare-for-consumer" &&
+					err2 == nil && q2.Name == "stomp-declare-for-publisher"
+			}).WithTimeout(3 * time.Second).Should(BeTrue())
+
+			session.Signal(os.Signal(os.Interrupt))
+
+			// eventually the queue should be deleted
+			Eventually(func() bool {
+				_, err1 := rmqc.GetQueue("/", "stomp-declare-for-consumer")
+				_, err2 := rmqc.GetQueue("/", "stomp-declare-for-publisher")
+				return err1 != nil && strings.Contains(err1.Error(), "Object Not Found") &&
+					err2 != nil && strings.Contains(err2.Error(), "Object Not Found")
+			})
+		})
+	})
 })
 
 func omq(args []string) *gexec.Session {
