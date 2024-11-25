@@ -11,7 +11,6 @@ import (
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
-	"github.com/rabbitmq/omq/pkg/mgmt"
 	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/relvacode/iso8601"
 
@@ -112,7 +111,6 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 	}
 
 	for c.Receiver == nil {
-		mgmt.DeclareAndBind(c.Config, c.Terminus, c.Id)
 		receiver, err := c.Session.NewReceiver(ctx,
 			c.Terminus,
 			&amqp.ReceiverOptions{
