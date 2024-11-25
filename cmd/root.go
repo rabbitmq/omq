@@ -186,6 +186,7 @@ func RootCmd() *cobra.Command {
 			}
 
 			metrics.RegisterMetrics(cfg.MetricTags)
+			metrics.RegisterCommandLineMetric(cfg, cfg.MetricTags)
 			metricsServer := metrics.GetMetricsServer()
 			metricsServer.Start()
 		},

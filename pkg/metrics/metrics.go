@@ -7,6 +7,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	vmetrics "github.com/VictoriaMetrics/metrics"
+	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 )
 
@@ -29,6 +31,7 @@ var lock = &sync.Mutex{}
 var metricsServer *MetricsServer
 
 var (
+	CommandLineArgs                          *vmetrics.Gauge
 	MessagesPublished                        *vmetrics.Counter
 	MessagesConsumedNormalPriority           *vmetrics.Counter
 	MessagesConsumedHighPriority             *vmetrics.Counter
@@ -53,6 +56,29 @@ func RegisterMetrics(globalLabels map[string]string) {
 	MessagesConsumedOutOfOrderHighPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + highPriorityLabels)
 	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`+labelsToString(globalLabels), 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
 	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labelsToString(globalLabels), 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
+}
+
+func RegisterCommandLineMetric(cfg config.Config, globalLabels map[string]string) {
+	var args []string
+	// some of the command line args are not useful in the metric
+	for _, arg := range os.Args[1:] {
+		if arg == "--print-all-metrics" {
+			continue
+		}
+		if strings.HasPrefix(arg, "--cleanup-queues") {
+			continue
+		}
+		if strings.HasPrefix(arg, "--expected-instances") {
+			continue
+		}
+		args = append(args, arg)
+	}
+
+	labels := map[string]string{
+		"command_line": strings.Join(args, " "),
+	}
+	maps.Copy(labels, globalLabels)
+	CommandLineArgs = vmetrics.GetOrCreateGauge("omq_args"+labelsToString(labels), func() float64 { return 1.0 })
 }
 
 func MessagesConsumedMetric(priority int) *vmetrics.Counter {

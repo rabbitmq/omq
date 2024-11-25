@@ -275,6 +275,7 @@ var _ = Describe("OMQ CLI", func() {
 					err2 != nil && strings.Contains(err2.Error(), "Object Not Found")
 			}).WithTimeout(3 * time.Second).Should(BeTrue())
 		})
+
 		It("declares queues for AMQP publishers with /queues/... address", func() {
 			args := []string{"amqp",
 				"-y", "0",
@@ -301,6 +302,7 @@ var _ = Describe("OMQ CLI", func() {
 				return err != nil
 			}).WithTimeout(3 * time.Second).Should(BeTrue())
 		})
+
 		It("declares queues for STOMP publishers and consumers with /amq/queue/... addresses", func() {
 			args := []string{"stomp",
 				"-r", "1",
@@ -330,6 +332,23 @@ var _ = Describe("OMQ CLI", func() {
 				return err1 != nil && strings.Contains(err1.Error(), "Object Not Found") &&
 					err2 != nil && strings.Contains(err2.Error(), "Object Not Found")
 			})
+		})
+	})
+
+	Describe("exposes command line flags as a omq_args metric", func() {
+		It("should print omq_args", func() {
+			args := []string{"amqp",
+				"-t", "/queues/omq-args",
+				"-T", "/queues/omq-args",
+				"-C", "0",
+				"-D", "0",
+				"--queues", "classic",
+				"--cleanup-queues=true",
+				"--print-all-metrics",
+			}
+			session := omq(args)
+			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Out).Should(gbytes.Say(`omq_args{command_line="amqp -t /queues/omq-args -T /queues/omq-args -C 0 -D 0 --queues classic"} 1`))
 		})
 	})
 })
