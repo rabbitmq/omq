@@ -151,8 +151,6 @@ func parsePublishTo(publishTo string, id int) (string, string) {
 	exchange := ""
 	routingKey := ""
 
-	log.Info("parser", "part0", parts[0], "part1", parts[1], "part2", parts[2])
-
 	if parts[1] == "queues" {
 		exchange = "amq.default"
 		routingKey = parts[2]
