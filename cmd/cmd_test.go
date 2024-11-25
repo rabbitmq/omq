@@ -5,7 +5,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("end-to-end latency uses nanoseconds only if we have both publishers and consumers", func() {
+var _ = Describe("end-to-end latency uses nanoseconds only if we have both publishers and consumers", Serial, func() {
 	It("should use nanoseconds when no -x / -y flags are used", func() {
 		args := []string{"amqp", "-C", "0", "-D", "0", "-t", "/topic/foobar", "-T", "/topic/foobar"}
 		rootCmd := RootCmd()
