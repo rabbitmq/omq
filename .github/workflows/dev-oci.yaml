@@ -1,6 +1,6 @@
 name: Publish dev OCI
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
   publish:

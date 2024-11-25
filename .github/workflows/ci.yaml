@@ -1,6 +1,6 @@
 name: CI
 
-on: [push, pull_request]
+on: [push]
 
 env:
   TEST_STATS_DELAY: 5000
