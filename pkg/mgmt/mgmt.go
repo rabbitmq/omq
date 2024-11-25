@@ -28,7 +28,7 @@ func Get() rmq.IManagement {
 		if err == nil {
 			break
 		}
-		log.Error("can't establish a management connection; retrying...", "error", err)
+		log.Error("can't establish a management connection; retrying...", "uri", mgmtUri, "error", err)
 		time.Sleep(time.Second)
 	}
 	log.Debug("management connection established", "uri", mgmtUri)
@@ -36,13 +36,54 @@ func Get() rmq.IManagement {
 	return conn.Management()
 }
 
+func DeclareQueues(cfg config.Config) {
+	// declare queues for AMQP publishers
+	if cfg.PublisherProto == config.AMQP && strings.HasPrefix(cfg.PublishTo, "/queues/") {
+		queueName := strings.TrimPrefix(cfg.PublishTo, "/queues/")
+		for i := 1; i <= cfg.Publishers; i++ {
+			DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+		}
+	}
+	// declare queues for AMQP consumers
+	if cfg.ConsumerProto == config.AMQP {
+		if strings.HasPrefix(cfg.ConsumeFrom, "/queues/") {
+			for i := 1; i <= cfg.Consumers; i++ {
+				queueName := strings.TrimPrefix(cfg.ConsumeFrom, "/queues/")
+				DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+			}
+		} else {
+			log.Info("Not declaring queues for AMQP consumers since the address doesn't start with /queues/")
+		}
+	}
+	// declare queues for STOMP publishers
+	if cfg.PublisherProto == config.STOMP && strings.HasPrefix(cfg.PublishTo, "/amq/queue/") {
+		queueName := strings.TrimPrefix(cfg.PublishTo, "/amq/queue/")
+		for i := 1; i <= cfg.Publishers; i++ {
+			DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+		}
+	}
+	// declare queues for STOMP consumers
+	if cfg.ConsumerProto == config.STOMP && strings.HasPrefix(cfg.ConsumeFrom, "/amq/queue/") {
+		queueName := strings.TrimPrefix(cfg.ConsumeFrom, "/amq/queue/")
+		for i := 1; i <= cfg.Consumers; i++ {
+			DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+		}
+	}
+}
+
 func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo {
 	if cfg.Queues == config.Predeclared {
 		return nil
 	}
 
-	// we should allow multiple mgmt uris
+	// TODO we should allow multiple mgmt uris
 	mgmtUri = cfg.ConsumerUri[0]
+	// TODO this is very naive, although should work for many cases
+	if strings.HasPrefix(mgmtUri, "stomp://") {
+		mgmtUri = strings.TrimPrefix(mgmtUri, "stomp://")
+		mgmtUri = "amqp://" + mgmtUri
+		mgmtUri = strings.Replace(mgmtUri, "61613", "5672", 1)
+	}
 	mgmt := Get()
 
 	var queueType rmq.QueueType
@@ -55,7 +96,6 @@ func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo 
 		queueType = rmq.QueueType{Type: rmq.Stream}
 	}
 
-	queueName = strings.TrimPrefix(queueName, "/queues/")
 	qi, err := mgmt.DeclareQueue(context.TODO(), &rmq.QueueSpecification{
 		Name:      queueName,
 		QueueType: queueType,
@@ -111,6 +151,8 @@ func parsePublishTo(publishTo string, id int) (string, string) {
 	exchange := ""
 	routingKey := ""
 
+	log.Info("parser", "part0", parts[0], "part1", parts[1], "part2", parts[2])
+
 	if parts[1] == "queues" {
 		exchange = "amq.default"
 		routingKey = parts[2]
@@ -123,6 +165,12 @@ func parsePublishTo(publishTo string, id int) (string, string) {
 	if parts[1] == "exchanges" && len(parts) == 4 {
 		exchange = parts[2]
 		routingKey = parts[3]
+	}
+
+	// STOMP publishing to /topic/:key
+	if parts[1] == "amq" && parts[2] == "queue" && len(parts) == 4 {
+		exchange = "amq.default"
+		routingKey = ""
 	}
 
 	// STOMP publishing to /topic/:key
