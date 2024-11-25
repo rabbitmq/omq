@@ -117,3 +117,10 @@ func Rate(rate float32) string {
 		return strconv.FormatFloat(float64(rate), 'f', -1, 64)
 	}
 }
+
+func RateTicker(rate float32) *time.Ticker {
+	if rate == 0 {
+		return nil
+	}
+	return time.NewTicker(time.Duration(1_000_000/float64(rate)) * time.Microsecond)
+}

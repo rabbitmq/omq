@@ -65,7 +65,7 @@ func (p Mqtt5Publisher) StartIdle(ctx context.Context) {
 
 func (p Mqtt5Publisher) StartRateLimited(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
-	ticker := time.NewTicker(time.Duration(1000/float64(p.Config.Rate)) * time.Millisecond)
+	ticker := utils.RateTicker(p.Config.Rate)
 
 	msgSent := 0
 	for {

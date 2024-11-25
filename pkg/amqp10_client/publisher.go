@@ -187,7 +187,7 @@ func (p *Amqp10Publisher) StartIdle(ctx context.Context) {
 }
 
 func (p *Amqp10Publisher) StartRateLimited(ctx context.Context) {
-	ticker := time.NewTicker(time.Duration(1_000_000/float64(p.Config.Rate)) * time.Microsecond)
+	ticker := utils.RateTicker(p.Config.Rate / float32(p.Config.MaxInFlight))
 
 	msgSent := 0
 	for {
