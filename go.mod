@@ -2,10 +2,8 @@ module github.com/rabbitmq/omq
 
 go 1.23.0
 
-replace github.com/Azure/go-amqp => github.com/mkuratczyk/go-amqp v0.0.0-20241014095613-d9376f5f2d9f
-
 require (
-	github.com/Azure/go-amqp v1.2.0
+	github.com/Azure/go-amqp v1.2.1-0.20241125140114-d6da29576273
 	github.com/VictoriaMetrics/metrics v1.35.1
 	github.com/charmbracelet/log v0.4.0
 	github.com/eclipse/paho.golang v0.22.0
@@ -18,6 +16,7 @@ require (
 	github.com/relvacode/iso8601 v1.6.0
 	github.com/spf13/cobra v1.8.1
 	github.com/thediveo/enumflag/v2 v2.0.5
+	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
 	k8s.io/api v0.31.3
 	k8s.io/apimachinery v0.31.3
 	k8s.io/client-go v0.31.3
@@ -70,7 +69,6 @@ require (
 	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/histogram v1.2.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.31.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect

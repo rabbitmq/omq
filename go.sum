@@ -1,3 +1,5 @@
+github.com/Azure/go-amqp v1.2.1-0.20241125140114-d6da29576273 h1:8F2z9GrwjEQjxT0L9uUxqtzCp0UGy+FN7aztELAuwuE=
+github.com/Azure/go-amqp v1.2.1-0.20241125140114-d6da29576273/go.mod h1:vZAogwdrkbyK3Mla8m/CxSc/aKdnTZ4IbPxl51Y5WZE=
 github.com/DataDog/datadog-go v3.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/VictoriaMetrics/metrics v1.35.1 h1:o84wtBKQbzLdDy14XeskkCZih6anG+veZ1SwJHFGwrU=
 github.com/VictoriaMetrics/metrics v1.35.1/go.mod h1:r7hveu6xMdUACXvB8TYdAj8WEsKzWB0EkpJN+RDtOf8=
@@ -164,8 +166,6 @@ github.com/michaelklishin/rabbit-hole v1.5.0 h1:Bex27BiFDsijCM9D0ezSHqyy0kehpYHu
 github.com/michaelklishin/rabbit-hole v1.5.0/go.mod h1:vvI1uOitYZi0O5HEGXhaWC1XT80Gy+HvFheJ+5Krlhk=
 github.com/miekg/dns v1.1.62 h1:cN8OuEF1/x5Rq6Np+h1epln8OiyPWV+lROx9LxcGgIQ=
 github.com/miekg/dns v1.1.62/go.mod h1:mvDlcItzm+br7MToIKqkglaGhlFMHJ9DTNNWONWXbNQ=
-github.com/mkuratczyk/go-amqp v0.0.0-20241014095613-d9376f5f2d9f h1:WVdm43rq1NhTOuRrxn73Tw4j9rrrC/ilOEKWTYxFWqo=
-github.com/mkuratczyk/go-amqp v0.0.0-20241014095613-d9376f5f2d9f/go.mod h1:vZAogwdrkbyK3Mla8m/CxSc/aKdnTZ4IbPxl51Y5WZE=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
