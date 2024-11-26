@@ -184,11 +184,6 @@ func RootCmd() *cobra.Command {
 			if cmd.Use != "version" {
 				setUris(&cfg, cmd.Use)
 			}
-
-			metrics.RegisterMetrics(cfg.MetricTags)
-			metrics.RegisterCommandLineMetric(cfg, cfg.MetricTags)
-			metricsServer := metrics.GetMetricsServer()
-			metricsServer.Start()
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			mgmt.DeleteDeclaredQueues()
@@ -274,8 +269,6 @@ func RootCmd() *cobra.Command {
 }
 
 func start(cfg config.Config) {
-	join_cluster(cfg.ExpectedInstances, cfg.SyncName)
-
 	if cfg.ConsumerLatency != 0 && cfg.ConsumerProto == config.MQTT {
 		fmt.Printf("Consumer latency is not supported for MQTT consumers")
 		os.Exit(1)
@@ -285,6 +278,10 @@ func start(cfg config.Config) {
 		fmt.Printf("max-in-flight > 1 is only supported for AMQP publishers")
 		os.Exit(1)
 	}
+
+	join_cluster(cfg.ExpectedInstances, cfg.SyncName)
+
+	start_metrics(cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -438,6 +435,13 @@ func join_cluster(expectedInstance int, serviceName string) {
 	}()
 }
 
+func start_metrics(cfg config.Config) {
+	metrics.RegisterMetrics(cfg.MetricTags)
+	metrics.RegisterCommandLineMetric(cfg, cfg.MetricTags)
+	metricsServer := metrics.GetMetricsServer()
+	metricsServer.Start()
+
+}
 func startConsumers(ctx context.Context, consumerProto config.Protocol, wg *sync.WaitGroup) {
 	for i := 1; i <= cfg.Consumers; i++ {
 		subscribed := make(chan bool)
