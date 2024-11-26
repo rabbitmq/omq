@@ -18,6 +18,7 @@ import (
 	vmetrics "github.com/VictoriaMetrics/metrics"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
+	"golang.org/x/exp/slices"
 )
 
 type MetricsServer struct {
@@ -61,14 +62,18 @@ func RegisterMetrics(globalLabels map[string]string) {
 func RegisterCommandLineMetric(cfg config.Config, globalLabels map[string]string) {
 	var args []string
 	// some of the command line args are not useful in the metric
+	ignoredArgs := []string{
+		"--print-all-metrics",
+		"--cleanup-queues",
+		"--expected-instances",
+		"--uri",
+		"--consumer-uri",
+		"--publisher-uri",
+	}
+	ignoredArgs = append(ignoredArgs, cfg.ConsumerUri...)
+	ignoredArgs = append(ignoredArgs, cfg.PublisherUri...)
 	for _, arg := range os.Args[1:] {
-		if arg == "--print-all-metrics" {
-			continue
-		}
-		if strings.HasPrefix(arg, "--cleanup-queues") {
-			continue
-		}
-		if strings.HasPrefix(arg, "--expected-instances") {
+		if slices.ContainsFunc(ignoredArgs, func(a string) bool { return strings.HasPrefix(arg, a) }) {
 			continue
 		}
 		args = append(args, arg)
