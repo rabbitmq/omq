@@ -151,6 +151,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			msg, err := c.Receiver.Receive(ctx, nil)
 			if err != nil {
 				if err == context.Canceled {
+					c.Stop("context canceled")
 					return
 				}
 				log.Error("failed to receive a message", "id", c.Id, "terminus", c.Terminus, "error", err.Error())
@@ -234,7 +235,7 @@ func (c *Amqp10Consumer) Stop(reason string) {
 	if err != nil {
 		log.Info("consumer stopped with an error", "id", c.Id, "error", err.Error())
 	}
-	log.Debug("consumer stopped", "id", c.Id)
+	log.Debug("consumer stopped", "id", c.Id, "reason", reason)
 }
 
 func buildLinkProperties(cfg config.Config) map[string]any {

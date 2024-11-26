@@ -170,6 +170,7 @@ func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
 	for msgSent := 0; msgSent < p.Config.PublishCount; {
 		select {
 		case <-ctx.Done():
+			p.Stop("time limit reached")
 			return
 		default:
 			err := p.Send()
