@@ -65,7 +65,6 @@ type MqttOptions struct {
 type Config struct {
 	ExpectedInstances    int
 	SyncName             string
-	SyncAll              bool // experimental
 	ConsumerProto        Protocol
 	PublisherProto       Protocol
 	PublisherId          string
