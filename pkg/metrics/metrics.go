@@ -69,6 +69,7 @@ func RegisterCommandLineMetric(cfg config.Config, globalLabels map[string]string
 		"--uri",
 		"--consumer-uri",
 		"--publisher-uri",
+		"--metric-tags",
 	}
 	ignoredArgs = append(ignoredArgs, cfg.ConsumerUri...)
 	ignoredArgs = append(ignoredArgs, cfg.PublisherUri...)
