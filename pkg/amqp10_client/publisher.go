@@ -103,6 +103,7 @@ func (p *Amqp10Publisher) Connect() {
 }
 
 func (p *Amqp10Publisher) CreateSender() {
+	// TODO do we need this?
 	var durability amqp.Durability
 	switch p.Config.QueueDurability {
 	case config.None:

@@ -19,7 +19,7 @@ declare a queue, use `--queues`; see below for more about topic/queue/routing ke
 A more complex example:
 ```shell
 $ omq mqtt-amqp --publishers 10 --publish-to 'sensor/%d' --rate 1 --size 100 \
-                --consumers 1 --consume-from /queues/sensors --amqp-binding-key 'sensor.#' --queues classic
+                --consumers 1 --consume-from /queues/sensors --binding-key 'sensor.#' --queues classic
 ```
 will start 10 MQTT publishers, each publishing 1 message a second, with 100 bytes of payload, to the `amq.topic` exchange (default for the MQTT plugin)
 with the topic/routing key of `sensor/%d`, where the `%d` is the ID of the publisher (from 1 to 10). It will also start a single AMQP 1.0 consumer that
@@ -130,7 +130,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
 ```
       --amqp-app-property stringArray           AMQP application properties, eg. key1=val1,val2
       --amqp-app-property-filter stringArray    AMQP application property filters, eg. key1=$p:prefix
-      --amqp-binding-key string                 AMQP 1.0 consumer binding key
+      --binding-key string                      AMQP 1.0 consumer binding key
       --amqp-property-filter stringArray        AMQP property filters, eg. subject=foo
       --amqp-reject-rate int                    Rate of messages to reject (0-100%)
       --amqp-release-rate int                   Rate of messages to release without accepting (0-100%)

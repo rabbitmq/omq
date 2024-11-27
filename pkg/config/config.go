@@ -50,7 +50,6 @@ type AmqpOptions struct {
 	SendSettled        bool
 	ReleaseRate        int
 	RejectRate         int
-	BindingKey         string
 	PropertyFilters    map[string]string
 	AppProperties      map[string][]string
 	AppPropertyFilters map[string]string
@@ -80,6 +79,7 @@ type Config struct {
 	PublishTo            string
 	ConsumeFrom          string
 	Queues               QueueType
+	BindingKey           string
 	CleanupQueues        bool
 	ConsumerCredits      int
 	ConsumerLatency      time.Duration

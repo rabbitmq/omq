@@ -121,8 +121,8 @@ func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo 
 	}
 
 	// explicitly set routing key overrides everything else
-	if cfg.Amqp.BindingKey != "" {
-		routingKey = utils.InjectId(cfg.Amqp.BindingKey, id)
+	if cfg.BindingKey != "" {
+		routingKey = utils.InjectId(cfg.BindingKey, id)
 	}
 
 	if exchangeName != "amq.default" {
