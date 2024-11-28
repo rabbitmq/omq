@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/go-amqp"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
@@ -24,7 +25,10 @@ func Get() rmq.IManagement {
 	}
 
 	for {
-		conn, err = rmq.Dial(context.TODO(), mgmtUri, nil)
+		conn, err = rmq.Dial(context.TODO(), mgmtUri, &amqp.ConnOptions{
+			SASLType:    amqp.SASLTypeAnonymous(),
+			ContainerID: "omq-management",
+		})
 		if err == nil {
 			break
 		}
