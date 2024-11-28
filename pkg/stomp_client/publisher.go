@@ -109,7 +109,7 @@ func (p *StompPublisher) StartFullSpeed(ctx context.Context) {
 func (p *StompPublisher) StartIdle(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", "-", "destination", p.Topic)
 
-	_ = ctx.Done()
+	<-ctx.Done()
 }
 
 func (p *StompPublisher) StartRateLimited(ctx context.Context) {

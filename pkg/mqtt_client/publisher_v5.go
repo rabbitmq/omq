@@ -60,7 +60,7 @@ func (p Mqtt5Publisher) StartFullSpeed(ctx context.Context) {
 func (p Mqtt5Publisher) StartIdle(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", "-", "destination", p.Topic)
 
-	_ = ctx.Done()
+	<-ctx.Done()
 }
 
 func (p Mqtt5Publisher) StartRateLimited(ctx context.Context) {

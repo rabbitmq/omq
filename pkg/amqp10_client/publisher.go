@@ -185,7 +185,7 @@ func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
 }
 
 func (p *Amqp10Publisher) StartIdle(ctx context.Context) {
-	_ = ctx.Done()
+	<-ctx.Done()
 }
 
 func (p *Amqp10Publisher) StartRateLimited(ctx context.Context) {
