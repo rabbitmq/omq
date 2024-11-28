@@ -265,6 +265,9 @@ func (p *Amqp10Publisher) Send() error {
 
 func (p *Amqp10Publisher) Stop(reason string) {
 	log.Debug("closing connection", "id", p.Id, "reason", reason)
+	if p.Session != nil {
+		_ = p.Session.Close(context.Background())
+	}
 	if p.Connection != nil {
 		_ = p.Connection.Close()
 	}
