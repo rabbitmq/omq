@@ -188,6 +188,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
 			outcome, err := c.outcome(ctx, msg)
 			if err != nil {
 				if err == context.Canceled {
+					c.Stop("context canceled")
 					return
 				}
 				log.Error("failed to "+outcome+" message", "id", c.Id, "terminus", c.Terminus, "error", err)
@@ -231,6 +232,7 @@ func pastTense(outcome string) string {
 }
 
 func (c *Amqp10Consumer) Stop(reason string) {
+	_ = c.Session.Close(context.Background())
 	err := c.Connection.Close()
 	if err != nil {
 		log.Info("consumer stopped with an error", "id", c.Id, "error", err.Error())
