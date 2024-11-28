@@ -265,7 +265,7 @@ const sampleKubernetesResponse = `
 }
 `
 
-var _ = FDescribe("parseEndpoints", func() {
+var _ = Describe("parseEndpoints", func() {
 	It("returns the correct list of IP addresses from sampleKubernetesResponse", func() {
 		ipAddresses, err := parseEndpoints([]byte(sampleKubernetesResponse))
 		Expect(err).NotTo(HaveOccurred())
