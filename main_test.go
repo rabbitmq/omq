@@ -160,7 +160,7 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 
-	FDescribe("supports --consumer-startup-delay", func() {
+	Describe("supports --consumer-startup-delay", func() {
 		It("should start consumers after the configured delay", func() {
 			args := []string{
 				"amqp",
