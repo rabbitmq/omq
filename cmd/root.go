@@ -14,16 +14,12 @@ import (
 	"syscall"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-
 	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/mgmt"
+	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/rabbitmq/omq/pkg/version"
 
 	"github.com/spf13/cobra"
@@ -399,42 +395,25 @@ func join_cluster(expectedInstance int, serviceName string) {
 		os.Exit(1)
 	}
 
-	// creates the in-cluster config
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
-	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	namespace := os.Getenv("MY_POD_NAMESPACE")
-	var endpoints *v1.Endpoints
-	var nodeCount int
+	var ips []string
+	var err error
 	for {
 		// wait until endpoints returns the expected number of instances
 		log.Info("getting endpoints", "name", serviceName)
-		endpoints, err = clientset.CoreV1().Endpoints(namespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
-		if err != nil || len(endpoints.Subsets) == 0 {
+		ips, err = utils.GetEndpoints(serviceName)
+		if err != nil {
 			log.Error("failed to retrieve endpoints; retrying...", "name", serviceName, "error", err)
 			time.Sleep(time.Second)
 			continue
 		}
-		nodeCount = len(endpoints.Subsets[0].Addresses)
-		if nodeCount >= expectedInstance {
-			log.Info("reached the expected number of instances", "expected instances", expectedInstance, "current instances", nodeCount)
+		if len(ips) >= expectedInstance {
+			log.Info("reached the expected number of instances", "expected instances", expectedInstance, "current instances", len(ips))
 			break
 		}
-		log.Info("waiting for the expected number of IPs to be returned from the endpoint", "exepcted", expectedInstance, "current", nodeCount)
+		log.Info("waiting for the expected number of IPs to be returned from the endpoint", "exepcted", expectedInstance, "current", len(ips))
 		time.Sleep(time.Second)
 	}
 
-	ips := make([]string, len(endpoints.Subsets[0].Addresses))
-	for i, node := range endpoints.Subsets[0].Addresses {
-		ips[i] = node.IP
-	}
 	sort.Strings(ips)
 
 	list, err := memberlist.Create(memberlist.DefaultLANConfig())
