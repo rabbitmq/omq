@@ -22,7 +22,7 @@ type Publisher interface {
 	Start(context.Context)
 }
 
-func NewConsumer(cfg config.Config, id int) Consumer {
+func NewConsumer(ctx context.Context, cfg config.Config, id int) Consumer {
 
 	topic := utils.InjectId(cfg.ConsumeFrom, id)
 	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
@@ -46,7 +46,7 @@ func NewConsumer(cfg config.Config, id int) Consumer {
 
 }
 
-func NewPublisher(cfg config.Config, id int) Publisher {
+func NewPublisher(ctx context.Context, cfg config.Config, id int) Publisher {
 	topic := utils.InjectId(cfg.PublishTo, id)
 	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix
 	// since MQTT has no concept of exchanges, we need to remove it

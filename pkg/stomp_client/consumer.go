@@ -23,7 +23,7 @@ type StompConsumer struct {
 	whichUri     int
 }
 
-func NewConsumer(cfg config.Config, id int) *StompConsumer {
+func NewConsumer(ctx context.Context, cfg config.Config, id int) *StompConsumer {
 
 	consumer := &StompConsumer{
 		Id:           id,

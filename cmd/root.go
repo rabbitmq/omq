@@ -341,36 +341,32 @@ func start(cfg config.Config) {
 	}()
 
 	var wg sync.WaitGroup
-	wg.Add(cfg.Publishers + cfg.Consumers)
 
 	// TODO
 	// refactor; make consumer startup delay more accurate
 	// clarfiy when queues are declared
 
 	mgmt.DeclareQueues(cfg)
-	// if --consumer-startup-delay is not set, we want to start
-	// all the consumers before we start any publishers
-	if cfg.ConsumerStartupDelay == 0 {
-		startConsumers(ctx, cfg.ConsumerProto, &wg)
-	} else {
-		go func() {
-			time.Sleep(cfg.ConsumerStartupDelay)
-			startConsumers(ctx, cfg.ConsumerProto, &wg)
-		}()
-	}
+	startConsumers(ctx, cfg.ConsumerProto, &wg)
 
 	if cfg.Publishers > 0 {
 		for i := 1; i <= cfg.Publishers; i++ {
-			n := i
-			go func() {
-				defer wg.Done()
-				p, err := common.NewPublisher(cfg.PublisherProto, cfg, n)
-				if err != nil {
-					log.Error("Error creating publisher: ", "error", err)
-					os.Exit(1)
-				}
-				p.Start(ctx)
-			}()
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				n := i
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					p, err := common.NewPublisher(ctx, cfg.PublisherProto, cfg, n)
+					if err != nil {
+						log.Error("Error creating publisher: ", "error", err)
+						os.Exit(1)
+					}
+					p.Start(ctx)
+				}()
+			}
 		}
 	}
 
@@ -465,20 +461,29 @@ func start_metrics(cfg config.Config) {
 }
 func startConsumers(ctx context.Context, consumerProto config.Protocol, wg *sync.WaitGroup) {
 	for i := 1; i <= cfg.Consumers; i++ {
-		subscribed := make(chan bool)
-		n := i
-		go func() {
-			defer wg.Done()
-			c, err := common.NewConsumer(consumerProto, cfg, n)
-			if err != nil {
-				log.Error("Error creating consumer: ", "error", err)
-				os.Exit(1)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			subscribed := make(chan bool)
+			n := i
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				time.Sleep(cfg.ConsumerStartupDelay)
+				c, err := common.NewConsumer(ctx, consumerProto, cfg, n)
+				if err != nil {
+					log.Error("Error creating consumer: ", "error", err)
+					os.Exit(1)
+				}
+				c.Start(ctx, subscribed)
+			}()
+			// consumers are started one by one and synchronously,
+			// unless a startup delay is set - then we just fire them and hope for the best
+			if cfg.ConsumerStartupDelay == 0 {
+				<-subscribed
 			}
-			c.Start(ctx, subscribed)
-		}()
-
-		// wait until we know the receiver has subscribed
-		<-subscribed
+		}
 	}
 }
 

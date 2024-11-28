@@ -18,22 +18,22 @@ type Consumer interface {
 	Start(context.Context, chan bool)
 }
 
-func NewPublisher(protocol config.Protocol, cfg config.Config, id int) (Publisher, error) {
+func NewPublisher(ctx context.Context, protocol config.Protocol, cfg config.Config, id int) (Publisher, error) {
 	switch protocol {
 	case config.AMQP:
-		p := amqp10_client.NewPublisher(cfg, id)
+		p := amqp10_client.NewPublisher(ctx, cfg, id)
 		if p == nil {
 			return nil, fmt.Errorf("failed to create an AMQP-1.0 publisher")
 		}
 		return p, nil
 	case config.STOMP:
-		p := stomp_client.NewPublisher(cfg, id)
+		p := stomp_client.NewPublisher(ctx, cfg, id)
 		if p == nil {
 			return nil, fmt.Errorf("failed to create a STOMP publisher")
 		}
 		return p, nil
 	case config.MQTT:
-		p := mqtt_client.NewPublisher(cfg, id)
+		p := mqtt_client.NewPublisher(ctx, cfg, id)
 		if p == nil {
 			return nil, fmt.Errorf("failed to create an MQTT publisher")
 		}
@@ -43,22 +43,22 @@ func NewPublisher(protocol config.Protocol, cfg config.Config, id int) (Publishe
 	return nil, fmt.Errorf("unknown protocol")
 }
 
-func NewConsumer(protocol config.Protocol, cfg config.Config, id int) (Consumer, error) {
+func NewConsumer(ctx context.Context, protocol config.Protocol, cfg config.Config, id int) (Consumer, error) {
 	switch protocol {
 	case config.AMQP:
-		c := amqp10_client.NewConsumer(cfg, id)
+		c := amqp10_client.NewConsumer(ctx, cfg, id)
 		if c == nil {
 			return nil, fmt.Errorf("failed to create an AMQP-1.0 consumer")
 		}
 		return c, nil
 	case config.STOMP:
-		c := stomp_client.NewConsumer(cfg, id)
+		c := stomp_client.NewConsumer(ctx, cfg, id)
 		if c == nil {
 			return nil, fmt.Errorf("failed to create a STOMP consumer")
 		}
 		return c, nil
 	case config.MQTT:
-		c := mqtt_client.NewConsumer(cfg, id)
+		c := mqtt_client.NewConsumer(ctx, cfg, id)
 		if c == nil {
 			return nil, fmt.Errorf("failed to create an MQTT consumer")
 		}

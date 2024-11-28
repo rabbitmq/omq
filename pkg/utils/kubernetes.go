@@ -31,7 +31,7 @@ func GetEndpoints(serviceName string) ([]string, error) {
 		log.Error("Can't read the Kubernetes token", "error", err.Error())
 		os.Exit(1)
 	}
-	var bearer = "Bearer " + string(token)
+	bearer := "Bearer " + string(token)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -56,7 +56,6 @@ func GetEndpoints(serviceName string) ([]string, error) {
 
 	client := &http.Client{Transport: tr}
 	resp, err := client.Do(req)
-
 	if err != nil {
 		log.Error("Can't connect to the Kubernetes API", "error", err.Error())
 		os.Exit(1)

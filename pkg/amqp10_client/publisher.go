@@ -27,9 +27,10 @@ type Amqp10Publisher struct {
 	Config     config.Config
 	msg        []byte
 	whichUri   int
+	ctx        context.Context
 }
 
-func NewPublisher(cfg config.Config, id int) *Amqp10Publisher {
+func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publisher {
 	publisher := &Amqp10Publisher{
 		Id:         id,
 		Connection: nil,
@@ -37,6 +38,7 @@ func NewPublisher(cfg config.Config, id int) *Amqp10Publisher {
 		Config:     cfg,
 		Terminus:   utils.InjectId(cfg.PublishTo, id),
 		whichUri:   0,
+		ctx:        ctx,
 	}
 
 	if cfg.SpreadConnections {
@@ -81,7 +83,12 @@ func (p *Amqp10Publisher) Connect() {
 
 		if err != nil {
 			log.Error("connection failed", "id", p.Id, "error", err.Error())
-			time.Sleep(1 * time.Second)
+			select {
+			case <-time.After(1 * time.Second):
+				continue
+			case <-p.ctx.Done():
+				return
+			}
 		} else {
 			log.Debug("connection established", "id", p.Id, "uri", uri)
 			p.Connection = conn

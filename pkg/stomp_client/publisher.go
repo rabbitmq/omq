@@ -24,7 +24,7 @@ type StompPublisher struct {
 	whichUri   int
 }
 
-func NewPublisher(cfg config.Config, id int) *StompPublisher {
+func NewPublisher(ctx context.Context, cfg config.Config, id int) *StompPublisher {
 	publisher := &StompPublisher{
 		Id:         id,
 		Connection: nil,

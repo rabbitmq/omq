@@ -27,9 +27,10 @@ type Amqp10Consumer struct {
 	Terminus   string
 	Config     config.Config
 	whichUri   int
+	ctx        context.Context
 }
 
-func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
+func NewConsumer(ctx context.Context, cfg config.Config, id int) *Amqp10Consumer {
 	consumer := &Amqp10Consumer{
 		Id:         id,
 		Connection: nil,
@@ -38,6 +39,7 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 		Terminus:   utils.InjectId(cfg.ConsumeFrom, id),
 		Config:     cfg,
 		whichUri:   0,
+		ctx:        ctx,
 	}
 
 	if cfg.SpreadConnections {
@@ -45,7 +47,7 @@ func NewConsumer(cfg config.Config, id int) *Amqp10Consumer {
 	}
 
 	// TODO: context?
-	consumer.Connect(context.TODO())
+	consumer.Connect(ctx)
 
 	return consumer
 }
@@ -81,7 +83,12 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 		})
 		if err != nil {
 			log.Error("consumer failed to connect", "id", c.Id, "error", err.Error())
-			time.Sleep(1 * time.Second)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
+				continue
+			}
 		} else {
 			log.Debug("consumer connected", "id", c.Id, "uri", uri)
 			c.Connection = conn
@@ -110,23 +117,28 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 		durability = amqp.DurabilityUnsettledState
 	}
 
-	for c.Receiver == nil {
-		receiver, err := c.Session.NewReceiver(ctx,
-			c.Terminus,
-			&amqp.ReceiverOptions{
-				SourceDurability: durability,
-				Credit:           int32(c.Config.ConsumerCredits),
-				Properties:       buildLinkProperties(c.Config),
-				Filters:          buildLinkFilters(c.Config),
-			})
-		if err != nil {
-			if err == context.Canceled {
-				return
+	for c.Receiver == nil && c.Session != nil {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			receiver, err := c.Session.NewReceiver(context.TODO(),
+				c.Terminus,
+				&amqp.ReceiverOptions{
+					SourceDurability: durability,
+					Credit:           int32(c.Config.ConsumerCredits),
+					Properties:       buildLinkProperties(c.Config),
+					Filters:          buildLinkFilters(c.Config),
+				})
+			if err != nil {
+				if err == context.Canceled {
+					return
+				}
+				log.Error("consumer failed to create a receiver", "id", c.Id, "error", err.Error())
+				time.Sleep(1 * time.Second)
+			} else {
+				c.Receiver = receiver
 			}
-			log.Error("consumer failed to create a receiver", "id", c.Id, "error", err.Error())
-			time.Sleep(1 * time.Second)
-		} else {
-			c.Receiver = receiver
 		}
 	}
 }
@@ -232,10 +244,11 @@ func pastTense(outcome string) string {
 }
 
 func (c *Amqp10Consumer) Stop(reason string) {
-	_ = c.Session.Close(context.Background())
-	err := c.Connection.Close()
-	if err != nil {
-		log.Info("consumer stopped with an error", "id", c.Id, "error", err.Error())
+	if c.Session != nil {
+		_ = c.Session.Close(context.Background())
+	}
+	if c.Connection != nil {
+		_ = c.Connection.Close()
 	}
 	log.Debug("consumer stopped", "id", c.Id, "reason", reason)
 }
