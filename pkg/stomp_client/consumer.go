@@ -24,7 +24,6 @@ type StompConsumer struct {
 }
 
 func NewConsumer(ctx context.Context, cfg config.Config, id int) *StompConsumer {
-
 	consumer := &StompConsumer{
 		Id:           id,
 		Connection:   nil,
@@ -76,7 +75,6 @@ func (c *StompConsumer) Connect() {
 			c.Connection = conn
 		}
 	}
-
 }
 
 func (c *StompConsumer) Subscribe() {
@@ -132,7 +130,6 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 			err := c.Connection.Ack(msg)
 			if err != nil {
 				log.Error("message NOT acknowledged", "id", c.Id, "destination", c.Topic)
-
 			} else {
 				metrics.MessagesConsumedMetric(priority).Inc()
 				i++
@@ -147,7 +144,6 @@ func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
 
 	c.Stop("--cmessages value reached")
 	log.Debug("consumer finished", "id", c.Id)
-
 }
 
 func (c *StompConsumer) Stop(reason string) {

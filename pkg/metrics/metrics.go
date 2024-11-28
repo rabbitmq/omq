@@ -121,12 +121,11 @@ func GetMetricsServer() *MetricsServer {
 			vmetrics.WritePrometheus(w, true)
 		})
 
-		metricsServer =
-			&MetricsServer{
-				httpServer: &http.Server{
-					Addr: get_metrics_ip() + ":8080",
-				},
-			}
+		metricsServer = &MetricsServer{
+			httpServer: &http.Server{
+				Addr: get_metrics_ip() + ":8080",
+			},
+		}
 	}
 
 	return metricsServer
@@ -155,8 +154,10 @@ func (m *MetricsServer) Start() {
 	}()
 }
 
-var previouslyPublished uint64
-var previouslyConsumed uint64
+var (
+	previouslyPublished uint64
+	previouslyConsumed  uint64
+)
 
 func (m *MetricsServer) PrintMessageRates(ctx context.Context) {
 	go func() {
@@ -176,7 +177,6 @@ func (m *MetricsServer) PrintMessageRates(ctx context.Context) {
 				previouslyConsumed = consumed
 
 			}
-
 		}
 	}()
 }

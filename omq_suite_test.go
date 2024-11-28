@@ -13,10 +13,12 @@ func TestOmq(t *testing.T) {
 	RunSpecs(t, "OMQ Suite")
 }
 
-var omqPath string
-var _ = BeforeSuite(func() {
-	var err error
-	omqPath, err = gexec.Build("github.com/rabbitmq/omq")
-	Expect(err).NotTo(HaveOccurred())
-	DeferCleanup(gexec.CleanupBuildArtifacts)
-})
+var (
+	omqPath string
+	_       = BeforeSuite(func() {
+		var err error
+		omqPath, err = gexec.Build("github.com/rabbitmq/omq")
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(gexec.CleanupBuildArtifacts)
+	})
+)

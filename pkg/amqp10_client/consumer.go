@@ -282,7 +282,8 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 		filters = append(filters, amqp.NewLinkFilter("amqp:application-properties-filter",
 			0,
 			map[string]any{
-				appProperty: filterExpression}))
+				appProperty: filterExpression,
+			}))
 	}
 
 	for property, filterExpression := range cfg.Amqp.PropertyFilters {
@@ -290,7 +291,8 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 			amqp.NewLinkFilter("amqp:properties-filter",
 				0,
 				map[amqp.Symbol]any{
-					amqp.Symbol(property): filterExpression}))
+					amqp.Symbol(property): filterExpression,
+				}))
 	}
 	return filters
 }

@@ -90,7 +90,7 @@ func (p *Amqp10Publisher) Connect() {
 				return
 			}
 		} else {
-			log.Debug("connection established", "id", p.Id, "uri", uri)
+			log.Debug("publisher connected", "id", p.Id, "uri", uri)
 			p.Connection = conn
 		}
 	}
@@ -129,7 +129,8 @@ func (p *Amqp10Publisher) CreateSender() {
 	for p.Sender == nil {
 		sender, err := p.Session.NewSender(context.TODO(), p.Terminus, &amqp.SenderOptions{
 			SettlementMode:   settleMode,
-			TargetDurability: durability})
+			TargetDurability: durability,
+		})
 		if err != nil {
 			log.Error("publisher failed to create a sender", "id", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)

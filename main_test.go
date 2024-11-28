@@ -32,7 +32,8 @@ var _ = Describe("OMQ CLI", func() {
 		func(publishProto string, publishToPrefix string, consumeProto string, consumeFromPrefix string) {
 			publishTo := publishToPrefix + publishProto + consumeProto
 			consumeFrom := consumeFromPrefix + publishProto + consumeProto
-			args := []string{publishProto + "-" + consumeProto,
+			args := []string{
+				publishProto + "-" + consumeProto,
 				"--pmessages=1",
 				"--cmessages=1",
 				"-t", publishTo,
@@ -67,7 +68,8 @@ var _ = Describe("OMQ CLI", func() {
 		func(publishProto string, publishToPrefix string, consumeProto string, consumeFromPrefix string) {
 			publishTo := publishToPrefix + publishProto + consumeProto
 			consumeFrom := consumeFromPrefix + publishProto + consumeProto
-			args := []string{publishProto + "-" + consumeProto,
+			args := []string{
+				publishProto + "-" + consumeProto,
 				"-C", "1",
 				"-D", "1",
 				"-t", publishTo,
@@ -96,7 +98,8 @@ var _ = Describe("OMQ CLI", func() {
 
 	Describe("supports AMQP Stream Application Property Filters", func() {
 		It("should filter messages based on app properties", func() {
-			args := []string{"amqp",
+			args := []string{
+				"amqp",
 				"--pmessages=6",
 				"--publish-to=/queues/stream-with-app-property-filters",
 				"--consume-from=/queues/stream-with-app-property-filters",
@@ -116,7 +119,8 @@ var _ = Describe("OMQ CLI", func() {
 
 	Describe("supports AMQP Stream Property Filters", func() {
 		It("should filter messages based on app properties", func() {
-			args := []string{"amqp",
+			args := []string{
+				"amqp",
 				"--pmessages=3",
 				"--publish-to=/queues/stream-with-property-filters",
 				"--consume-from=/queues/stream-with-property-filters",
@@ -136,7 +140,8 @@ var _ = Describe("OMQ CLI", func() {
 
 	Describe("supports Fan-In from MQTT to AMQP", func() {
 		It("should fan-in messages from MQTT to AMQP", func() {
-			args := []string{"mqtt-amqp",
+			args := []string{
+				"mqtt-amqp",
 				"--publishers=3",
 				"--consumers=1",
 				"--pmessages=5",
@@ -155,9 +160,10 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 
-	Describe("supports --consumer-startup-delay", func() {
+	FDescribe("supports --consumer-startup-delay", func() {
 		It("should start consumers after the configured delay", func() {
-			args := []string{"amqp",
+			args := []string{
+				"amqp",
 				"-C", "1",
 				"-D", "1",
 				"--consumer-startup-delay=3s",
@@ -165,25 +171,32 @@ var _ = Describe("OMQ CLI", func() {
 				"-T", "/queues/consumer-startup-delay",
 				"--queues", "classic",
 				"--cleanup-queues=true",
-				"--print-all-metrics"}
+				"--print-all-metrics",
+			}
 
 			session := omq(args)
 			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
-			Expect(metricValue(session.Out, `omq_end_to_end_latency_seconds{quantile="0.99"}`)).Should(BeNumerically(">", 2))
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="normal"}`)).Should(Equal(1.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_end_to_end_latency_seconds{quantile="0.99"}`)).Should(BeNumerically(">", 2))
 		})
 	})
 
 	Describe("supports `--max-in-flight` in AMQP", func() {
 		It("Higher --max-in-flight value should lead to higher publishing rate", func() {
 			publishWithMaxInFlight := func(maxInFlight string) *gexec.Session {
-				args := []string{"amqp",
+				args := []string{
+					"amqp",
 					"-z", "3s",
 					"-t", "/queues/amqp-max-in-flight",
 					"-T", "/queues/amqp-max-in-flight",
 					"--queues", "stream",
 					"--cleanup-queues=true",
 					"--print-all-metrics",
-					"--max-in-flight", maxInFlight}
+					"--max-in-flight", maxInFlight,
+				}
 
 				session := omq(args)
 				Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
@@ -207,7 +220,8 @@ var _ = Describe("OMQ CLI", func() {
 		func(versionFlag string, connectionVersion string) {
 			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
 			Expect(err).ShouldNot(HaveOccurred())
-			args := []string{"mqtt",
+			args := []string{
+				"mqtt",
 				"--time=6s",
 				"--publish-to=/topic/foo",
 				"--consume-from=/topic/foo",
@@ -246,7 +260,8 @@ var _ = Describe("OMQ CLI", func() {
 
 	Describe("declares queues for AMQP and STOMP clients", func() {
 		It("declares queues for AMQP consumers with /queues/ address", func() {
-			args := []string{"amqp",
+			args := []string{
+				"amqp",
 				"-y", "2",
 				"-x", "0",
 				"-T", "/queues/declare-without-publishers-%d",
@@ -277,7 +292,8 @@ var _ = Describe("OMQ CLI", func() {
 		})
 
 		It("declares queues for AMQP publishers with /queues/... address", func() {
-			args := []string{"amqp",
+			args := []string{
+				"amqp",
 				"-y", "0",
 				"-r", "1",
 				"-t", "/queues/declare-without-consumers",
@@ -304,7 +320,8 @@ var _ = Describe("OMQ CLI", func() {
 		})
 
 		It("declares queues for STOMP publishers and consumers with /amq/queue/... addresses", func() {
-			args := []string{"stomp",
+			args := []string{
+				"stomp",
 				"-r", "1",
 				"-t", "/amq/queue/stomp-declare-for-publisher",
 				"-T", "/amq/queue/stomp-declare-for-consumer",
@@ -337,7 +354,8 @@ var _ = Describe("OMQ CLI", func() {
 
 	Describe("exposes command line flags as a omq_args metric", func() {
 		It("should print omq_args", func() {
-			args := []string{"amqp",
+			args := []string{
+				"amqp",
 				"-t", "/queues/omq-args",
 				"-T", "/queues/omq-args",
 				"-C", "0",

@@ -23,7 +23,6 @@ type Publisher interface {
 }
 
 func NewConsumer(ctx context.Context, cfg config.Config, id int) Consumer {
-
 	topic := utils.InjectId(cfg.ConsumeFrom, id)
 	topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
 	topic = strings.TrimPrefix(topic, "/topic/")
@@ -43,7 +42,6 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) Consumer {
 			Config:     cfg,
 		}
 	}
-
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) Publisher {
@@ -71,7 +69,6 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) Publisher {
 			Config:     cfg,
 		}
 	}
-
 }
 
 func newMqtt34Connection(cfg config.Config, id int) mqtt.Client {

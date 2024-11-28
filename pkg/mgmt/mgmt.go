@@ -13,9 +13,11 @@ import (
 	rmq "github.com/rabbitmq/rabbitmq-amqp-go-client/rabbitmq_amqp"
 )
 
-var mgmtConn *rmq.IConnection
-var declaredQueues []string
-var mgmtUri string
+var (
+	mgmtConn       *rmq.IConnection
+	declaredQueues []string
+	mgmtUri        string
+)
 
 func Get() rmq.IManagement {
 	var conn rmq.IConnection

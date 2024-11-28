@@ -43,10 +43,12 @@ var (
 	versionCmd  = &cobra.Command{}
 )
 
-var metricTags []string
-var amqpAppProperties []string
-var amqpAppPropertyFilters []string
-var amqpPropertyFilters []string
+var (
+	metricTags             []string
+	amqpAppProperties      []string
+	amqpAppPropertyFilters []string
+	amqpPropertyFilters    []string
+)
 
 func Execute() {
 	rootCmd := RootCmd()
@@ -457,8 +459,8 @@ func start_metrics(cfg config.Config) {
 	metrics.RegisterCommandLineMetric(cfg, cfg.MetricTags)
 	metricsServer := metrics.GetMetricsServer()
 	metricsServer.Start()
-
 }
+
 func startConsumers(ctx context.Context, consumerProto config.Protocol, wg *sync.WaitGroup) {
 	for i := 1; i <= cfg.Consumers; i++ {
 		select {
