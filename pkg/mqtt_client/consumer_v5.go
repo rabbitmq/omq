@@ -50,7 +50,10 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 			log.Info("consumer connected", "id", c.Id, "topic", c.Topic)
 			if _, err := cm.Subscribe(context.Background(), &paho.Subscribe{
 				Subscriptions: []paho.SubscribeOptions{
-					{Topic: c.Topic, QoS: 1},
+					{
+						Topic: c.Topic,
+						QoS:   byte(c.Config.MqttConsumer.QoS),
+					},
 				},
 			}); err != nil {
 				fmt.Printf("failed to subscribe (%s). This is likely to mean no messages will be received.", err)
