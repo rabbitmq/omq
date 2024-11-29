@@ -19,12 +19,59 @@ import (
 )
 
 var _ = Describe("OMQ CLI", func() {
-	Describe("executed without any commands/flags, displays its usage", func() {
-		It("should print help", func() {
+	Describe("basic start/stop functionality", func() {
+		It("executed without any commands/flags, displays its usage", func() {
 			session := omq([]string{})
 			Eventually(session).Should(gexec.Exit(0))
 			Eventually(session.Out).Should(gbytes.Say(`Available Commands:`))
 			Eventually(session.Out).Should(gbytes.Say(`Flags:`))
+		})
+		It("--time limit stops omq quickly", func() {
+			args := []string{
+				"mqtt",
+				"--publishers=100",
+				"--publish-to=sensor/%d",
+				"--rate=1",
+				"--consumers=100",
+				"--consume-from=/queues/sensors",
+				"--binding-key=sensor.#",
+				"--time", "5s",
+			}
+			session := omq(args)
+			// wait until metrics are printed (after consuemrs connected and publishers were spawned)
+			Eventually(session.Err).WithTimeout(10 * time.Second).Should(gbytes.Say(`published=`))
+			// from that moment, it should terminate roughly in 5 seconds
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+		})
+		It("^C can stop omq while it's trying to connect", func() {
+			args := []string{
+				"amqp",
+				"--uri", "amqp://foobar:5672",
+			}
+			session := omq(args)
+			// wait until metrics are printed (after consuemrs connected and publishers were spawned)
+			Eventually(session.Err).WithTimeout(5 * time.Second).Should(gbytes.Say(`consumer failed to connect`))
+			// from that moment, it should terminate roughly in 5 seconds
+			session.Signal(os.Signal(os.Interrupt))
+			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(0))
+		})
+		It("^C can stop omq while it's publishing and consuming", func() {
+			args := []string{
+				"mqtt",
+				"--publishers=2",
+				"--publish-to=sensor/%d",
+				"--rate=1",
+				"--consumers=2",
+				"--consume-from=/queues/sensors",
+				"--binding-key=sensor.#",
+			}
+			session := omq(args)
+			// wait until metrics are printed (after consuemrs connected and publishers were spawned)
+			Eventually(session.Err).WithTimeout(5 * time.Second).Should(gbytes.Say(`published=`))
+			// from that moment, it should terminate roughly in 5 seconds
+			time.Sleep(2 * time.Second)
+			session.Signal(os.Signal(os.Interrupt))
+			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(0))
 		})
 	})
 
