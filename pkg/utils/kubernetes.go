@@ -66,7 +66,6 @@ func GetEndpoints(serviceName string) ([]string, error) {
 	if err != nil {
 		log.Error("", "error", err)
 	}
-	log.Info(string(responseData))
 	return parseEndpoints(responseData)
 }
 
