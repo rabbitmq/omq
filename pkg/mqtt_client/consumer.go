@@ -19,6 +19,16 @@ type MqttConsumer struct {
 	Config     config.Config
 }
 
+func NewMqttConsumer(cfg config.Config, id int) MqttConsumer {
+	topic := publisherTopic(cfg.ConsumeFrom, id)
+	return MqttConsumer{
+		Id:         id,
+		Connection: nil,
+		Topic:      topic,
+		Config:     cfg,
+	}
+}
+
 func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 	msgsReceived := 0
 	previousMessageTimeSent := time.Unix(0, 0)

@@ -30,11 +30,11 @@ var _ = Describe("OMQ CLI", func() {
 			args := []string{
 				"mqtt",
 				"--publishers=100",
-				"--publish-to=sensor/%d",
+				"--publish-to=time/%d",
 				"--rate=1",
 				"--consumers=100",
-				"--consume-from=/queues/sensors",
-				"--binding-key=sensor.#",
+				"--consume-from=/queues/time",
+				"--binding-key=time.#",
 				"--time", "5s",
 			}
 			session := omq(args)
@@ -68,11 +68,11 @@ var _ = Describe("OMQ CLI", func() {
 			args := []string{
 				"mqtt",
 				"--publishers=2",
-				"--publish-to=sensor/%d",
+				"--publish-to=can-stop-me-now/%d",
 				"--rate=1",
 				"--consumers=2",
-				"--consume-from=/queues/sensors",
-				"--binding-key=sensor.#",
+				"--consume-from=/queues/can-stop-me-now",
+				"--binding-key=can-stop-me-now.#",
 			}
 			session := omq(args)
 			// wait until metrics are printed (after consuemrs connected and publishers were spawned)
@@ -201,16 +201,16 @@ var _ = Describe("OMQ CLI", func() {
 				"--publishers=3",
 				"--consumers=1",
 				"--pmessages=5",
-				"--publish-to=sensor/%d",
-				"--consume-from=/queues/sensors",
-				"--binding-key=sensor.#",
+				"--publish-to=fan-in-mqtt-amqp",
+				"--consume-from=/queues/fan-in-mqtt-amqp",
+				"--binding-key=fan-in-mqtt-amqp",
 				"--queues=classic",
 				"--cleanup-queues=true",
-				"--time=2s",
+				"--time=5s",
 			}
 
 			session := omq(args)
-			Eventually(session).WithTimeout(4 * time.Second).Should(gexec.Exit(0))
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=15`))
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=15`))
 		})
@@ -278,11 +278,10 @@ var _ = Describe("OMQ CLI", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			args := []string{
 				"mqtt",
-				"--time=6s",
-				"--publish-to=/topic/foo",
-				"--consume-from=/topic/foo",
-				"--consumer-id=omq-test-%r",
-				"--publisher-id=omq-test-%r",
+				"--publish-to=/topic/omq-version-test-topic-" + versionFlag,
+				"--consume-from=/topic/omq-version-test-topic-" + versionFlag,
+				"--consumer-id=omq-version-test-consumer-" + versionFlag,
+				"--publisher-id=omq-version-test-publisher-" + versionFlag,
 				"--rate", "1",
 				"--print-all-metrics",
 			}
@@ -291,16 +290,24 @@ var _ = Describe("OMQ CLI", func() {
 				args = append(args, "--mqtt-consumer-version", versionFlag)
 			}
 			session := omq(args)
+			Eventually(session.Err).WithTimeout(5 * time.Second).Should(gbytes.Say(`published=`))
 
 			Eventually(func() bool {
 				conns, err := rmqc.ListConnections()
-				return err == nil &&
+				if err == nil &&
 					len(conns) >= 2 &&
 					slices.ContainsFunc(conns, func(conn rabbithole.ConnectionInfo) bool {
-						return conn.Protocol == connectionVersion
-					})
+						return conn.Protocol == connectionVersion &&
+							strings.HasPrefix(conn.ClientProperties["client_id"].(string), "omq-version-test")
+					}) {
+					return true
+				} else {
+					GinkgoWriter.Printf("\n--- time: %v    len: %v ---\n%+v\n---\n", time.Now(), len(conns), conns)
+					return false
+				}
 			}, 7*time.Second, 500*time.Millisecond).Should(BeTrue())
-			Eventually(session).WithTimeout(7 * time.Second).Should(gexec.Exit(0))
+			session.Signal(os.Signal(os.Interrupt))
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
 
 			output, _ := io.ReadAll(session.Out)
 			buf := bytes.NewReader(output)

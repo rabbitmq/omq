@@ -21,12 +21,28 @@ type MqttPublisher struct {
 	msg        []byte
 }
 
+func NewMqttPublisher(cfg config.Config, id int) MqttPublisher {
+	topic := publisherTopic(cfg.PublishTo, id)
+	return MqttPublisher{
+		Id:         id,
+		Connection: nil,
+		Topic:      topic,
+		Config:     cfg,
+	}
+}
+
 func (p MqttPublisher) Start(ctx context.Context) {
 	// sleep random interval to avoid all publishers publishing at the same time
 	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
 
-	defer p.Connection.Disconnect(250)
+	defer func() {
+		if p.Connection != nil {
+			p.Connection.Disconnect(250)
+		}
+	}()
+
+	p.Connect(ctx)
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
@@ -39,6 +55,51 @@ func (p MqttPublisher) Start(ctx context.Context) {
 		p.StartRateLimited(ctx)
 	}
 	log.Debug("publisher stopped", "id", p.Id)
+}
+
+func (p *MqttPublisher) Connect(ctx context.Context) {
+	var token mqtt.Token
+
+	opts := p.connectionOptions()
+	connection := mqtt.NewClient(opts)
+	for {
+		token = connection.Connect()
+		token.Wait()
+		if token.Error() == nil {
+			break
+		}
+		log.Error("publisher connection failed", "id", p.Id, "error", token.Error())
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(1 * time.Second):
+			continue
+		}
+	}
+	p.Connection = connection
+}
+
+func (p MqttPublisher) connectionOptions() *mqtt.ClientOptions {
+	opts := mqtt.NewClientOptions().
+		SetClientID(utils.InjectId(p.Config.PublisherId, p.Id)).
+		SetAutoReconnect(true).
+		SetCleanSession(p.Config.MqttPublisher.CleanSession).
+		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
+			log.Info("publisher connection lost", "id", p.Id)
+		}).
+		SetProtocolVersion(uint(p.Config.MqttPublisher.Version))
+
+	var j int
+	for i, n := range utils.WrappedSequence(len(p.Config.PublisherUri), p.Id-1) {
+		if p.Config.SpreadConnections {
+			j = n
+		} else {
+			j = i
+		}
+		parsedUri := utils.ParseURI(p.Config.PublisherUri[j], "mqtt", "1883")
+		opts.AddBroker(parsedUri.Broker).SetUsername(parsedUri.Username).SetPassword(parsedUri.Password)
+	}
+	return opts
 }
 
 func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
@@ -102,5 +163,7 @@ func (p MqttPublisher) Send() {
 
 func (p MqttPublisher) Stop(reason string) {
 	log.Debug("closing connection", "id", p.Id, "reason", reason)
-	p.Connection.Disconnect(250)
+	if p.Connection != nil {
+		p.Connection.Disconnect(250)
+	}
 }

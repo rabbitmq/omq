@@ -22,14 +22,28 @@ type Mqtt5Publisher struct {
 	msg        []byte
 }
 
+func NewMqtt5Publisher(cfg config.Config, id int) Mqtt5Publisher {
+	topic := publisherTopic(cfg.PublishTo, id)
+	return Mqtt5Publisher{
+		Id:         id,
+		Connection: nil,
+		Topic:      topic,
+		Config:     cfg,
+	}
+}
+
 func (p Mqtt5Publisher) Start(ctx context.Context) {
 	// sleep random interval to avoid all publishers publishing at the same time
 	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
 
 	defer func() {
-		_ = p.Connection.Disconnect(context.TODO())
+		if p.Connection != nil {
+			_ = p.Connection.Disconnect(context.TODO())
+		}
 	}()
+
+	p.Connect(ctx)
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
@@ -41,7 +55,46 @@ func (p Mqtt5Publisher) Start(ctx context.Context) {
 	default:
 		p.StartRateLimited(ctx)
 	}
+	// TODO it seems that sometimes if we stop quickly after sending
+	// a message, this message is not delivered, even though Publish
+	// is supposed to by synchronous; to be investigated
+	time.Sleep(500 * time.Millisecond)
 	log.Debug("publisher stopped", "id", p.Id)
+}
+
+func (p *Mqtt5Publisher) Connect(ctx context.Context) {
+	opts := p.connectionOptions()
+	connection, err := autopaho.NewConnection(context.TODO(), opts)
+	if err != nil {
+		log.Error("publisher connection failed", "id", p.Id, "error", err)
+	}
+	connection.AwaitConnection(ctx)
+	p.Connection = connection
+}
+
+func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
+	opts := autopaho.ClientConfig{
+		ServerUrls:                    stringsToUrls(p.Config.PublisherUri),
+		CleanStartOnInitialConnection: p.Config.MqttPublisher.CleanSession,
+		KeepAlive:                     20,
+		ConnectRetryDelay:             1 * time.Second,
+		OnConnectionUp: func(*autopaho.ConnectionManager, *paho.Connack) {
+			log.Info("publisher connected", "id", p.Id)
+		},
+		OnConnectError: func(err error) {
+			log.Info("publisher failed to connect ", "id", p.Id, "error", err)
+		},
+		ClientConfig: paho.ClientConfig{
+			ClientID: utils.InjectId(p.Config.PublisherId, p.Id),
+			OnClientError: func(err error) {
+				log.Error("publisher error", "id", p.Id, "error", err)
+			},
+			OnServerDisconnect: func(d *paho.Disconnect) {
+				log.Error("publisher disconnected", "id", p.Id, "reasonCode", d.ReasonCode, "reasonString", d.Properties.ReasonString)
+			},
+		},
+	}
+	return opts
 }
 
 func (p Mqtt5Publisher) StartFullSpeed(ctx context.Context) {
@@ -85,10 +138,6 @@ func (p Mqtt5Publisher) StartRateLimited(ctx context.Context) {
 }
 
 func (p Mqtt5Publisher) Send() {
-	// if !p.Connection.IsConnected() {
-	// 	time.Sleep(1 * time.Second)
-	// 	return
-	// }
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	startTime := time.Now()
 	_, err := p.Connection.Publish(context.TODO(), &paho.Publish{

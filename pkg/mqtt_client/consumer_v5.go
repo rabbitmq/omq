@@ -20,6 +20,16 @@ type Mqtt5Consumer struct {
 	Config     config.Config
 }
 
+func NewMqtt5Consumer(cfg config.Config, id int) Mqtt5Consumer {
+	topic := publisherTopic(cfg.ConsumeFrom, id)
+	return Mqtt5Consumer{
+		Id:         id,
+		Connection: nil,
+		Topic:      topic,
+		Config:     cfg,
+	}
+}
+
 func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 	msgsReceived := 0
 	previousMessageTimeSent := time.Unix(0, 0)
@@ -81,6 +91,7 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 	if err != nil {
 		log.Error("consumer connection failed", "id", c.Id, "error", err)
 	}
+	c.Connection.AwaitConnection(ctx)
 	close(subscribed)
 
 	// TODO: currently we can consume more than ConsumerCount messages
