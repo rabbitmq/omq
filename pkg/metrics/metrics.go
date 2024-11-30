@@ -169,13 +169,14 @@ func (m *MetricsServer) PrintMessageRates(ctx context.Context) {
 				published := MessagesPublished.Get()
 				consumed := MessagesConsumedNormalPriority.Get() + MessagesConsumedHighPriority.Get()
 
-				log.Print("",
-					"published", fmt.Sprintf("%v/s", published-previouslyPublished),
-					"consumed", fmt.Sprintf("%v/s", consumed-previouslyConsumed))
+				if published > 0 || consumed > 0 {
+					log.Print("",
+						"published", fmt.Sprintf("%v/s", published-previouslyPublished),
+						"consumed", fmt.Sprintf("%v/s", consumed-previouslyConsumed))
 
-				previouslyPublished = published
-				previouslyConsumed = consumed
-
+					previouslyPublished = published
+					previouslyConsumed = consumed
+				}
 			}
 		}
 	}()
