@@ -133,8 +133,12 @@ func (p *Amqp10Publisher) CreateSender() {
 		})
 		if err != nil {
 			log.Error("publisher failed to create a sender", "id", p.Id, "error", err.Error())
-			time.Sleep(1 * time.Second)
-			p.Connect()
+			select {
+			case <-p.ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
+				p.Connect()
+			}
 		} else {
 			p.Sender = sender
 		}

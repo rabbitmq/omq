@@ -49,9 +49,18 @@ var _ = Describe("OMQ CLI", func() {
 				"--uri", "amqp://foobar:5672",
 			}
 			session := omq(args)
-			// wait until metrics are printed (after consuemrs connected and publishers were spawned)
 			Eventually(session.Err).WithTimeout(5 * time.Second).Should(gbytes.Say(`consumer failed to connect`))
-			// from that moment, it should terminate roughly in 5 seconds
+			session.Signal(os.Signal(os.Interrupt))
+			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(0))
+		})
+		It("^C can stop omq while it's trying to create a sender", func() {
+			args := []string{
+				"amqp",
+				"-y", "0",
+				"-t", "/queues/no-such-queue",
+			}
+			session := omq(args)
+			Eventually(session.Err).WithTimeout(5 * time.Second).Should(gbytes.Say(`publisher failed to create a sender `))
 			session.Signal(os.Signal(os.Interrupt))
 			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(0))
 		})
