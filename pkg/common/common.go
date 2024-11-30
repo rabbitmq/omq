@@ -18,8 +18,8 @@ type Consumer interface {
 	Start(context.Context, chan bool)
 }
 
-func NewPublisher(ctx context.Context, protocol config.Protocol, cfg config.Config, id int) (Publisher, error) {
-	switch protocol {
+func NewPublisher(ctx context.Context, cfg config.Config, id int) (Publisher, error) {
+	switch cfg.PublisherProto {
 	case config.AMQP:
 		p := amqp10_client.NewPublisher(ctx, cfg, id)
 		if p == nil {

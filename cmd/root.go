@@ -361,7 +361,7 @@ func start(cfg config.Config) {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					p, err := common.NewPublisher(ctx, cfg.PublisherProto, cfg, n)
+					p, err := common.NewPublisher(ctx, cfg, n)
 					if err != nil {
 						log.Error("Error creating publisher: ", "error", err)
 						os.Exit(1)
