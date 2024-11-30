@@ -308,6 +308,8 @@ func RootCmd() *cobra.Command {
 }
 
 func start(cfg config.Config) {
+	// we can't do this in sanitizeConfig because we need to know
+	// the publisher and consumer protocols and these are set later on
 	if cfg.ConsumerLatency != 0 && cfg.ConsumerProto == config.MQTT {
 		fmt.Printf("Consumer latency is not supported for MQTT consumers")
 		os.Exit(1)
@@ -326,21 +328,7 @@ func start(cfg config.Config) {
 	defer cancel()
 
 	// handle ^C
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-		select {
-		case <-c:
-			cancel()
-			log.Print("Received SIGTERM, shutting down...")
-			// PersistentPostRun does all the cleanup
-			// this is just just a backup mechanism
-			time.Sleep(30 * time.Second)
-			os.Exit(0)
-		case <-ctx.Done():
-			return
-		}
-	}()
+	handleInterupt(ctx, cancel)
 
 	var wg sync.WaitGroup
 
@@ -349,28 +337,8 @@ func start(cfg config.Config) {
 	// clarfiy when queues are declared
 
 	mgmt.DeclareQueues(cfg)
-	startConsumers(ctx, cfg.ConsumerProto, &wg)
-
-	if cfg.Publishers > 0 {
-		for i := 1; i <= cfg.Publishers; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				n := i
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					p, err := common.NewPublisher(ctx, cfg, n)
-					if err != nil {
-						log.Error("Error creating publisher: ", "error", err)
-						os.Exit(1)
-					}
-					p.Start(ctx)
-				}()
-			}
-		}
-	}
+	startConsumers(ctx, &wg)
+	startPublishers(ctx, &wg)
 
 	if cfg.Duration > 0 {
 		log.Debug("will stop all consumers and publishers at " + time.Now().Add(cfg.Duration).String())
@@ -461,7 +429,7 @@ func start_metrics(cfg config.Config) {
 	metricsServer.Start()
 }
 
-func startConsumers(ctx context.Context, consumerProto config.Protocol, wg *sync.WaitGroup) {
+func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 	for i := 1; i <= cfg.Consumers; i++ {
 		select {
 		case <-ctx.Done():
@@ -473,7 +441,7 @@ func startConsumers(ctx context.Context, consumerProto config.Protocol, wg *sync
 			go func() {
 				defer wg.Done()
 				time.Sleep(cfg.ConsumerStartupDelay)
-				c, err := common.NewConsumer(ctx, consumerProto, cfg, n)
+				c, err := common.NewConsumer(ctx, cfg.ConsumerProto, cfg, n)
 				if err != nil {
 					log.Error("Error creating consumer: ", "error", err)
 					os.Exit(1)
@@ -485,6 +453,27 @@ func startConsumers(ctx context.Context, consumerProto config.Protocol, wg *sync
 			if cfg.ConsumerStartupDelay == 0 {
 				<-subscribed
 			}
+		}
+	}
+}
+
+func startPublishers(ctx context.Context, wg *sync.WaitGroup) {
+	for i := 1; i <= cfg.Publishers; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			n := i
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				p, err := common.NewPublisher(ctx, cfg, n)
+				if err != nil {
+					log.Error("Error creating publisher: ", "error", err)
+					os.Exit(1)
+				}
+				p.Start(ctx)
+			}()
 		}
 	}
 }
@@ -615,4 +604,22 @@ func sanitizeConfig(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+func handleInterupt(ctx context.Context, cancel context.CancelFunc) {
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		select {
+		case <-c:
+			cancel()
+			log.Print("Received SIGTERM, shutting down...")
+			// PersistentPostRun does all the cleanup
+			// this is just just a backup mechanism
+			time.Sleep(30 * time.Second)
+			os.Exit(0)
+		case <-ctx.Done():
+			return
+		}
+	}()
 }
