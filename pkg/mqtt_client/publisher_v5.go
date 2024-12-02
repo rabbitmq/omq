@@ -68,7 +68,11 @@ func (p *Mqtt5Publisher) Connect(ctx context.Context) {
 	if err != nil {
 		log.Error("publisher connection failed", "id", p.Id, "error", err)
 	}
-	connection.AwaitConnection(ctx)
+	err = connection.AwaitConnection(ctx)
+	if err != nil {
+		// AwaitConnection only returns an error if the context is cancelled
+		return
+	}
 	p.Connection = connection
 }
 

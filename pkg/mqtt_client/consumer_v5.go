@@ -91,7 +91,11 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 	if err != nil {
 		log.Error("consumer connection failed", "id", c.Id, "error", err)
 	}
-	c.Connection.AwaitConnection(ctx)
+	err = c.Connection.AwaitConnection(ctx)
+	if err != nil {
+		// AwaitConnection only returns an error if the context is cancelled
+		return
+	}
 	close(subscribed)
 
 	// TODO: currently we can consume more than ConsumerCount messages
