@@ -139,14 +139,19 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
       --mqtt-publisher-clean-session            MQTT publisher clean session (default true)
       --mqtt-publisher-qos int                  MQTT publisher QoS level (0, 1 or 2; default=0)
       --mqtt-publisher-version int              MQTT consumer protocol version (3, 4 or 5; default=5) (default 5)
-      --cleanup-queues                          Delete the queues at the end (only explicitly declared queues, not STOMP subscriptions)
+      --binding-key string                      Binding key for queue declarations
+      --cleanup-queues                          Delete the queues at the end (omq only deletes the queues it explicitly declared)
   -D, --cmessages int                           The number of messages to consume per consumer (default=MaxInt) (default 9223372036854775807)
-  -T, --consume-from string                     The queue/topic/terminus to consume from (%d will be replaced with the consumer's id) (default "/topic/omq")
+  -T, --consume-from string                     The queue/topic/terminus to consume from (%d will be replaced with the consumer's id) (default "/queues/omq-%d")
       --consumer-credits int                    AMQP-1.0 consumer credits / STOMP prefetch count (default 1)
-  -L, --consumer-latency duration               consumer latency (time to accept message; not supported by MQTT)
-      --consumer-priority int32                 Consumer priority (AMQP 1.0 and STOMP)
+      --consumer-id string                      Client ID for AMQP and MQTT consumers (%d => consumer's id, %r => random) (default "omq-consumer-%d")
+  -L, --consumer-latency duration               consumer latency (time to accept message)
+      --consumer-priority int32                 Consumer priority
+      --consumer-startup-delay duration         Delay consumer startup to allow a backlog of messages to build up (eg. 10s)
       --consumer-uri strings                    URI for consuming
   -y, --consumers int                           The number of consumers to start (default 1)
+      --expected-instances int                  The number of instances to synchronize (default 1)
+      --expected-instances-endpoint string      The DNS name that will return members to synchronize with
   -h, --help                                    help for omq
   -l, --log-level log-level                     Log level (debug, info, error) (default info)
       --log-out-of-order-messages               Print a log line when a message is received that is older than the previously received message
@@ -156,17 +161,18 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
       --message-ttl duration                    Message TTL (not set by default)
       --metric-tags strings                     Prometheus label-value pairs, eg. l1=v1,l2=v2
   -C, --pmessages int                           The number of messages to send per publisher (default 9223372036854775807)
-  -t, --publish-to string                       The topic/terminus to publish to (%d will be replaced with the publisher's id) (default "/topic/omq")
+      --print-all-metrics                       Print all metrics before exiting
+  -t, --publish-to string                       The topic/terminus to publish to (%d will be replaced with the publisher's id) (default "/queues/omq-%d")
+      --publisher-id string                     Client ID for AMQP and MQTT publishers (%d => consumer's id, %r => random) (default "omq-publisher-%d")
       --publisher-uri strings                   URI for publishing
   -x, --publishers int                          The number of publishers to start (default 1)
-      --queues predeclared                      Type of queues to declare (or predeclared to use existing queues) (default predeclared)
       --queue-durability queue-durability       Queue durability (default: configuration - the queue definition is durable) (default configuration)
-  -r, --rate float                              Messages per second (-1 = unlimited) (default -1)
+      --queues predeclared                      Type of queues to declare (or predeclared to use existing queues) (default predeclared)
+  -r, --rate float32                            Messages per second (-1 = unlimited) (default -1)
   -s, --size int                                Message payload size in bytes (default 12)
       --spread-connections                      Spread connections across URIs (default true)
-      --stream-filter-value-set string          Stream filter value for publisher
-      --stream-filter-values string             Stream consumer filter
       --stream-offset string                    Stream consumer offset specification (default=next)
   -z, --time duration                           Run duration (eg. 10s, 5m, 2h)
+      --uri strings                             URI for both publishers and consumers
   -m, --use-millis                              Use milliseconds for timestamps (automatically enabled when no publishers or no consumers)
 ```
