@@ -37,11 +37,7 @@ func (p Mqtt5Publisher) Start(ctx context.Context) {
 	s := rand.Intn(1000)
 	time.Sleep(time.Duration(s) * time.Millisecond)
 
-	defer func() {
-		if p.Connection != nil {
-			_ = p.Connection.Disconnect(context.TODO())
-		}
-	}()
+	defer p.Stop("shutting down")
 
 	p.Connect(ctx)
 
@@ -64,7 +60,7 @@ func (p Mqtt5Publisher) Start(ctx context.Context) {
 
 func (p *Mqtt5Publisher) Connect(ctx context.Context) {
 	opts := p.connectionOptions()
-	connection, err := autopaho.NewConnection(context.TODO(), opts)
+	connection, err := autopaho.NewConnection(ctx, opts)
 	if err != nil {
 		log.Error("publisher connection failed", "id", p.Id, "error", err)
 	}
@@ -161,5 +157,7 @@ func (p Mqtt5Publisher) Send() {
 
 func (p Mqtt5Publisher) Stop(reason string) {
 	log.Debug("closing connection", "id", p.Id, "reason", reason)
-	_ = p.Connection.Disconnect(context.TODO())
+	if p.Connection != nil {
+		_ = p.Connection.Disconnect(context.TODO())
+	}
 }

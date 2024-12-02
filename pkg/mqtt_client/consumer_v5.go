@@ -86,8 +86,10 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 		},
 	}
 
+	defer c.Stop("shutting down")
+
 	var err error
-	c.Connection, err = autopaho.NewConnection(context.TODO(), opts)
+	c.Connection, err = autopaho.NewConnection(ctx, opts)
 	if err != nil {
 		log.Error("consumer connection failed", "id", c.Id, "error", err)
 	}
@@ -114,5 +116,7 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 
 func (c Mqtt5Consumer) Stop(reason string) {
 	log.Debug("closing connection", "id", c.Id, "reason", reason)
-	_ = c.Connection.Disconnect(context.TODO())
+	if c.Connection != nil {
+		_ = c.Connection.Disconnect(context.TODO())
+	}
 }

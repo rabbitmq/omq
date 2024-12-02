@@ -616,7 +616,7 @@ func handleInterupt(ctx context.Context, cancel context.CancelFunc) {
 			log.Print("Received SIGTERM, shutting down...")
 			// PersistentPostRun does all the cleanup
 			// this is just just a backup mechanism
-			time.Sleep(30 * time.Second)
+			time.Sleep(5 * time.Second)
 			os.Exit(0)
 		case <-ctx.Done():
 			return
