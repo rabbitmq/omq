@@ -73,8 +73,12 @@ func (p *Mqtt5Publisher) Connect(ctx context.Context) {
 }
 
 func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
+	urls := stringsToUrls(p.Config.PublisherUri)
+	pass, _ := urls[0].User.Password()
 	opts := autopaho.ClientConfig{
-		ServerUrls:                    stringsToUrls(p.Config.PublisherUri),
+		ServerUrls:                    urls,
+		ConnectUsername:               urls[0].User.Username(),
+		ConnectPassword:               []byte(pass),
 		CleanStartOnInitialConnection: p.Config.MqttPublisher.CleanSession,
 		KeepAlive:                     20,
 		ConnectRetryDelay:             1 * time.Second,

@@ -51,8 +51,12 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 		return true, nil
 	}
 
+	urls := stringsToUrls(c.Config.ConsumerUri)
+	pass, _ := urls[0].User.Password()
 	opts := autopaho.ClientConfig{
-		ServerUrls:                    stringsToUrls(c.Config.ConsumerUri),
+		ServerUrls:                    urls,
+		ConnectUsername:               urls[0].User.Username(),
+		ConnectPassword:               []byte(pass),
 		CleanStartOnInitialConnection: c.Config.MqttConsumer.CleanSession,
 		KeepAlive:                     20,
 		ConnectRetryDelay:             1 * time.Second,
