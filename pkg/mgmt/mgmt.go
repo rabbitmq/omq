@@ -125,6 +125,11 @@ func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo 
 		routingKey = utils.InjectId(cfg.BindingKey, id)
 	}
 
+	// explicitly set exchange overrides everything else
+	if cfg.Exchange != "" {
+		exchangeName = cfg.Exchange
+	}
+
 	if exchangeName != "amq.default" {
 		_, err = mgmt.Bind(context.TODO(), &rmq.BindingSpecification{
 			SourceExchange:   exchangeName,

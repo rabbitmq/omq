@@ -267,6 +267,8 @@ func RootCmd() *cobra.Command {
 		"Queue durability (default: configuration - the queue definition is durable)")
 	rootCmd.PersistentFlags().StringVar(&cfg.BindingKey, "binding-key", "",
 		"Binding key for queue declarations")
+	rootCmd.PersistentFlags().StringVar(&cfg.Exchange, "exchange", "",
+		"Exchange for binding declarations")
 
 	// messages
 	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message payload size in bytes")

@@ -216,6 +216,25 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 
+	Describe("supports Fan-Out from AMQP to MQTT", func() {
+		It("should fan-out messages from AMQP to MQTT", func() {
+			args := []string{
+				"amqp-mqtt",
+				"--publishers=1",
+				"--consumers=10",
+				"--pmessages=5",
+				"--publish-to=/exchanges/amq.topic/broadcast",
+				"--consume-from=broadcast",
+				"--time=3s",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=5`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=50`))
+		})
+	})
+
 	Describe("supports --consumer-startup-delay", func() {
 		It("should start consumers after the configured delay", func() {
 			args := []string{

@@ -79,6 +79,7 @@ type Config struct {
 	PublishTo            string
 	ConsumeFrom          string
 	Queues               QueueType
+	Exchange             string
 	BindingKey           string
 	CleanupQueues        bool
 	ConsumerCredits      int
