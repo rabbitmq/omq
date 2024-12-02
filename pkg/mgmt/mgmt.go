@@ -118,13 +118,7 @@ func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo 
 		declaredQueues = append(declaredQueues, queueName)
 	}
 
-	var exchangeName, routingKey string
-	if cfg.PublisherProto == config.MQTT {
-		exchangeName = "amq.topic"
-		routingKey = utils.InjectId(strings.TrimPrefix(cfg.PublishTo, "/topic/"), id)
-	} else {
-		exchangeName, routingKey = parsePublishTo(cfg.PublishTo, id)
-	}
+	exchangeName, routingKey := parsePublishTo(cfg.PublisherProto, cfg.PublishTo, id)
 
 	// explicitly set routing key overrides everything else
 	if cfg.BindingKey != "" {
@@ -147,51 +141,61 @@ func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo 
 	return qi
 }
 
-func parsePublishTo(publishTo string, id int) (string, string) {
+func parsePublishTo(proto config.Protocol, publishTo string, id int) (string, string) {
 	parts := strings.Split(publishTo, "/")
 
-	if len(parts) < 2 {
+	if len(parts) < 2 && proto != config.MQTT {
 		return "amq.direct", utils.InjectId(parts[0], id)
 	}
 
 	exchange := ""
 	routingKey := ""
 
-	if parts[1] == "queues" {
-		exchange = "amq.default"
-		routingKey = parts[2]
+	if proto == config.AMQP {
+		if parts[1] == "queues" && len(parts) == 3 {
+			exchange = "amq.default"
+			routingKey = parts[2]
+		}
+
+		if parts[1] == "exchanges" && len(parts) == 3 {
+			exchange = parts[2]
+		}
+
+		if parts[1] == "exchanges" && len(parts) == 4 {
+			exchange = parts[2]
+			routingKey = parts[3]
+		}
 	}
 
-	if parts[1] == "exchanges" && len(parts) == 3 {
-		exchange = parts[2]
-	}
-
-	if parts[1] == "exchanges" && len(parts) == 4 {
-		exchange = parts[2]
-		routingKey = parts[3]
-	}
-
-	// STOMP publishing to /topic/:key
-	if parts[1] == "amq" && parts[2] == "queue" && len(parts) == 4 {
-		exchange = "amq.default"
-		routingKey = ""
-	}
-
-	// STOMP publishing to /topic/:key
-	if parts[1] == "topic" && len(parts) == 3 {
+	if proto == config.MQTT {
 		exchange = "amq.topic"
-		routingKey = parts[2]
+		routingKey = strings.TrimPrefix(publishTo, "/topic/")
 	}
 
-	// STOMP publishing to /exchange/:exchange
-	if parts[1] == "exchange" && len(parts) == 3 {
-		exchange = parts[2]
-	}
+	if proto == config.STOMP {
+		// STOMP publishing to /queue/:queue
+		if parts[1] == "queue" && len(parts) == 3 {
+			exchange = "amq.default"
+			routingKey = parts[2]
+		}
 
-	// STOMP publishing to /exchange/:exchange/:key
-	if parts[1] == "exchange" && len(parts) == 4 {
-		exchange = parts[2]
-		routingKey = parts[3]
+		// STOMP publishing to /amq/:queue
+		if parts[1] == "amq" && parts[2] == "queue" && len(parts) == 4 {
+			exchange = "amq.default"
+			routingKey = parts[3]
+		}
+
+		// STOMP publishing to /topic/:key
+		if parts[1] == "topic" && len(parts) == 3 {
+			exchange = "amq.topic"
+			routingKey = parts[2]
+		}
+
+		// STOMP publishing to /exchange/:exchange/:key
+		if parts[1] == "exchange" && len(parts) == 4 {
+			exchange = parts[2]
+			routingKey = parts[3]
+		}
 	}
 
 	return exchange, utils.InjectId(routingKey, id)
