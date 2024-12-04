@@ -51,7 +51,10 @@ var (
 	amqpPropertyFilters    []string
 )
 
-var rmqMgmt *mgmt.Mgmt
+var (
+	rmqMgmt       *mgmt.Mgmt
+	metricsServer *metrics.MetricsServer
+)
 
 func Execute() {
 	rootCmd := RootCmd()
@@ -201,6 +204,7 @@ func RootCmd() *cobra.Command {
 		Use: "version",
 		Run: func(cmd *cobra.Command, args []string) {
 			version.Print()
+			os.Exit(0)
 		},
 	}
 
@@ -222,9 +226,6 @@ func RootCmd() *cobra.Command {
 					os.Exit(1)
 				}
 			}
-		},
-		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			shutdown(cfg.PrintAllMetrics)
 		},
 	}
 
@@ -336,13 +337,15 @@ func start(cfg config.Config) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// handle ^C
 	handleInterupt(ctx, cancel)
 
-	startMetrics(cfg)
+	metricsServer = metrics.Start(ctx, cfg)
+	defer metricsServer.Stop()
+
 	rmqMgmt = mgmt.Start(ctx, cfg.ManagementUri, cfg.CleanupQueues)
+	defer rmqMgmt.Stop()
 
 	var wg sync.WaitGroup
 
@@ -361,8 +364,6 @@ func start(cfg config.Config) {
 	}
 
 	// every  second, print the current values of the metrics
-	m := metrics.GetMetricsServer()
-	m.PrintMessageRates(ctx)
 	wg.Wait()
 }
 
@@ -435,13 +436,6 @@ func joinCluster(expectedInstance int, serviceName string) {
 		_ = list.Leave(time.Second)
 		_ = list.Shutdown()
 	}()
-}
-
-func startMetrics(cfg config.Config) {
-	metrics.RegisterMetrics(cfg.MetricTags)
-	metrics.RegisterCommandLineMetric(cfg, cfg.MetricTags)
-	metricsServer := metrics.GetMetricsServer()
-	metricsServer.Start()
 }
 
 func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
@@ -546,16 +540,6 @@ func defaultUri(proto string) string {
 		uri = "mqtt://localhost:1883"
 	}
 	return uri
-}
-
-func shutdown(printAllMetrics bool) {
-	rmqMgmt.Stop()
-	metricsServer := metrics.GetMetricsServer()
-	metricsServer.PrintSummary()
-
-	if printAllMetrics {
-		metricsServer.PrintAll()
-	}
 }
 
 func sanitizeConfig(cfg *config.Config) error {
