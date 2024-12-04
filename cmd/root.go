@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -49,6 +50,8 @@ var (
 	amqpAppPropertyFilters []string
 	amqpPropertyFilters    []string
 )
+
+var rmqMgmt *mgmt.Mgmt
 
 func Execute() {
 	rootCmd := RootCmd()
@@ -213,11 +216,15 @@ func RootCmd() *cobra.Command {
 			}
 
 			if cmd.Use != "version" {
-				setUris(&cfg, cmd.Use)
+				err := setUris(&cfg, cmd.Use)
+				if err != nil {
+					fmt.Printf("ERROR: %s\n", err)
+					os.Exit(1)
+				}
 			}
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			shutdown(cfg.CleanupQueues, cfg.PrintAllMetrics)
+			shutdown(cfg.PrintAllMetrics)
 		},
 	}
 
@@ -227,6 +234,8 @@ func RootCmd() *cobra.Command {
 		"URI for publishing")
 	rootCmd.PersistentFlags().StringSliceVarP(&cfg.ConsumerUri, "consumer-uri", "", nil,
 		"URI for consuming")
+	rootCmd.PersistentFlags().StringSliceVarP(&cfg.ManagementUri, "management-uri", "", nil,
+		"URI for declaring queues (must be AMQP)")
 	rootCmd.PersistentFlags().BoolVar(&cfg.SpreadConnections, "spread-connections", true,
 		"Spread connections across URIs")
 
@@ -322,9 +331,9 @@ func start(cfg config.Config) {
 		os.Exit(1)
 	}
 
-	join_cluster(cfg.ExpectedInstances, cfg.SyncName)
-
-	start_metrics(cfg)
+	if cfg.ExpectedInstances > 1 {
+		joinCluster(cfg.ExpectedInstances, cfg.SyncName)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -332,13 +341,17 @@ func start(cfg config.Config) {
 	// handle ^C
 	handleInterupt(ctx, cancel)
 
+	startMetrics(cfg)
+	rmqMgmt = mgmt.Start(ctx, cfg.ManagementUri, cfg.CleanupQueues)
+
 	var wg sync.WaitGroup
 
 	// TODO
 	// refactor; make consumer startup delay more accurate
-	// clarfiy when queues are declared
 
-	mgmt.DeclareQueues(cfg)
+	if cfg.Queues != config.Predeclared {
+		rmqMgmt.DeclareQueues(cfg)
+	}
 	startConsumers(ctx, &wg)
 	startPublishers(ctx, &wg)
 
@@ -353,7 +366,7 @@ func start(cfg config.Config) {
 	wg.Wait()
 }
 
-func join_cluster(expectedInstance int, serviceName string) {
+func joinCluster(expectedInstance int, serviceName string) {
 	if expectedInstance == 1 {
 		return
 	}
@@ -424,7 +437,7 @@ func join_cluster(expectedInstance int, serviceName string) {
 	}()
 }
 
-func start_metrics(cfg config.Config) {
+func startMetrics(cfg config.Config) {
 	metrics.RegisterMetrics(cfg.MetricTags)
 	metrics.RegisterCommandLineMetric(cfg, cfg.MetricTags)
 	metricsServer := metrics.GetMetricsServer()
@@ -442,13 +455,17 @@ func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				time.Sleep(cfg.ConsumerStartupDelay)
-				c, err := common.NewConsumer(ctx, cfg.ConsumerProto, cfg, n)
-				if err != nil {
-					log.Error("Error creating consumer: ", "error", err)
-					os.Exit(1)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(cfg.ConsumerStartupDelay):
+					c, err := common.NewConsumer(ctx, cfg.ConsumerProto, cfg, n)
+					if err != nil {
+						log.Error("Error creating consumer: ", "error", err)
+						os.Exit(1)
+					}
+					c.Start(ctx, subscribed)
 				}
-				c.Start(ctx, subscribed)
 			}()
 			// consumers are started one by one and synchronously,
 			// unless a startup delay is set - then we just fire them and hope for the best
@@ -480,8 +497,24 @@ func startPublishers(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-func setUris(cfg *config.Config, command string) {
-	// --uri is a shortcut to set both --publisher-uri and --consumer-uri
+func setUris(cfg *config.Config, command string) error {
+	var managementUri []string
+	if cfg.ManagementUri != nil {
+		managementUri = cfg.ManagementUri
+	} else {
+		if cfg.Uri != nil && strings.HasPrefix(cfg.Uri[0], "amqp") {
+			managementUri = cfg.Uri
+		} else if cfg.PublisherUri == nil && cfg.ConsumerUri == nil {
+			managementUri = []string{defaultUri("amqp")}
+		} else {
+			if cfg.Queues != config.Predeclared {
+				return errors.New("Not sure where to connect to declare the queues; please set --management-uri")
+			}
+		}
+	}
+	log.Debug("setting management uri", "uri", managementUri)
+	cfg.ManagementUri = managementUri
+
 	if cfg.Uri != nil {
 		if cfg.PublisherUri != nil || cfg.ConsumerUri != nil {
 			fmt.Printf("ERROR: can't specify both --uri and --publisher-uri/--consumer-uri")
@@ -499,6 +532,7 @@ func setUris(cfg *config.Config, command string) {
 		log.Debug("setting default consumer uri", "uri", defaultUri(strings.Split(command, "-")[1]))
 		cfg.ConsumerUri = []string{defaultUri(strings.Split(command, "-")[1])}
 	}
+	return nil
 }
 
 func defaultUri(proto string) string {
@@ -514,11 +548,8 @@ func defaultUri(proto string) string {
 	return uri
 }
 
-func shutdown(deleteQueues bool, printAllMetrics bool) {
-	if deleteQueues {
-		mgmt.DeleteDeclaredQueues()
-	}
-	mgmt.Disconnect()
+func shutdown(printAllMetrics bool) {
+	rmqMgmt.Stop()
 	metricsServer := metrics.GetMetricsServer()
 	metricsServer.PrintSummary()
 

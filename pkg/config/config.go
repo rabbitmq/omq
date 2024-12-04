@@ -71,6 +71,7 @@ type Config struct {
 	Uri                  []string
 	PublisherUri         []string
 	ConsumerUri          []string
+	ManagementUri        []string
 	Publishers           int
 	Consumers            int
 	SpreadConnections    bool

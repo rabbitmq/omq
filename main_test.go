@@ -430,7 +430,7 @@ var _ = Describe("OMQ CLI", func() {
 				_, err2 := rmqc.GetQueue("/", "stomp-declare-for-publisher")
 				return err1 != nil && strings.Contains(err1.Error(), "Object Not Found") &&
 					err2 != nil && strings.Contains(err2.Error(), "Object Not Found")
-			})
+			}).WithTimeout(3 * time.Second).Should(BeTrue())
 		})
 	})
 

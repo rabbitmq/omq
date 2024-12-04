@@ -2,8 +2,10 @@ package mgmt
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Azure/go-amqp"
@@ -14,40 +16,63 @@ import (
 )
 
 var (
-	mgmtConn       *rmq.IConnection
-	declaredQueues []string
-	mgmtUri        string
+	instance *Mgmt
+	once     sync.Once
 )
 
-func Get() rmq.IManagement {
-	var conn rmq.IConnection
-	var err error
-	if mgmtConn != nil && (*mgmtConn).Status() == rmq.Open {
-		return (*mgmtConn).Management()
+type Mgmt struct {
+	ctx            context.Context
+	conn           rmq.IConnection
+	declaredQueues []string
+	uris           []string
+	cleanupQueues  bool
+}
+
+func Start(ctx context.Context, uris []string, cleanupQueues bool) *Mgmt {
+	once.Do(func() {
+		instance = &Mgmt{ctx: ctx, uris: uris, cleanupQueues: cleanupQueues}
+	})
+	return instance
+}
+
+func (m *Mgmt) connection() rmq.IConnection {
+	if len(m.uris) == 0 {
+		return nil
+	}
+
+	if m.conn != nil && m.conn.Status() == rmq.Open {
+		return m.conn
 	}
 
 	for {
-		conn, err = rmq.Dial(context.TODO(), mgmtUri, &amqp.ConnOptions{
+		// TODO support multiple URIs
+		conn, err := rmq.Dial(context.TODO(), m.uris[0], &amqp.ConnOptions{
 			SASLType:    amqp.SASLTypeAnonymous(),
 			ContainerID: "omq-management",
 		})
 		if err == nil {
+			m.conn = conn
 			break
 		}
-		log.Error("can't establish a management connection; retrying...", "uri", mgmtUri, "error", err)
-		time.Sleep(time.Second)
+		log.Error("can't establish a management connection; retrying...", "uri", m.uris[0], "error", err)
+		select {
+		case <-m.ctx.Done():
+			return nil
+		case <-time.After(time.Second):
+			continue
+		}
 	}
-	log.Debug("management connection established", "uri", mgmtUri)
-	mgmtConn = &conn
-	return conn.Management()
+	log.Debug("management connection established", "uri", m.uris[0])
+	return m.conn
 }
 
-func DeclareQueues(cfg config.Config) {
+func (m *Mgmt) DeclareQueues(cfg config.Config) {
+	log.Info("Declaring queues...")
 	// declare queues for AMQP publishers
 	if cfg.PublisherProto == config.AMQP && strings.HasPrefix(cfg.PublishTo, "/queues/") {
 		queueName := strings.TrimPrefix(cfg.PublishTo, "/queues/")
 		for i := 1; i <= cfg.Publishers; i++ {
-			DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+			m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
 		}
 	}
 	// declare queues for AMQP consumers
@@ -55,7 +80,7 @@ func DeclareQueues(cfg config.Config) {
 		if strings.HasPrefix(cfg.ConsumeFrom, "/queues/") {
 			for i := 1; i <= cfg.Consumers; i++ {
 				queueName := strings.TrimPrefix(cfg.ConsumeFrom, "/queues/")
-				DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+				m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
 			}
 		} else {
 			log.Info("Not declaring queues for AMQP consumers since the address doesn't start with /queues/")
@@ -65,32 +90,22 @@ func DeclareQueues(cfg config.Config) {
 	if cfg.PublisherProto == config.STOMP && strings.HasPrefix(cfg.PublishTo, "/amq/queue/") {
 		queueName := strings.TrimPrefix(cfg.PublishTo, "/amq/queue/")
 		for i := 1; i <= cfg.Publishers; i++ {
-			DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+			m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
 		}
 	}
 	// declare queues for STOMP consumers
 	if cfg.ConsumerProto == config.STOMP && strings.HasPrefix(cfg.ConsumeFrom, "/amq/queue/") {
 		queueName := strings.TrimPrefix(cfg.ConsumeFrom, "/amq/queue/")
 		for i := 1; i <= cfg.Consumers; i++ {
-			DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+			m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
 		}
 	}
 }
 
-func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo {
+func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo {
 	if cfg.Queues == config.Predeclared {
 		return nil
 	}
-
-	// TODO we should allow multiple mgmt uris
-	mgmtUri = cfg.ConsumerUri[0]
-	// TODO this is very naive, although should work for many cases
-	if strings.HasPrefix(mgmtUri, "stomp://") {
-		mgmtUri = strings.TrimPrefix(mgmtUri, "stomp://")
-		mgmtUri = "amqp://" + mgmtUri
-		mgmtUri = strings.Replace(mgmtUri, "61613", "5672", 1)
-	}
-	mgmt := Get()
 
 	var queueType rmq.QueueType
 	switch cfg.Queues {
@@ -102,7 +117,12 @@ func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo 
 		queueType = rmq.QueueType{Type: rmq.Stream}
 	}
 
-	qi, err := mgmt.DeclareQueue(context.TODO(), &rmq.QueueSpecification{
+	conn := instance.connection()
+	if conn == nil {
+		return nil
+	}
+
+	qi, err := conn.Management().DeclareQueue(context.TODO(), &rmq.QueueSpecification{
 		Name:      queueName,
 		QueueType: queueType,
 	})
@@ -112,10 +132,8 @@ func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo 
 	}
 	log.Debug("queue declared", "name", qi.Name(), "type", qi.Type())
 
-	if cfg.CleanupQueues {
-		// if we don't need to delete at the end, there's no point in tracking declared queues
-		// note: DeleteAll() is always called, so the empty list serves as the mechanism to skip deletion
-		declaredQueues = append(declaredQueues, queueName)
+	if m.cleanupQueues {
+		m.declaredQueues = append(m.declaredQueues, queueName)
 	}
 
 	exchangeName, routingKey := parsePublishTo(cfg.PublisherProto, cfg.PublishTo, id)
@@ -131,7 +149,7 @@ func DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo 
 	}
 
 	if exchangeName != "amq.default" {
-		_, err = mgmt.Bind(context.TODO(), &rmq.BindingSpecification{
+		_, err = instance.connection().Management().Bind(context.TODO(), &rmq.BindingSpecification{
 			SourceExchange:   exchangeName,
 			DestinationQueue: queueName,
 			BindingKey:       routingKey,
@@ -206,18 +224,35 @@ func parsePublishTo(proto config.Protocol, publishTo string, id int) (string, st
 	return exchange, utils.InjectId(routingKey, id)
 }
 
-func DeleteDeclaredQueues() {
-	for _, queueName := range declaredQueues {
+func (m *Mgmt) DeleteDeclaredQueues() {
+	if len(m.declaredQueues) == 0 {
+		return
+	}
+
+	log.Info("Deleting queues...")
+	for _, queueName := range m.declaredQueues {
+		if m.conn == nil || m.conn.Status() != rmq.Open {
+			log.Info("Management connection lost; some queues were not deleted")
+			return
+		}
 		log.Debug("deleting queue...", "name", queueName)
-		err := Get().DeleteQueue(context.TODO(), queueName)
+		err := m.conn.Management().DeleteQueue(context.TODO(), queueName)
 		if err != nil {
 			log.Info("Failed to delete a queue", "queue", queueName, "error", err)
 		}
 	}
 }
 
-func Disconnect() {
-	if mgmtConn != nil && (*mgmtConn).Status() == rmq.Open {
-		(*mgmtConn).Close(context.Background())
+func (m *Mgmt) DeleteQueue(ctx context.Context, name string) error {
+	if m.conn == nil || m.conn.Status() != rmq.Open {
+		return errors.New("management connection lost")
+	}
+	return m.conn.Management().DeleteQueue(ctx, name)
+}
+
+func (m *Mgmt) Stop() {
+	m.DeleteDeclaredQueues()
+	if m.conn != nil && m.conn.Status() == rmq.Open {
+		m.conn.Close(context.Background())
 	}
 }
