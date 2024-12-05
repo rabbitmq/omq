@@ -158,8 +158,7 @@ func (m *MetricsServer) printMessageRates(ctx context.Context) {
 				if published > 0 || consumed > 0 {
 					log.Print("",
 						"published", fmt.Sprintf("%v/s", published-previouslyPublished),
-						"consumed", fmt.Sprintf("%v/s", consumed-previouslyConsumed),
-						"goroutines", runtime.NumGoroutine())
+						"consumed", fmt.Sprintf("%v/s", consumed-previouslyConsumed))
 
 					previouslyPublished = published
 					previouslyConsumed = consumed

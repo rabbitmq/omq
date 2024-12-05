@@ -255,7 +255,7 @@ func (p *Amqp10Publisher) Send() error {
 			log.Error("publisher connection failure; reconnecting...", "id", p.Id, "error", connErr.Error())
 			return err
 		} else if errors.As(err, &linkErr) {
-			// log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+			log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
 			return err
 		} else {
 			log.Error("message sending failure", "id", p.Id, "error", err)
