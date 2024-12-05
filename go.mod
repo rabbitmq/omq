@@ -3,7 +3,7 @@ module github.com/rabbitmq/omq
 go 1.23.0
 
 require (
-	github.com/Azure/go-amqp v1.2.1-0.20241125140114-d6da29576273
+	github.com/Azure/go-amqp v1.3.1-0.20241204220653-2048490fff6e
 	github.com/VictoriaMetrics/metrics v1.35.1
 	github.com/charmbracelet/log v0.4.0
 	github.com/eclipse/paho.golang v0.22.0
@@ -46,6 +46,7 @@ require (
 	github.com/miekg/dns v1.1.62 // indirect
 	github.com/muesli/termenv v0.15.2 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
+	github.com/panjf2000/ants/v2 v2.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
@@ -59,6 +60,7 @@ require (
 	golang.org/x/sync v0.9.0 // indirect
 	golang.org/x/sys v0.27.0 // indirect
 	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/time v0.8.0 // indirect
 	golang.org/x/tools v0.27.0 // indirect
 	google.golang.org/protobuf v1.35.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

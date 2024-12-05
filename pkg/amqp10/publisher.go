@@ -7,15 +7,18 @@ import (
 	"math/rand"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
+	"golang.org/x/time/rate"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 
 	"github.com/Azure/go-amqp"
+	"github.com/panjf2000/ants/v2"
 )
 
 type Amqp10Publisher struct {
@@ -27,6 +30,8 @@ type Amqp10Publisher struct {
 	Config     config.Config
 	msg        []byte
 	whichUri   int
+	pool       *ants.Pool
+	poolWg     sync.WaitGroup
 	ctx        context.Context
 }
 
@@ -152,47 +157,20 @@ func (p *Amqp10Publisher) Start(ctx context.Context) {
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
-	var wg sync.WaitGroup
+	var err error
+	p.pool, err = ants.NewPool(p.Config.MaxInFlight, ants.WithExpiryDuration(time.Duration(10*time.Second)), ants.WithNonblocking(false))
+	if err != nil {
+		log.Error("Can't initialize a pool for handling send receipts", "error", err)
+		return
+	}
+	defer p.pool.Release()
 
+	log.Info("publisher started", "id", p.Id, "rate", utils.Rate(p.Config.Rate), "destination", p.Terminus)
 	switch p.Config.Rate {
-	case -1:
-		wg.Add(p.Config.MaxInFlight)
-		for i := 1; i <= p.Config.MaxInFlight; i++ {
-			go func() {
-				defer wg.Done()
-				p.StartFullSpeed(ctx)
-			}()
-		}
 	case 0:
 		p.StartIdle(ctx)
 	default:
-		wg.Add(p.Config.MaxInFlight)
-		for i := 1; i <= p.Config.MaxInFlight; i++ {
-			go func() {
-				defer wg.Done()
-				p.StartRateLimited(ctx)
-			}()
-		}
-	}
-
-	log.Info("publisher started", "id", p.Id, "rate", utils.Rate(p.Config.Rate), "destination", p.Terminus)
-	wg.Wait()
-}
-
-func (p *Amqp10Publisher) StartFullSpeed(ctx context.Context) {
-	for msgSent := 0; msgSent < p.Config.PublishCount; {
-		select {
-		case <-ctx.Done():
-			p.Stop("time limit reached")
-			return
-		default:
-			err := p.Send()
-			if err != nil {
-				p.Connect()
-			} else {
-				msgSent++
-			}
-		}
+		p.StartPublishing(ctx)
 	}
 }
 
@@ -200,26 +178,40 @@ func (p *Amqp10Publisher) StartIdle(ctx context.Context) {
 	<-ctx.Done()
 }
 
-func (p *Amqp10Publisher) StartRateLimited(ctx context.Context) {
-	ticker := utils.RateTicker(p.Config.Rate / float32(p.Config.MaxInFlight))
+func (p *Amqp10Publisher) StartPublishing(ctx context.Context) {
+	var limit rate.Limit
+	if p.Config.Rate == -1 {
+		limit = rate.Inf
+	} else {
+		limit = rate.Limit(p.Config.Rate)
+	}
+	// burst will probably need to be adjusted/dynamic, but for now it's fine
+	limiter := rate.NewLimiter(limit, 1)
 
-	msgSent := 0
+	var msgSent atomic.Int64
 	for {
 		select {
 		case <-ctx.Done():
 			p.Stop("time limit reached")
 			return
-		case <-ticker.C:
-			err := p.Send()
-			if err != nil {
-				p.Connect()
-			} else {
-				msgSent++
-				if msgSent >= p.Config.PublishCount {
-					p.Stop("--pmessages value reached")
-					return
-				}
+		default:
+			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+				p.Stop("--pmessages value reached")
+				return
 			}
+			if p.Config.Rate > 0 {
+				_ = limiter.Wait(context.Background())
+			}
+			p.poolWg.Add(1)
+			_ = p.pool.Submit(func() {
+				defer func() {
+					p.poolWg.Done()
+				}()
+				err := p.Send()
+				if err != nil {
+					p.Connect()
+				}
+			})
 		}
 	}
 }
@@ -255,27 +247,58 @@ func (p *Amqp10Publisher) Send() error {
 	}
 
 	startTime := time.Now()
-	err := p.Sender.Send(context.TODO(), msg, nil)
-	latency := time.Since(startTime)
-	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
-	var connErr *amqp.ConnError
-	var linkErr *amqp.LinkError
-	if errors.As(err, &connErr) {
-		log.Error("publisher connection failure; reconnecting...", "id", p.Id, "error", connErr.Error())
-		return err
-	} else if errors.As(err, &linkErr) {
-		log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
-		return err
-	} else if err != nil {
-		log.Error("message sending failure", "id", p.Id, "error", err)
+	receipt, err := p.Sender.SendWithReceipt(context.TODO(), msg, nil)
+	if err != nil {
+		var connErr *amqp.ConnError
+		var linkErr *amqp.LinkError
+		if errors.As(err, &connErr) {
+			log.Error("publisher connection failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+			return err
+		} else if errors.As(err, &linkErr) {
+			// log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+			return err
+		} else {
+			log.Error("message sending failure", "id", p.Id, "error", err)
+		}
+	} else {
+		p.handleSent(&receipt, startTime)
 	}
-	// rejected messages are not counted as published, maybe they should be?
-	metrics.MessagesPublished.Inc()
-	metrics.PublishingLatency.Update(latency.Seconds())
 	return nil
 }
 
+func (p *Amqp10Publisher) handleSent(receipt *amqp.SendReceipt, published time.Time) {
+	state, err := receipt.Wait(context.TODO())
+	if err != nil {
+		log.Error("error waiting for a message receipt", "id", p.Id, "error", err)
+		return
+	}
+	latency := time.Since(published)
+	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency)
+	switch stateType := state.(type) {
+	case *amqp.StateAccepted:
+		// only accepted messages are counted as published; perhaps we should count other outcomes?
+		metrics.MessagesPublished.Inc()
+		metrics.PublishingLatency.Update(latency.Seconds())
+	case *amqp.StateModified:
+		// message must be modified and resent before it can be processed.
+		// the values in stateType provide further context.
+		log.Info("server requires modifications to accept this message", "state", stateType)
+	case *amqp.StateReceived:
+		// see the fields in [StateReceived] for information on
+		// how to handle this delivery state.
+		log.Info("message received but not processed by the broker", "state", stateType)
+	case *amqp.StateRejected:
+		if stateType.Error != nil {
+			log.Info("message rejected by the broker", "state", stateType.Error)
+		}
+	case *amqp.StateReleased:
+		log.Info("message released the broker", "state", stateType)
+	}
+	log.Debug("message receipt received", "outcome", state)
+}
+
 func (p *Amqp10Publisher) Stop(reason string) {
+	p.poolWg.Wait()
 	log.Debug("closing connection", "id", p.Id, "reason", reason)
 	if p.Session != nil {
 		_ = p.Session.Close(context.Background())
