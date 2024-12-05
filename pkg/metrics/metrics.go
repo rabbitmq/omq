@@ -23,7 +23,6 @@ import (
 
 type MetricsServer struct {
 	httpServer     *http.Server
-	running        bool
 	started        time.Time
 	printAllOnStop bool
 }
@@ -51,6 +50,7 @@ func startServer() {
 
 		metricsServer = &MetricsServer{
 			httpServer: &http.Server{
+				// we'll try to listen on 8080, if it's already in use, we'll try the next one
 				Addr: get_metrics_ip() + ":8080",
 			},
 		}
@@ -66,11 +66,7 @@ func Start(ctx context.Context, cfg config.Config) *MetricsServer {
 
 	go func() {
 		for {
-			metricsServer.httpServer.RegisterOnShutdown(func() {
-				metricsServer.running = false
-			})
 			metricsServer.started = time.Now()
-			metricsServer.running = true
 			log.Debug("starting Prometheus metrics server", "address", metricsServer.httpServer.Addr)
 			err := metricsServer.httpServer.ListenAndServe()
 			if errors.Is(err, syscall.EADDRINUSE) {
