@@ -1,4 +1,4 @@
-package mqtt_client
+package mqtt
 
 import (
 	. "github.com/onsi/ginkgo/v2"

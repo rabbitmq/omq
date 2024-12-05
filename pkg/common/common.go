@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rabbitmq/omq/pkg/amqp10_client"
+	"github.com/rabbitmq/omq/pkg/amqp10"
 	"github.com/rabbitmq/omq/pkg/config"
-	"github.com/rabbitmq/omq/pkg/mqtt_client"
-	"github.com/rabbitmq/omq/pkg/stomp_client"
+	"github.com/rabbitmq/omq/pkg/mqtt"
+	"github.com/rabbitmq/omq/pkg/stomp"
 )
 
 type Publisher interface {
@@ -21,19 +21,19 @@ type Consumer interface {
 func NewPublisher(ctx context.Context, cfg config.Config, id int) (Publisher, error) {
 	switch cfg.PublisherProto {
 	case config.AMQP:
-		p := amqp10_client.NewPublisher(ctx, cfg, id)
+		p := amqp10.NewPublisher(ctx, cfg, id)
 		if p == nil {
 			return nil, fmt.Errorf("failed to create an AMQP-1.0 publisher")
 		}
 		return p, nil
 	case config.STOMP:
-		p := stomp_client.NewPublisher(ctx, cfg, id)
+		p := stomp.NewPublisher(ctx, cfg, id)
 		if p == nil {
 			return nil, fmt.Errorf("failed to create a STOMP publisher")
 		}
 		return p, nil
 	case config.MQTT:
-		p := mqtt_client.NewPublisher(ctx, cfg, id)
+		p := mqtt.NewPublisher(ctx, cfg, id)
 		if p == nil {
 			return nil, fmt.Errorf("failed to create an MQTT publisher")
 		}
@@ -46,19 +46,19 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) (Publisher, er
 func NewConsumer(ctx context.Context, protocol config.Protocol, cfg config.Config, id int) (Consumer, error) {
 	switch protocol {
 	case config.AMQP:
-		c := amqp10_client.NewConsumer(ctx, cfg, id)
+		c := amqp10.NewConsumer(ctx, cfg, id)
 		if c == nil {
 			return nil, fmt.Errorf("failed to create an AMQP-1.0 consumer")
 		}
 		return c, nil
 	case config.STOMP:
-		c := stomp_client.NewConsumer(ctx, cfg, id)
+		c := stomp.NewConsumer(ctx, cfg, id)
 		if c == nil {
 			return nil, fmt.Errorf("failed to create a STOMP consumer")
 		}
 		return c, nil
 	case config.MQTT:
-		c := mqtt_client.NewConsumer(ctx, cfg, id)
+		c := mqtt.NewConsumer(ctx, cfg, id)
 		if c == nil {
 			return nil, fmt.Errorf("failed to create an MQTT consumer")
 		}

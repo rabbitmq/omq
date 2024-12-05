@@ -4,3 +4,5 @@ dist/
 
 omq-cpu.pprof
 omq-memory.pprof
+
+**/*.test

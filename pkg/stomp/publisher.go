@@ -1,4 +1,4 @@
-package stomp_client
+package stomp
 
 import (
 	"context"

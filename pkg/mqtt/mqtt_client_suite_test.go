@@ -1,4 +1,4 @@
-package mqtt_client_test
+package mqtt_test
 
 import (
 	"testing"

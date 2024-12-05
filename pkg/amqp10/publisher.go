@@ -1,4 +1,4 @@
-package amqp10_client
+package amqp10
 
 import (
 	"context"
