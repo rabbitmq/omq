@@ -12,7 +12,7 @@ require (
 	github.com/hashicorp/memberlist v0.5.1
 	github.com/michaelklishin/rabbit-hole v1.5.0
 	github.com/onsi/ginkgo/v2 v2.20.2
-	github.com/onsi/gomega v1.34.2
+	github.com/onsi/gomega v1.36.0
 	github.com/panjf2000/ants/v2 v2.10.0
 	github.com/relvacode/iso8601 v1.6.0
 	github.com/spf13/cobra v1.8.1
