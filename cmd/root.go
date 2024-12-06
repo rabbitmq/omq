@@ -355,7 +355,20 @@ func start(cfg config.Config) {
 	if cfg.Queues != config.Predeclared {
 		rmqMgmt.DeclareQueues(cfg)
 	}
-	startConsumers(ctx, &wg)
+	if cfg.ConsumerStartupDelay == 0 {
+		startConsumers(ctx, &wg)
+	} else {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(cfg.ConsumerStartupDelay):
+				startConsumers(ctx, &wg)
+			}
+		}()
+	}
 	startPublishers(ctx, &wg)
 
 	if cfg.Duration > 0 {
@@ -444,28 +457,20 @@ func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 		case <-ctx.Done():
 			return
 		default:
-			subscribed := make(chan bool)
+			consumerReady := make(chan bool)
 			n := i
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(cfg.ConsumerStartupDelay):
-					c, err := common.NewConsumer(ctx, cfg.ConsumerProto, cfg, n)
-					if err != nil {
-						log.Error("Error creating consumer: ", "error", err)
-						os.Exit(1)
-					}
-					c.Start(ctx, subscribed)
+				c, err := common.NewConsumer(ctx, cfg.ConsumerProto, cfg, n)
+				if err != nil {
+					log.Error("Error creating consumer: ", "error", err)
+					os.Exit(1)
 				}
+				c.Start(ctx, consumerReady)
 			}()
-			// consumers are started one by one and synchronously,
-			// unless a startup delay is set - then we just fire them and hope for the best
-			if cfg.ConsumerStartupDelay == 0 {
-				<-subscribed
-			}
+			// consumers are started one by one and synchronously
+			<-consumerReady
 		}
 	}
 }
