@@ -14,7 +14,7 @@ type Consumer interface {
 }
 
 type Publisher interface {
-	Start(context.Context)
+	Start(context.Context, chan bool, chan bool)
 }
 
 func NewConsumer(ctx context.Context, cfg config.Config, id int) Consumer {

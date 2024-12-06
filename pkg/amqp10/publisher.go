@@ -149,11 +149,7 @@ func (p *Amqp10Publisher) CreateSender() {
 	}
 }
 
-func (p *Amqp10Publisher) Start(ctx context.Context) {
-	// sleep random interval to avoid all publishers publishing at the same time
-	s := rand.Intn(1000)
-	time.Sleep(time.Duration(s) * time.Millisecond)
-
+func (p *Amqp10Publisher) Start(ctx context.Context, publisherReady chan bool, startPublishing chan bool) {
 	p.msg = utils.MessageBody(p.Config.Size)
 
 	var err error
@@ -163,6 +159,16 @@ func (p *Amqp10Publisher) Start(ctx context.Context) {
 		return
 	}
 	defer p.pool.Release()
+
+	close(publisherReady)
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-startPublishing:
+		// short random delay to avoid all publishers publishing at the same time
+		time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+	}
 
 	log.Info("publisher started", "id", p.Id, "rate", utils.Rate(p.Config.Rate), "destination", p.Terminus)
 	var farewell string
@@ -189,14 +195,14 @@ func (p *Amqp10Publisher) StartPublishing(ctx context.Context) string {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
-				_ = limiter.Wait(context.Background())
+				_ = limiter.Wait(ctx)
 			}
 			p.poolWg.Add(1)
 			_ = p.pool.Submit(func() {
 				defer func() {
 					p.poolWg.Done()
 				}()
-				err := p.Send()
+				err := p.Send(ctx)
 				if err != nil {
 					p.Connect()
 				}
@@ -205,7 +211,7 @@ func (p *Amqp10Publisher) StartPublishing(ctx context.Context) string {
 	}
 }
 
-func (p *Amqp10Publisher) Send() error {
+func (p *Amqp10Publisher) Send(ctx context.Context) error {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	msg := amqp.NewMessage(p.msg)
 
@@ -236,7 +242,7 @@ func (p *Amqp10Publisher) Send() error {
 	}
 
 	startTime := time.Now()
-	receipt, err := p.Sender.SendWithReceipt(context.TODO(), msg, nil)
+	receipt, err := p.Sender.SendWithReceipt(ctx, msg, nil)
 	if err != nil {
 		var connErr *amqp.ConnError
 		var linkErr *amqp.LinkError
@@ -288,7 +294,7 @@ func (p *Amqp10Publisher) handleSent(receipt *amqp.SendReceipt, published time.T
 
 func (p *Amqp10Publisher) Stop(reason string) {
 	p.poolWg.Wait()
-	log.Debug("closing connection", "id", p.Id, "reason", reason)
+	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Session != nil {
 		_ = p.Session.Close(context.Background())
 	}

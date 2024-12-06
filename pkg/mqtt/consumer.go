@@ -29,7 +29,7 @@ func NewMqttConsumer(cfg config.Config, id int) MqttConsumer {
 	}
 }
 
-func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
+func (c MqttConsumer) Start(ctx context.Context, cosumerReady chan bool) {
 	msgsReceived := 0
 	previousMessageTimeSent := time.Unix(0, 0)
 
@@ -87,7 +87,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 		log.Error("failed to connect", "id", c.Id, "error", token.Error())
 	}
 
-	close(subscribed)
+	close(cosumerReady)
 
 	// TODO: currently we can consume more than ConsumerCount messages
 	for msgsReceived < c.Config.ConsumeCount {
@@ -104,7 +104,7 @@ func (c MqttConsumer) Start(ctx context.Context, subscribed chan bool) {
 }
 
 func (c MqttConsumer) Stop(reason string) {
-	log.Debug("closing connection", "id", c.Id, "reason", reason)
+	log.Debug("closing consumer connection", "id", c.Id, "reason", reason)
 	c.Connection.Disconnect(250)
 }
 

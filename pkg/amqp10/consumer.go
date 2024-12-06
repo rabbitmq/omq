@@ -143,9 +143,9 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 	}
 }
 
-func (c *Amqp10Consumer) Start(ctx context.Context, subscribed chan bool) {
+func (c *Amqp10Consumer) Start(ctx context.Context, consumerReady chan bool) {
 	c.CreateReceiver(ctx)
-	close(subscribed)
+	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "terminus", c.Terminus)
 	previousMessageTimeSent := time.Unix(0, 0)
 

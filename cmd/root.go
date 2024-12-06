@@ -349,9 +349,6 @@ func start(cfg config.Config) {
 
 	var wg sync.WaitGroup
 
-	// TODO
-	// refactor; make consumer startup delay more accurate
-
 	if cfg.Queues != config.Predeclared {
 		rmqMgmt.DeclareQueues(cfg)
 	}
@@ -369,11 +366,14 @@ func start(cfg config.Config) {
 			}
 		}()
 	}
-	startPublishers(ctx, &wg)
+
+	startPublishing := make(chan bool)
+	startPublishers(ctx, &wg, startPublishing)
+	close(startPublishing)
 
 	if cfg.Duration > 0 {
-		log.Debug("will stop all consumers and publishers at " + time.Now().Add(cfg.Duration).String())
 		time.AfterFunc(cfg.Duration, func() { cancel() })
+		log.Debug("will stop all consumers and publishers at " + time.Now().Add(cfg.Duration).String())
 	}
 
 	// every  second, print the current values of the metrics
@@ -475,12 +475,13 @@ func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-func startPublishers(ctx context.Context, wg *sync.WaitGroup) {
+func startPublishers(ctx context.Context, wg *sync.WaitGroup, startPublishing chan bool) {
 	for i := 1; i <= cfg.Publishers; i++ {
 		select {
 		case <-ctx.Done():
 			return
 		default:
+			publisherReady := make(chan bool)
 			n := i
 			wg.Add(1)
 			go func() {
@@ -490,8 +491,13 @@ func startPublishers(ctx context.Context, wg *sync.WaitGroup) {
 					log.Error("Error creating publisher: ", "error", err)
 					os.Exit(1)
 				}
-				p.Start(ctx)
+				// publisher are started one by one and synchronously
+				// then we close the channel to allow all of them to start publishing "at once"
+				// but each publisher sleeps for a random sub-second time, to avoid burts of
+				// messages being published
+				p.Start(ctx, publisherReady, startPublishing)
 			}()
+			<-publisherReady
 		}
 	}
 }

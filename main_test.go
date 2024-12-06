@@ -33,8 +33,7 @@ var _ = Describe("OMQ CLI", func() {
 				"--publish-to=time/%d",
 				"--rate=1",
 				"--consumers=100",
-				"--consume-from=/queues/time",
-				"--binding-key=time.#",
+				"--consume-from=time/%d",
 				"--time", "5s",
 			}
 			session := omq(args)
@@ -330,9 +329,9 @@ var _ = Describe("OMQ CLI", func() {
 
 			output, _ := io.ReadAll(session.Out)
 			buf := bytes.NewReader(output)
-			Expect(metricValue(buf, `omq_messages_consumed_total{priority="normal"}`)).Should((BeNumerically(">", 0)))
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="normal"}`)).Should((BeNumerically(">", 0.0)))
 			buf.Reset(output)
-			Expect(metricValue(buf, `omq_messages_published_total`)).Should((BeNumerically(">", 0)))
+			Expect(metricValue(buf, `omq_messages_published_total`)).Should((BeNumerically(">", 0.0)))
 		},
 		Entry("MQTT v3.1", "3", "MQTT 3-1"),
 		Entry("MQTT v3.1.1", "4", "MQTT 3-1-1"),

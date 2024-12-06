@@ -89,9 +89,9 @@ func (c *StompConsumer) Subscribe() {
 	c.Subscription = sub
 }
 
-func (c *StompConsumer) Start(ctx context.Context, subscribed chan bool) {
+func (c *StompConsumer) Start(ctx context.Context, consumerReady chan bool) {
 	c.Subscribe()
-	close(subscribed)
+	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "destination", c.Topic)
 
 	previousMessageTimeSent := time.Unix(0, 0)

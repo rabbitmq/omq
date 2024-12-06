@@ -2,7 +2,6 @@ package mqtt
 
 import (
 	"context"
-	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
+	"golang.org/x/exp/rand"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 )
@@ -77,11 +77,7 @@ func (p MqttPublisher) connectionOptions() *mqtt.ClientOptions {
 	return opts
 }
 
-func (p MqttPublisher) Start(ctx context.Context) {
-	// sleep random interval to avoid all publishers publishing at the same time
-	s := rand.Intn(1000)
-	time.Sleep(time.Duration(s) * time.Millisecond)
-
+func (p MqttPublisher) Start(ctx context.Context, publisherReady chan bool, startPublishing chan bool) {
 	defer func() {
 		if p.Connection != nil {
 			p.Connection.Disconnect(250)
@@ -91,6 +87,16 @@ func (p MqttPublisher) Start(ctx context.Context) {
 	p.Connect(ctx)
 
 	p.msg = utils.MessageBody(p.Config.Size)
+
+	close(publisherReady)
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-startPublishing:
+		// short random delay to avoid all publishers publishing at the same time
+		time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+	}
 
 	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 
@@ -118,7 +124,7 @@ func (p MqttPublisher) StartPublishing(ctx context.Context) string {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
-				_ = limiter.Wait(context.Background())
+				_ = limiter.Wait(ctx)
 			}
 			p.Send()
 		}
@@ -145,7 +151,7 @@ func (p MqttPublisher) Send() {
 }
 
 func (p MqttPublisher) Stop(reason string) {
-	log.Debug("closing connection", "id", p.Id, "reason", reason)
+	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Connection != nil {
 		p.Connection.Disconnect(250)
 	}

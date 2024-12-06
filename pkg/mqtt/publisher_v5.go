@@ -2,7 +2,7 @@ package mqtt
 
 import (
 	"context"
-	"math/rand"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -11,6 +11,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
+	"golang.org/x/exp/rand"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 )
@@ -76,16 +77,20 @@ func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 	return opts
 }
 
-func (p Mqtt5Publisher) Start(ctx context.Context) {
-	// sleep random interval to avoid all publishers publishing at the same time
-	s := rand.Intn(1000)
-	time.Sleep(time.Duration(s) * time.Millisecond)
-
-	defer p.Stop("shutting down")
-
+func (p Mqtt5Publisher) Start(ctx context.Context, publisherReady chan bool, startPublishing chan bool) {
 	p.Connect(ctx)
 
 	p.msg = utils.MessageBody(p.Config.Size)
+
+	close(publisherReady)
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-startPublishing:
+		// short random delay to avoid all publishers publishing at the same time
+		time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+	}
 
 	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
 
@@ -117,23 +122,27 @@ func (p Mqtt5Publisher) StartPublishing(ctx context.Context) string {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
-				_ = limiter.Wait(context.Background())
+				_ = limiter.Wait(ctx)
 			}
-			p.Send()
+			p.Send(ctx)
 		}
 	}
 }
 
-func (p Mqtt5Publisher) Send() {
+func (p Mqtt5Publisher) Send(ctx context.Context) {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	startTime := time.Now()
-	_, err := p.Connection.Publish(context.TODO(), &paho.Publish{
+	_, err := p.Connection.Publish(ctx, &paho.Publish{
 		QoS:     byte(p.Config.MqttPublisher.QoS),
 		Topic:   p.Topic,
 		Payload: p.msg,
 	})
 	if err != nil {
-		log.Error("message sending failure", "id", p.Id, "error", err)
+		// I couldn't find any way to prevent publishing just after omq
+		// initiated the shutdown procedure, so we have to ignore this
+		if !strings.Contains(err.Error(), "use of closed network connection") {
+			log.Error("message sending failure", "id", p.Id, "error", err)
+		}
 		return
 	}
 	latency := time.Since(startTime)
@@ -143,7 +152,7 @@ func (p Mqtt5Publisher) Send() {
 }
 
 func (p Mqtt5Publisher) Stop(reason string) {
-	log.Debug("closing connection", "id", p.Id, "reason", reason)
+	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Connection != nil {
 		_ = p.Connection.Disconnect(context.TODO())
 	}

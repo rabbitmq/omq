@@ -11,7 +11,7 @@ import (
 )
 
 type Publisher interface {
-	Start(context.Context)
+	Start(context.Context, chan bool, chan bool)
 }
 
 type Consumer interface {

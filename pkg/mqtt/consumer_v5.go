@@ -30,7 +30,7 @@ func NewMqtt5Consumer(cfg config.Config, id int) Mqtt5Consumer {
 	}
 }
 
-func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
+func (c Mqtt5Consumer) Start(ctx context.Context, consumerReady chan bool) {
 	msgsReceived := 0
 	previousMessageTimeSent := time.Unix(0, 0)
 
@@ -90,8 +90,6 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 		},
 	}
 
-	defer c.Stop("shutting down")
-
 	var err error
 	c.Connection, err = autopaho.NewConnection(ctx, opts)
 	if err != nil {
@@ -102,7 +100,7 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 		// AwaitConnection only returns an error if the context is cancelled
 		return
 	}
-	close(subscribed)
+	close(consumerReady)
 
 	// TODO: currently we can consume more than ConsumerCount messages
 	for msgsReceived < c.Config.ConsumeCount {
@@ -119,7 +117,7 @@ func (c Mqtt5Consumer) Start(ctx context.Context, subscribed chan bool) {
 }
 
 func (c Mqtt5Consumer) Stop(reason string) {
-	log.Debug("closing connection", "id", c.Id, "reason", reason)
+	log.Debug("closing consumer connection", "id", c.Id, "reason", reason)
 	if c.Connection != nil {
 		_ = c.Connection.Disconnect(context.TODO())
 	}

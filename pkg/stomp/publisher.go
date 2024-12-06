@@ -3,7 +3,6 @@ package stomp
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/utils"
+	"golang.org/x/exp/rand"
 
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
@@ -71,12 +71,18 @@ func (p *StompPublisher) Connect() {
 	}
 }
 
-func (p *StompPublisher) Start(ctx context.Context) {
-	// sleep random interval to avoid all publishers publishing at the same time
-	s := rand.Intn(1000)
-	time.Sleep(time.Duration(s) * time.Millisecond)
-
+func (p *StompPublisher) Start(ctx context.Context, publisherReady chan bool, startPublishing chan bool) {
 	p.msg = utils.MessageBody(p.Config.Size)
+
+	close(publisherReady)
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-startPublishing:
+		// short random delay to avoid all publishers publishing at the same time
+		time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+	}
 
 	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Topic)
 
@@ -104,7 +110,7 @@ func (p *StompPublisher) StartPublishing(ctx context.Context) string {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
-				_ = limiter.Wait(context.Background())
+				_ = limiter.Wait(ctx)
 			}
 			err := p.Send()
 			if err != nil {
@@ -131,7 +137,7 @@ func (p *StompPublisher) Send() error {
 }
 
 func (p *StompPublisher) Stop(reason string) {
-	log.Debug("closing connection", "id", p.Id, "reason", reason)
+	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	_ = p.Connection.Disconnect()
 }
 
