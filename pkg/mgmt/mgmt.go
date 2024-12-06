@@ -23,14 +23,19 @@ var (
 type Mgmt struct {
 	ctx            context.Context
 	conn           rmq.IConnection
-	declaredQueues []string
+	declaredQueues map[string]bool
 	uris           []string
 	cleanupQueues  bool
 }
 
 func Start(ctx context.Context, uris []string, cleanupQueues bool) *Mgmt {
 	once.Do(func() {
-		instance = &Mgmt{ctx: ctx, uris: uris, cleanupQueues: cleanupQueues}
+		instance = &Mgmt{
+			ctx:            ctx,
+			uris:           uris,
+			cleanupQueues:  cleanupQueues,
+			declaredQueues: make(map[string]bool),
+		}
 	})
 	return instance
 }
@@ -103,7 +108,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 }
 
 func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo {
-	if cfg.Queues == config.Predeclared {
+	if cfg.Queues == config.Predeclared || m.declaredQueues[queueName] {
 		return nil
 	}
 
@@ -133,7 +138,7 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) rmq.I
 	log.Debug("queue declared", "name", qi.Name(), "type", qi.Type())
 
 	if m.cleanupQueues {
-		m.declaredQueues = append(m.declaredQueues, queueName)
+		m.declaredQueues[queueName] = true
 	}
 
 	exchangeName, routingKey := parsePublishTo(cfg.PublisherProto, cfg.PublishTo, id)
@@ -230,7 +235,7 @@ func (m *Mgmt) DeleteDeclaredQueues() {
 	}
 
 	log.Info("Deleting queues...")
-	for _, queueName := range m.declaredQueues {
+	for queueName := range m.declaredQueues {
 		if m.conn == nil || m.conn.Status() != rmq.Open {
 			log.Info("Management connection lost; some queues were not deleted")
 			return
