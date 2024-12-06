@@ -13,7 +13,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
-	"golang.org/x/time/rate"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 
@@ -158,7 +157,7 @@ func (p *Amqp10Publisher) Start(ctx context.Context) {
 	p.msg = utils.MessageBody(p.Config.Size)
 
 	var err error
-	p.pool, err = ants.NewPool(p.Config.MaxInFlight, ants.WithExpiryDuration(time.Duration(10*time.Second)), ants.WithNonblocking(false))
+	p.pool, err = utils.AntsPool(p.Config.MaxInFlight)
 	if err != nil {
 		log.Error("Can't initialize a pool for handling send receipts", "error", err)
 		return
@@ -166,38 +165,28 @@ func (p *Amqp10Publisher) Start(ctx context.Context) {
 	defer p.pool.Release()
 
 	log.Info("publisher started", "id", p.Id, "rate", utils.Rate(p.Config.Rate), "destination", p.Terminus)
-	switch p.Config.Rate {
-	case 0:
-		p.StartIdle(ctx)
-	default:
-		p.StartPublishing(ctx)
-	}
-}
-
-func (p *Amqp10Publisher) StartIdle(ctx context.Context) {
-	<-ctx.Done()
-}
-
-func (p *Amqp10Publisher) StartPublishing(ctx context.Context) {
-	var limit rate.Limit
-	if p.Config.Rate == -1 {
-		limit = rate.Inf
+	var farewell string
+	if p.Config.Rate == 0 {
+		// idle connection
+		<-ctx.Done()
+		farewell = "context cancelled"
 	} else {
-		limit = rate.Limit(p.Config.Rate)
+		farewell = p.StartPublishing(ctx)
 	}
-	// burst will probably need to be adjusted/dynamic, but for now it's fine
-	limiter := rate.NewLimiter(limit, 1)
+	p.Stop(farewell)
+}
+
+func (p *Amqp10Publisher) StartPublishing(ctx context.Context) string {
+	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent atomic.Int64
 	for {
 		select {
 		case <-ctx.Done():
-			p.Stop("time limit reached")
-			return
+			return "context cancelled"
 		default:
 			if msgSent.Add(1) > int64(p.Config.PublishCount) {
-				p.Stop("--pmessages value reached")
-				return
+				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
 				_ = limiter.Wait(context.Background())

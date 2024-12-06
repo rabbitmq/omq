@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync/atomic"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -77,61 +78,37 @@ func (p *StompPublisher) Start(ctx context.Context) {
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
-	switch p.Config.Rate {
-	case -1:
-		p.StartFullSpeed(ctx)
-	case 0:
-		p.StartIdle(ctx)
-	default:
-		p.StartRateLimited(ctx)
-	}
-}
-
-func (p *StompPublisher) StartFullSpeed(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Topic)
 
-	for msgSent := 0; msgSent < p.Config.PublishCount; {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			err := p.Send()
-			if err != nil {
-				p.Connect()
-			} else {
-				msgSent++
-			}
-		}
+	var farewell string
+	if p.Config.Rate == 0 {
+		// idle connection
+		<-ctx.Done()
+		farewell = "context cancelled"
+	} else {
+		farewell = p.StartPublishing(ctx)
 	}
-	log.Debug("publisher completed", "id", p.Id)
+	p.Stop(farewell)
 }
 
-func (p *StompPublisher) StartIdle(ctx context.Context) {
-	log.Info("publisher started", "id", p.Id, "rate", "-", "destination", p.Topic)
+func (p *StompPublisher) StartPublishing(ctx context.Context) string {
+	limiter := utils.RateLimiter(p.Config.Rate)
 
-	<-ctx.Done()
-}
-
-func (p *StompPublisher) StartRateLimited(ctx context.Context) {
-	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
-	ticker := utils.RateTicker(p.Config.Rate)
-
-	msgSent := 0
+	var msgSent atomic.Int64
 	for {
 		select {
 		case <-ctx.Done():
-			p.Stop("time limit reached")
-			return
-		case <-ticker.C:
+			return "context cancelled"
+		default:
+			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+				return "--pmessages value reached"
+			}
+			if p.Config.Rate > 0 {
+				_ = limiter.Wait(context.Background())
+			}
 			err := p.Send()
 			if err != nil {
 				p.Connect()
-			} else {
-				msgSent++
-				if msgSent >= p.Config.PublishCount {
-					p.Stop("--pmessages value reached")
-					return
-				}
 			}
 		}
 	}

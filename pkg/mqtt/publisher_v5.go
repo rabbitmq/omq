@@ -3,6 +3,7 @@ package mqtt
 import (
 	"context"
 	"math/rand"
+	"sync/atomic"
 	"time"
 
 	"github.com/eclipse/paho.golang/autopaho"
@@ -30,32 +31,6 @@ func NewMqtt5Publisher(cfg config.Config, id int) Mqtt5Publisher {
 		Topic:      topic,
 		Config:     cfg,
 	}
-}
-
-func (p Mqtt5Publisher) Start(ctx context.Context) {
-	// sleep random interval to avoid all publishers publishing at the same time
-	s := rand.Intn(1000)
-	time.Sleep(time.Duration(s) * time.Millisecond)
-
-	defer p.Stop("shutting down")
-
-	p.Connect(ctx)
-
-	p.msg = utils.MessageBody(p.Config.Size)
-
-	switch p.Config.Rate {
-	case -1:
-		p.StartFullSpeed(ctx)
-	case 0:
-		p.StartIdle(ctx)
-	default:
-		p.StartRateLimited(ctx)
-	}
-	// TODO it seems that sometimes if we stop quickly after sending
-	// a message, this message is not delivered, even though Publish
-	// is supposed to by synchronous; to be investigated
-	time.Sleep(500 * time.Millisecond)
-	log.Debug("publisher stopped", "id", p.Id)
 }
 
 func (p *Mqtt5Publisher) Connect(ctx context.Context) {
@@ -101,42 +76,50 @@ func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 	return opts
 }
 
-func (p Mqtt5Publisher) StartFullSpeed(ctx context.Context) {
-	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Topic)
+func (p Mqtt5Publisher) Start(ctx context.Context) {
+	// sleep random interval to avoid all publishers publishing at the same time
+	s := rand.Intn(1000)
+	time.Sleep(time.Duration(s) * time.Millisecond)
 
-	for msgSent := 0; msgSent < p.Config.PublishCount; msgSent++ {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			p.Send()
-		}
-	}
-}
+	defer p.Stop("shutting down")
 
-func (p Mqtt5Publisher) StartIdle(ctx context.Context) {
-	log.Info("publisher started", "id", p.Id, "rate", "-", "destination", p.Topic)
+	p.Connect(ctx)
 
-	<-ctx.Done()
-}
+	p.msg = utils.MessageBody(p.Config.Size)
 
-func (p Mqtt5Publisher) StartRateLimited(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
-	ticker := utils.RateTicker(p.Config.Rate)
 
-	msgSent := 0
+	var farewell string
+	if p.Config.Rate == 0 {
+		// idle connection
+		<-ctx.Done()
+		farewell = "context cancelled"
+	} else {
+		farewell = p.StartPublishing(ctx)
+	}
+	// TODO it seems that sometimes if we stop quickly after sending
+	// a message, this message is not delivered, even though Publish
+	// is supposed to by synchronous; to be investigated
+	time.Sleep(500 * time.Millisecond)
+	p.Stop(farewell)
+}
+
+func (p Mqtt5Publisher) StartPublishing(ctx context.Context) string {
+	limiter := utils.RateLimiter(p.Config.Rate)
+
+	var msgSent atomic.Int64
 	for {
 		select {
 		case <-ctx.Done():
-			p.Stop("time limit reached")
-			return
-		case <-ticker.C:
-			p.Send()
-			msgSent++
-			if msgSent >= p.Config.PublishCount {
-				p.Stop("--pmessages value reached")
-				return
+			return "time limit reached"
+		default:
+			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+				return "--pmessages value reached"
 			}
+			if p.Config.Rate > 0 {
+				_ = limiter.Wait(context.Background())
+			}
+			p.Send()
 		}
 	}
 }

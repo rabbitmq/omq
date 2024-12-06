@@ -3,6 +3,7 @@ package mqtt
 import (
 	"context"
 	"math/rand"
+	"sync/atomic"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -29,32 +30,6 @@ func NewMqttPublisher(cfg config.Config, id int) MqttPublisher {
 		Topic:      topic,
 		Config:     cfg,
 	}
-}
-
-func (p MqttPublisher) Start(ctx context.Context) {
-	// sleep random interval to avoid all publishers publishing at the same time
-	s := rand.Intn(1000)
-	time.Sleep(time.Duration(s) * time.Millisecond)
-
-	defer func() {
-		if p.Connection != nil {
-			p.Connection.Disconnect(250)
-		}
-	}()
-
-	p.Connect(ctx)
-
-	p.msg = utils.MessageBody(p.Config.Size)
-
-	switch p.Config.Rate {
-	case -1:
-		p.StartFullSpeed(ctx)
-	case 0:
-		p.StartIdle(ctx)
-	default:
-		p.StartRateLimited(ctx)
-	}
-	log.Debug("publisher stopped", "id", p.Id)
 }
 
 func (p *MqttPublisher) Connect(ctx context.Context) {
@@ -102,42 +77,50 @@ func (p MqttPublisher) connectionOptions() *mqtt.ClientOptions {
 	return opts
 }
 
-func (p MqttPublisher) StartFullSpeed(ctx context.Context) {
-	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Topic)
+func (p MqttPublisher) Start(ctx context.Context) {
+	// sleep random interval to avoid all publishers publishing at the same time
+	s := rand.Intn(1000)
+	time.Sleep(time.Duration(s) * time.Millisecond)
 
-	for msgSent := 0; msgSent < p.Config.PublishCount; msgSent++ {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			p.Send()
+	defer func() {
+		if p.Connection != nil {
+			p.Connection.Disconnect(250)
 		}
-	}
-}
+	}()
 
-func (p MqttPublisher) StartIdle(ctx context.Context) {
-	log.Info("publisher started", "id", p.Id, "rate", "-", "destination", p.Topic)
+	p.Connect(ctx)
 
-	<-ctx.Done()
-}
+	p.msg = utils.MessageBody(p.Config.Size)
 
-func (p MqttPublisher) StartRateLimited(ctx context.Context) {
 	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
-	ticker := utils.RateTicker(p.Config.Rate)
 
-	msgSent := 0
+	var farewell string
+	if p.Config.Rate == 0 {
+		// idle connection
+		<-ctx.Done()
+		farewell = "context cancelled"
+	} else {
+		farewell = p.StartPublishing(ctx)
+	}
+	p.Stop(farewell)
+}
+
+func (p MqttPublisher) StartPublishing(ctx context.Context) string {
+	limiter := utils.RateLimiter(p.Config.Rate)
+
+	var msgSent atomic.Int64
 	for {
 		select {
 		case <-ctx.Done():
-			p.Stop("time limit reached")
-			return
-		case <-ticker.C:
-			p.Send()
-			msgSent++
-			if msgSent >= p.Config.PublishCount {
-				p.Stop("--pmessages value reached")
-				return
+			return "time limit reached"
+		default:
+			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+				return "--pmessages value reached"
 			}
+			if p.Config.Rate > 0 {
+				_ = limiter.Wait(context.Background())
+			}
+			p.Send()
 		}
 	}
 }

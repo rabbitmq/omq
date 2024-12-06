@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/time/rate"
+
+	"github.com/panjf2000/ants/v2"
 	"github.com/rabbitmq/omq/pkg/log"
 )
 
@@ -118,9 +121,17 @@ func Rate(rate float32) string {
 	}
 }
 
-func RateTicker(rate float32) *time.Ticker {
-	if rate == 0 {
-		return nil
+func RateLimiter(publishRate float32) *rate.Limiter {
+	var limit rate.Limit
+	if publishRate == -1 {
+		limit = rate.Inf
+	} else {
+		limit = rate.Limit(publishRate)
 	}
-	return time.NewTicker(time.Duration(1_000_000/float64(rate)) * time.Microsecond)
+	// burst may need to be adjusted/dynamic, but for now it works pretty well
+	return rate.NewLimiter(limit, 1)
+}
+
+func AntsPool(maxInFlight int) (*ants.Pool, error) {
+	return ants.NewPool(maxInFlight, ants.WithExpiryDuration(time.Duration(10*time.Second)), ants.WithNonblocking(false))
 }
