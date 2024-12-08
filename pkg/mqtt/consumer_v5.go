@@ -120,6 +120,8 @@ func (c Mqtt5Consumer) Start(ctx context.Context, consumerReady chan bool) {
 func (c Mqtt5Consumer) Stop(reason string) {
 	log.Debug("closing consumer connection", "id", c.Id, "reason", reason)
 	if c.Connection != nil {
-		_ = c.Connection.Disconnect(context.TODO())
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = c.Connection.Disconnect(disconnectCtx)
 	}
 }

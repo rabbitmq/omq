@@ -72,7 +72,7 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 		uri := c.Config.ConsumerUri[c.whichUri]
 		c.whichUri++
 		hostname, vhost := hostAndVHost(uri)
-		conn, err := amqp.Dial(context.TODO(), uri, &amqp.ConnOptions{
+		conn, err := amqp.Dial(ctx, uri, &amqp.ConnOptions{
 			ContainerID: utils.InjectId(c.Config.ConsumerId, c.Id),
 			SASLType:    amqp.SASLTypeAnonymous(),
 			HostName:    vhost,
@@ -81,12 +81,12 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 			},
 		})
 		if err != nil {
-			log.Error("consumer failed to connect", "id", c.Id, "error", err.Error())
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(1 * time.Second):
-				continue
+			default:
+				log.Error("consumer failed to connect", "id", c.Id, "error", err.Error())
+				time.Sleep(1 * time.Second)
 			}
 		} else {
 			log.Debug("consumer connected", "id", c.Id, "uri", uri)
@@ -95,10 +95,14 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 	}
 
 	for c.Session == nil {
-		session, err := c.Connection.NewSession(context.TODO(), nil)
+		session, err := c.Connection.NewSession(ctx, nil)
 		if err != nil {
-			log.Error("consumer failed to create a session", "id", c.Id, "error", err.Error())
-			time.Sleep(1 * time.Second)
+			if err == context.Canceled {
+				return
+			} else {
+				log.Error("consumer failed to create a session", "id", c.Id, "error", err.Error())
+				time.Sleep(1 * time.Second)
+			}
 		} else {
 			c.Session = session
 		}
