@@ -140,7 +140,8 @@ func (p Mqtt5Publisher) Send(ctx context.Context) {
 	if err != nil {
 		// I couldn't find any way to prevent publishing just after omq
 		// initiated the shutdown procedure, so we have to ignore this
-		if !strings.Contains(err.Error(), "use of closed network connection") {
+		if !strings.Contains(err.Error(), "use of closed network connection") &&
+			!strings.Contains(err.Error(), "context canceled") {
 			log.Error("message sending failure", "id", p.Id, "error", err)
 		}
 		return
