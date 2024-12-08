@@ -75,6 +75,8 @@ func RootCmd() *cobra.Command {
 		"MQTT consumer QoS level (0, 1 or 2; default=0)")
 	mqttConsumerFlags.BoolVar(&cfg.MqttConsumer.CleanSession, "mqtt-consumer-clean-session", true,
 		"MQTT consumer clean session")
+	mqttConsumerFlags.DurationVar(&cfg.MqttConsumer.SessionExpiryInterval, "mqtt-consumer-session-expiry-interval", 0,
+		"MQTT consumer session expiry interval")
 
 	mqttPublisherFlags := pflag.NewFlagSet("mqtt-publisher", pflag.ContinueOnError)
 	mqttPublisherFlags.IntVar(&cfg.MqttPublisher.Version, "mqtt-publisher-version", 5,
@@ -83,6 +85,8 @@ func RootCmd() *cobra.Command {
 		"MQTT publisher QoS level (0, 1 or 2; default=0)")
 	mqttPublisherFlags.BoolVar(&cfg.MqttPublisher.CleanSession, "mqtt-publisher-clean-session", true,
 		"MQTT publisher clean session")
+	mqttPublisherFlags.DurationVar(&cfg.MqttPublisher.SessionExpiryInterval, "mqtt-publisher-session-expiry-interval", 0,
+		"MQTT publisher session expiry interval")
 
 	amqpPublisherFlags := pflag.NewFlagSet("amqp-publisher", pflag.ContinueOnError)
 
@@ -262,7 +266,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().Int32Var(&cfg.ConsumerPriority, "consumer-priority", 0, "Consumer priority")
 	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerCredits, "consumer-credits", 1,
 		"AMQP-1.0 consumer credits / STOMP prefetch count")
-	rootCmd.PersistentFlags().DurationVarP(&cfg.ConsumerLatency, "consumer-latency", "L", 0*time.Second,
+	rootCmd.PersistentFlags().DurationVarP(&cfg.ConsumerLatency, "consumer-latency", "L", 0,
 		"consumer latency (time to accept message)")
 	rootCmd.PersistentFlags().BoolVar(&cfg.LogOutOfOrder, "log-out-of-order-messages", false,
 		"Print a log line when a message is received that is older than the previously received message")

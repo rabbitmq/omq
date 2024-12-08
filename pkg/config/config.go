@@ -56,9 +56,10 @@ type AmqpOptions struct {
 }
 
 type MqttOptions struct {
-	Version      int
-	QoS          int
-	CleanSession bool
+	Version               int
+	QoS                   int
+	CleanSession          bool
+	SessionExpiryInterval time.Duration
 }
 
 type Config struct {

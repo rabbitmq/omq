@@ -58,6 +58,7 @@ func (c Mqtt5Consumer) Start(ctx context.Context, consumerReady chan bool) {
 		ConnectUsername:               urls[0].User.Username(),
 		ConnectPassword:               []byte(pass),
 		CleanStartOnInitialConnection: c.Config.MqttConsumer.CleanSession,
+		SessionExpiryInterval:         uint32(c.Config.MqttConsumer.SessionExpiryInterval.Seconds()),
 		KeepAlive:                     20,
 		ConnectRetryDelay:             1 * time.Second,
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
