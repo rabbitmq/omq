@@ -46,7 +46,6 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *Amqp10Consumer
 		consumer.whichUri = (id - 1) % len(cfg.ConsumerUri)
 	}
 
-	// TODO: context?
 	consumer.Connect(ctx)
 
 	return consumer
