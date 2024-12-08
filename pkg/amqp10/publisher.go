@@ -244,6 +244,9 @@ func (p *Amqp10Publisher) Send(ctx context.Context) error {
 	startTime := time.Now()
 	receipt, err := p.Sender.SendWithReceipt(ctx, msg, nil)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
 		var connErr *amqp.ConnError
 		var linkErr *amqp.LinkError
 		if errors.As(err, &connErr) {
