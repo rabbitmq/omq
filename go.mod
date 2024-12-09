@@ -3,7 +3,7 @@ module github.com/rabbitmq/omq
 go 1.23.0
 
 require (
-	github.com/Azure/go-amqp v1.3.1-0.20241204220653-2048490fff6e
+	github.com/Azure/go-amqp v1.4.0-beta.1
 	github.com/VictoriaMetrics/metrics v1.35.1
 	github.com/charmbracelet/log v0.4.0
 	github.com/eclipse/paho.golang v0.22.0
@@ -32,7 +32,7 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
-	github.com/google/pprof v0.0.0-20241203143554-1e3fdc7de467 // indirect
+	github.com/google/pprof v0.0.0-20241206021119-61a79c692802 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
