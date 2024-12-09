@@ -327,12 +327,12 @@ func start(cfg config.Config) {
 	// we can't do this in sanitizeConfig because we need to know
 	// the publisher and consumer protocols and these are set later on
 	if cfg.ConsumerLatency != 0 && cfg.ConsumerProto == config.MQTT {
-		fmt.Printf("Consumer latency is not supported for MQTT consumers")
+		fmt.Println("Consumer latency is not supported for MQTT consumers")
 		os.Exit(1)
 	}
 
 	if cfg.MaxInFlight > 1 && cfg.PublisherProto != config.AMQP {
-		fmt.Printf("max-in-flight > 1 is only supported for AMQP publishers")
+		fmt.Println("max-in-flight > 1 is only supported for AMQP publishers")
 		os.Exit(1)
 	}
 
@@ -526,7 +526,7 @@ func setUris(cfg *config.Config, command string) error {
 
 	if cfg.Uri != nil {
 		if cfg.PublisherUri != nil || cfg.ConsumerUri != nil {
-			fmt.Printf("ERROR: can't specify both --uri and --publisher-uri/--consumer-uri")
+			fmt.Println("ERROR: can't specify both --uri and --publisher-uri/--consumer-uri")
 			os.Exit(1)
 		}
 		cfg.PublisherUri = cfg.Uri
