@@ -47,6 +47,7 @@ var QueueTypes = map[QueueType][]string{
 
 type AmqpOptions struct {
 	Subjects           []string
+	SendSettled        bool
 	ReleaseRate        int
 	RejectRate         int
 	PropertyFilters    map[string]string

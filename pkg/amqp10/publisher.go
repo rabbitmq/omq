@@ -125,8 +125,14 @@ func (p *Amqp10Publisher) CreateSender() {
 		durability = amqp.DurabilityUnsettledState
 	}
 
+	settleMode := amqp.SenderSettleModeUnsettled.Ptr()
+	if p.Config.Amqp.SendSettled {
+		settleMode = amqp.SenderSettleModeSettled.Ptr()
+	}
+
 	for p.Sender == nil {
 		sender, err := p.Session.NewSender(context.TODO(), p.Terminus, &amqp.SenderOptions{
+			SettlementMode:   settleMode,
 			TargetDurability: durability,
 		})
 		if err != nil {
@@ -196,7 +202,12 @@ func (p *Amqp10Publisher) StartPublishing(ctx context.Context) string {
 				defer func() {
 					p.poolWg.Done()
 				}()
-				err := p.Send(ctx)
+				var err error
+				if p.Config.Amqp.SendSettled {
+					err = p.SendSync(ctx)
+				} else {
+					err = p.SendAsync(ctx)
+				}
 				if err != nil {
 					p.Connect()
 				}
@@ -205,57 +216,63 @@ func (p *Amqp10Publisher) StartPublishing(ctx context.Context) string {
 	}
 }
 
-func (p *Amqp10Publisher) Send(ctx context.Context) error {
-	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
-	msg := amqp.NewMessage(p.msg)
-
-	if len(p.Config.Amqp.AppProperties) > 0 {
-		msg.ApplicationProperties = make(map[string]any)
-		for key, val := range p.Config.Amqp.AppProperties {
-			msg.ApplicationProperties[key] = val[metrics.MessagesPublished.Get()%uint64(len(val))]
-		}
-	}
-
-	if len(p.Config.Amqp.Subjects) > 0 {
-		msg.Properties = &amqp.MessageProperties{Subject: &p.Config.Amqp.Subjects[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.Subjects))]}
-	}
-
-	if p.Config.StreamFilterValueSet != "" {
-		msg.Annotations = amqp.Annotations{"x-stream-filter-value": p.Config.StreamFilterValueSet}
-	}
-
-	msg.Header = &amqp.MessageHeader{}
-	msg.Header.Durable = p.Config.MessageDurability
-	if p.Config.MessagePriority != "" {
-		// already validated in root.go
-		priority, _ := strconv.ParseUint(p.Config.MessagePriority, 10, 8)
-		msg.Header.Priority = uint8(priority)
-	}
-	if p.Config.MessageTTL.Microseconds() > 0 {
-		msg.Header.TTL = p.Config.MessageTTL
-	}
+func (p *Amqp10Publisher) SendAsync(ctx context.Context) error {
+	msg := p.prepareMessage()
 
 	startTime := time.Now()
+	if p.Sender == nil {
+		return errors.New("sender is nil")
+	}
 	receipt, err := p.Sender.SendWithReceipt(ctx, msg, nil)
 	if err != nil {
 		select {
 		case <-ctx.Done():
 			return nil
 		default:
-			var connErr *amqp.ConnError
-			var linkErr *amqp.LinkError
-			if errors.As(err, &connErr) {
-				log.Error("publisher connection failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+			err = p.handleSendErrors(err)
+			if err != nil {
 				return err
-			} else if errors.As(err, &linkErr) {
-				log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
-				return err
-			} else {
-				log.Error("message sending failure", "id", p.Id, "error", err)
 			}
 		}
 	} else {
 		p.handleSent(&receipt, startTime)
+	}
+	return nil
+}
+
+func (p *Amqp10Publisher) SendSync(ctx context.Context) error {
+	msg := p.prepareMessage()
+	startTime := time.Now()
+	if p.Sender == nil {
+		return errors.New("sender is nil")
+	}
+	err := p.Sender.Send(context.TODO(), msg, nil)
+	latency := time.Since(startTime)
+	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
+	err = p.handleSendErrors(err)
+	if err != nil {
+		return err
+	}
+	// rejected messages are not counted as published, maybe they should be?
+	metrics.MessagesPublished.Inc()
+	metrics.PublishingLatency.Update(latency.Seconds())
+	return nil
+}
+
+// handleSendErrors returns an error if the error suggests we should reconnect
+// (this is native, but amqp-go-client should handle this better in the future)
+// otherwise we log an error but return nil to keep publishing
+func (p *Amqp10Publisher) handleSendErrors(err error) error {
+	var connErr *amqp.ConnError
+	var linkErr *amqp.LinkError
+	if errors.As(err, &connErr) {
+		log.Error("publisher connection failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+		return err
+	} else if errors.As(err, &linkErr) {
+		log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+		return err
+	} else if err != nil {
+		log.Error("message sending failure", "id", p.Id, "error", err)
 	}
 	return nil
 }
@@ -300,4 +317,36 @@ func (p *Amqp10Publisher) Stop(reason string) {
 	if p.Connection != nil {
 		_ = p.Connection.Close()
 	}
+}
+
+func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
+	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
+	msg := amqp.NewMessage(p.msg)
+
+	if len(p.Config.Amqp.AppProperties) > 0 {
+		msg.ApplicationProperties = make(map[string]any)
+		for key, val := range p.Config.Amqp.AppProperties {
+			msg.ApplicationProperties[key] = val[metrics.MessagesPublished.Get()%uint64(len(val))]
+		}
+	}
+
+	if len(p.Config.Amqp.Subjects) > 0 {
+		msg.Properties = &amqp.MessageProperties{Subject: &p.Config.Amqp.Subjects[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.Subjects))]}
+	}
+
+	if p.Config.StreamFilterValueSet != "" {
+		msg.Annotations = amqp.Annotations{"x-stream-filter-value": p.Config.StreamFilterValueSet}
+	}
+
+	msg.Header = &amqp.MessageHeader{}
+	msg.Header.Durable = p.Config.MessageDurability
+	if p.Config.MessagePriority != "" {
+		// already validated in root.go
+		priority, _ := strconv.ParseUint(p.Config.MessagePriority, 10, 8)
+		msg.Header.Priority = uint8(priority)
+	}
+	if p.Config.MessageTTL.Microseconds() > 0 {
+		msg.Header.TTL = p.Config.MessageTTL
+	}
+	return msg
 }
