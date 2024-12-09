@@ -125,14 +125,8 @@ func (p *Amqp10Publisher) CreateSender() {
 		durability = amqp.DurabilityUnsettledState
 	}
 
-	settleMode := amqp.SenderSettleModeUnsettled.Ptr()
-	if p.Config.Amqp.SendSettled {
-		settleMode = amqp.SenderSettleModeSettled.Ptr()
-	}
-
 	for p.Sender == nil {
 		sender, err := p.Session.NewSender(context.TODO(), p.Terminus, &amqp.SenderOptions{
-			SettlementMode:   settleMode,
 			TargetDurability: durability,
 		})
 		if err != nil {

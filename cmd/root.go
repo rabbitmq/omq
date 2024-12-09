@@ -94,8 +94,6 @@ func RootCmd() *cobra.Command {
 		"AMQP application properties, eg. key1=val1,val2")
 	amqpPublisherFlags.StringSliceVar(&cfg.Amqp.Subjects, "amqp-subject", []string{},
 		"AMQP 1.0 message subject(s)")
-	amqpPublisherFlags.BoolVar(&cfg.Amqp.SendSettled, "amqp-send-settled", false,
-		"Send settled messages (fire and forget)")
 
 	amqpConsumerFlags := pflag.NewFlagSet("amqp-consumer", pflag.ContinueOnError)
 
