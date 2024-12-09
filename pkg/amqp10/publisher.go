@@ -244,19 +244,21 @@ func (p *Amqp10Publisher) Send(ctx context.Context) error {
 	startTime := time.Now()
 	receipt, err := p.Sender.SendWithReceipt(ctx, msg, nil)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
+		select {
+		case <-ctx.Done():
 			return nil
-		}
-		var connErr *amqp.ConnError
-		var linkErr *amqp.LinkError
-		if errors.As(err, &connErr) {
-			log.Error("publisher connection failure; reconnecting...", "id", p.Id, "error", connErr.Error())
-			return err
-		} else if errors.As(err, &linkErr) {
-			log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
-			return err
-		} else {
-			log.Error("message sending failure", "id", p.Id, "error", err)
+		default:
+			var connErr *amqp.ConnError
+			var linkErr *amqp.LinkError
+			if errors.As(err, &connErr) {
+				log.Error("publisher connection failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+				return err
+			} else if errors.As(err, &linkErr) {
+				log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+				return err
+			} else {
+				log.Error("message sending failure", "id", p.Id, "error", err)
+			}
 		}
 	} else {
 		p.handleSent(&receipt, startTime)
