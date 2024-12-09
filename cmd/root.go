@@ -574,8 +574,8 @@ func sanitizeConfig(cfg *config.Config) error {
 		return fmt.Errorf("combined release and reject rate can't be more than 100%%")
 	}
 
-	if cfg.MaxInFlight < 1 || cfg.MaxInFlight > 256 {
-		return fmt.Errorf("max-in-flight must be between 1 and 256")
+	if cfg.MaxInFlight < 1 {
+		return fmt.Errorf("max-in-flight must be at least 1")
 	}
 
 	// go-amqp treats `0` as if the value was not set and uses 1 credit
