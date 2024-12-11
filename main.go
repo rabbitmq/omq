@@ -20,7 +20,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 		_ = pprof.StartCPUProfile(cpuFile)
 	}
-	if os.Getenv("OMQ_FGROF") == "true" {
+	if os.Getenv("OMQ_FGPROF") == "true" {
 		http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
 		go func() {
 			_ = http.ListenAndServe(":6060", nil)
