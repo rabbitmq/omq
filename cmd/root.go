@@ -104,9 +104,9 @@ func RootCmd() *cobra.Command {
 	amqpConsumerFlags.IntVar(&cfg.Amqp.ReleaseRate, "amqp-release-rate", 0,
 		"Rate of messages to release without accepting (0-100%)")
 	amqpConsumerFlags.StringArrayVar(&amqpAppPropertyFilters, "amqp-app-property-filter", []string{},
-		"AMQP application property filters, eg. key1=$p:prefix")
+		"AMQP application property filters, eg. key1=&p:prefix")
 	amqpConsumerFlags.StringArrayVar(&amqpPropertyFilters, "amqp-property-filter", []string{},
-		"AMQP property filters, eg. key1=$p:prefix")
+		"AMQP property filters, eg. key1=&p:prefix")
 
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",

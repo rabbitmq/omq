@@ -80,8 +80,8 @@ Note that this is a separate feature from stream filtering of the Stream protoco
 1. When publishing, you can specify application properties. If multiple values are provided, one of them is used for each message
    (so you get a mix of messages with different values). For example, `--amqp-app-property key=foo,bar,baz` will publish some messages
    with `key=foo`, some with `key=bar` and some with `key=baz` (in roughly equal proportions).
-2. When consuming, you can apply a filter, for example, `--amqp-app-property-filter key=$p:ba` will tell RabbitMQ to only deliver
-   messages where the `key` property starts with `ba` (`$p:` means that what follows is a prefix), so it'll return roughly 66%
+2. When consuming, you can apply a filter, for example, `--amqp-app-property-filter key=&p:ba` will tell RabbitMQ to only deliver
+   messages where the `key` property starts with `ba` (`&p:` means that what follows is a prefix), so it'll return roughly 66%
    of the messages in the stream. You can filter on properties (eg. `subject`) or application properties.
 
 Here's a full example, where we can see this in action:
@@ -129,7 +129,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
 
 ```
       --amqp-app-property stringArray           AMQP application properties, eg. key1=val1,val2
-      --amqp-app-property-filter stringArray    AMQP application property filters, eg. key1=$p:prefix
+      --amqp-app-property-filter stringArray    AMQP application property filters, eg. key1=&p:prefix
       --binding-key string                      AMQP 1.0 consumer binding key
       --amqp-property-filter stringArray        AMQP property filters, eg. subject=foo
       --amqp-reject-rate int                    Rate of messages to reject (0-100%)
