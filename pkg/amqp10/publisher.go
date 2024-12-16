@@ -303,17 +303,17 @@ func (p *Amqp10Publisher) handleSent(receipt *amqp.SendReceipt, published time.T
 	case *amqp.StateModified:
 		// message must be modified and resent before it can be processed.
 		// the values in stateType provide further context.
-		log.Info("server requires modifications to accept this message", "state", stateType)
+		log.Debug("server requires modifications to accept this message", "state", stateType)
 	case *amqp.StateReceived:
 		// see the fields in [StateReceived] for information on
 		// how to handle this delivery state.
-		log.Info("message received but not processed by the broker", "state", stateType)
+		log.Debug("message received but not processed by the broker", "state", stateType)
 	case *amqp.StateRejected:
 		if stateType.Error != nil {
 			log.Info("message rejected by the broker", "state", stateType.Error)
 		}
 	case *amqp.StateReleased:
-		log.Info("message released the broker", "state", stateType)
+		log.Debug("message released the broker", "state", stateType)
 	}
 	log.Debug("message receipt received", "outcome", state)
 }
