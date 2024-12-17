@@ -332,6 +332,7 @@ func (p *Amqp10Publisher) Stop(reason string) {
 func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	msg := amqp.NewMessage(p.msg)
+	msg.Properties = &amqp.MessageProperties{}
 
 	if len(p.Config.Amqp.AppProperties) > 0 {
 		msg.ApplicationProperties = make(map[string]any)
@@ -341,7 +342,11 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	}
 
 	if len(p.Config.Amqp.Subjects) > 0 {
-		msg.Properties = &amqp.MessageProperties{Subject: &p.Config.Amqp.Subjects[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.Subjects))]}
+		msg.Properties.Subject = &p.Config.Amqp.Subjects[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.Subjects))]
+	}
+
+	if len(p.Config.Amqp.To) > 0 {
+		msg.Properties.To = &p.Config.Amqp.To[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.To))]
 	}
 
 	if p.Config.StreamFilterValueSet != "" {
