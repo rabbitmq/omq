@@ -1,8 +1,8 @@
 ## omq
 
-`omq` is a messaging system client for testing purposes. It currently supports AMQP-1.0, STOMP and MQTT 3.1/3.1.1/5.0.
-It is developed mostly for RabbitMQ but might be useful for other brokers as well (some tests against ActiveMQ
-were performed).
+`omq` is a messaging system client for testing purposes. It currently supports AMQP-1.0, STOMP and MQTT 3.1/3.1.1/5.0
+and partially AMQP 0.9.1 (only for publishing). It is developed mostly for RabbitMQ but might be useful for other brokers
+as well (some tests against ActiveMQ were performed).
 
 `omq` starts a group of publishers and a group of consumers, in both cases all publishers/consumers are identical,
 except for the target terminus/queue/routing key, which may be slightly different. The publishers can use
@@ -64,6 +64,12 @@ Different protocols refer to the targets / sources of messages differently and R
 For convenience, if either `--publish-to` or `--consume-from` starts with `/exchange/amq.topic/` or `/topic/`, MQTT publisher/consumer
 will remove that prefix. RabbitMQ only allows using a single topic exchange with MQTT (`amq.topic` by default), so this prefix doesn't make
 much sense. Removing it makes it easier to use the same parameters across protocols.
+
+AMQP 0.9.1 publishers use the same target address as AMQP 1.0:
+* `/queues/foo` will publish to the default exchange with the routing key `foo`
+* `/exchange/bar` will publish to the `bar` exchange with an empty routing key
+* `/exchange/bar/baz` will publish to the `bar` exchange with the routing key `baz`
+* any `--publish-to` value that doesn't match any of the above formats is treated as a routing key for the default exchange
 
 Read more about how RabbitMQ handles sources and targets in different protocols:
 * [AMQP 1.0](https://www.rabbitmq.com/docs/amqp#address-v1) format used by RabbitMQ 3.x
@@ -127,53 +133,5 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
 
 ### Options
 
-```
-      --amqp-app-property stringArray           AMQP application properties, eg. key1=val1,val2
-      --amqp-app-property-filter stringArray    AMQP application property filters, eg. key1=&p:prefix
-      --binding-key string                      AMQP 1.0 consumer binding key
-      --amqp-property-filter stringArray        AMQP property filters, eg. subject=foo
-      --amqp-reject-rate int                    Rate of messages to reject (0-100%)
-      --amqp-release-rate int                   Rate of messages to release without accepting (0-100%)
-      --amqp-subject strings                    AMQP 1.0 message subject(s), eg. foo,bar,baz
-      --amqp-to strings                         AMQP 1.0 message To field (required for the anonymous terminus)
-      --mqtt-consumer-version int               MQTT consumer protocol version (3, 4 or 5; default=5) (default 5)
-      --mqtt-publisher-clean-session            MQTT publisher clean session (default true)
-      --mqtt-publisher-qos int                  MQTT publisher QoS level (0, 1 or 2; default=0)
-      --mqtt-publisher-version int              MQTT consumer protocol version (3, 4 or 5; default=5) (default 5)
-      --binding-key string                      Binding key for queue declarations
-      --cleanup-queues                          Delete the queues at the end (omq only deletes the queues it explicitly declared)
-  -D, --cmessages int                           The number of messages to consume per consumer (default=MaxInt) (default 9223372036854775807)
-  -T, --consume-from string                     The queue/topic/terminus to consume from (%d will be replaced with the consumer's id) (default "/queues/omq-%d")
-      --consumer-credits int                    AMQP-1.0 consumer credits / STOMP prefetch count (default 1)
-      --consumer-id string                      Client ID for AMQP and MQTT consumers (%d => consumer's id, %r => random) (default "omq-consumer-%d")
-  -L, --consumer-latency duration               consumer latency (time to accept message)
-      --consumer-priority int32                 Consumer priority
-      --consumer-startup-delay duration         Delay consumer startup to allow a backlog of messages to build up (eg. 10s)
-      --consumer-uri strings                    URI for consuming
-  -y, --consumers int                           The number of consumers to start (default 1)
-      --expected-instances int                  The number of instances to synchronize (default 1)
-      --expected-instances-endpoint string      The DNS name that will return members to synchronize with
-  -h, --help                                    help for omq
-  -l, --log-level log-level                     Log level (debug, info, error) (default info)
-      --log-out-of-order-messages               Print a log line when a message is received that is older than the previously received message
-  -c, --max-in-flight int                       Maximum number of in-flight messages per publisher (default 1)
-  -d, --message-durability                      Mark messages as durable (default true)
-      --message-priority string                 Message priority (0-255, default=unset)
-      --message-ttl duration                    Message TTL (not set by default)
-      --metric-tags strings                     Prometheus label-value pairs, eg. l1=v1,l2=v2
-  -C, --pmessages int                           The number of messages to send per publisher (default 9223372036854775807)
-      --print-all-metrics                       Print all metrics before exiting
-  -t, --publish-to string                       The topic/terminus to publish to (%d will be replaced with the publisher's id) (default "/queues/omq-%d")
-      --publisher-id string                     Client ID for AMQP and MQTT publishers (%d => consumer's id, %r => random) (default "omq-publisher-%d")
-      --publisher-uri strings                   URI for publishing
-  -x, --publishers int                          The number of publishers to start (default 1)
-      --queue-durability queue-durability       Queue durability (default: configuration - the queue definition is durable) (default configuration)
-      --queues predeclared                      Type of queues to declare (or predeclared to use existing queues) (default predeclared)
-  -r, --rate float32                            Messages per second (-1 = unlimited) (default -1)
-  -s, --size int                                Message payload size in bytes (default 12)
-      --spread-connections                      Spread connections across URIs (default true)
-      --stream-offset string                    Stream consumer offset specification (default=next)
-  -z, --time duration                           Run duration (eg. 10s, 5m, 2h)
-      --uri strings                             URI for both publishers and consumers
-  -m, --use-millis                              Use milliseconds for timestamps (automatically enabled when no publishers or no consumers)
-```
+Use `omq --help` for the full list of options. Keep in mind that some options are protocol-specific and therefore will only
+be printed with the corresponding subcommand. For example `omq mqtt --help` will additionally show MQTT-specific options.

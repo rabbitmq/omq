@@ -10,6 +10,7 @@ type Protocol int
 
 const (
 	AMQP Protocol = iota
+	AMQP091
 	STOMP
 	MQTT
 	MQTT5
