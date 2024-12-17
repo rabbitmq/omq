@@ -135,6 +135,7 @@ messages published with perf-test can be consumed by `omq` or vice versa, and th
       --amqp-reject-rate int                    Rate of messages to reject (0-100%)
       --amqp-release-rate int                   Rate of messages to release without accepting (0-100%)
       --amqp-subject strings                    AMQP 1.0 message subject(s), eg. foo,bar,baz
+      --amqp-to strings                         AMQP 1.0 message To field (required for the anonymous terminus)
       --mqtt-consumer-version int               MQTT consumer protocol version (3, 4 or 5; default=5) (default 5)
       --mqtt-publisher-clean-session            MQTT publisher clean session (default true)
       --mqtt-publisher-qos int                  MQTT publisher QoS level (0, 1 or 2; default=0)
