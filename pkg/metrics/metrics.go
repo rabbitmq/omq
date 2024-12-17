@@ -66,7 +66,7 @@ func Start(ctx context.Context, cfg config.Config) *MetricsServer {
 
 	go func() {
 		for {
-			metricsServer.started = time.Now()
+			metricsServer.started = time.Now() // updated later for higher accuracy
 			log.Debug("starting Prometheus metrics server", "address", metricsServer.httpServer.Addr)
 			err := metricsServer.httpServer.ListenAndServe()
 			if errors.Is(err, syscall.EADDRINUSE) {
@@ -166,6 +166,10 @@ func (m *MetricsServer) printMessageRates(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+func (m *MetricsServer) StartTime(t time.Time) {
+	m.started = t
 }
 
 func (m *MetricsServer) Stop() {

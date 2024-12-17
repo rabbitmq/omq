@@ -373,6 +373,7 @@ func start(cfg config.Config) {
 
 	startPublishing := make(chan bool)
 	startPublishers(ctx, &wg, startPublishing)
+	metricsServer.StartTime(time.Now())
 	close(startPublishing)
 
 	if cfg.Duration > 0 {
