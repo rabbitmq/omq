@@ -32,16 +32,20 @@ import (
 
 var cfg config.Config
 var (
-	amqp_amqp   = &cobra.Command{}
-	amqp_stomp  = &cobra.Command{}
-	amqp_mqtt   = &cobra.Command{}
-	stomp_stomp = &cobra.Command{}
-	stomp_amqp  = &cobra.Command{}
-	stomp_mqtt  = &cobra.Command{}
-	mqtt_mqtt   = &cobra.Command{}
-	mqtt_amqp   = &cobra.Command{}
-	mqtt_stomp  = &cobra.Command{}
-	versionCmd  = &cobra.Command{}
+	amqp_amqp       = &cobra.Command{}
+	amqp_stomp      = &cobra.Command{}
+	amqp_mqtt       = &cobra.Command{}
+	stomp_stomp     = &cobra.Command{}
+	stomp_amqp      = &cobra.Command{}
+	stomp_mqtt      = &cobra.Command{}
+	mqtt_mqtt       = &cobra.Command{}
+	mqtt_amqp       = &cobra.Command{}
+	mqtt_stomp      = &cobra.Command{}
+	amqp091_amqp091 = &cobra.Command{}
+	amqp091_amqp    = &cobra.Command{}
+	amqp091_mqtt    = &cobra.Command{}
+	amqp091_stomp   = &cobra.Command{}
+	versionCmd      = &cobra.Command{}
 )
 
 var (
@@ -206,6 +210,43 @@ func RootCmd() *cobra.Command {
 	}
 	mqtt_stomp.Flags().AddFlagSet(mqttPublisherFlags)
 
+	amqp091_amqp091 = &cobra.Command{
+		Use:     "amqp091-amqp091",
+		Aliases: []string{"amqp091"},
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.AMQP091
+			cfg.ConsumerProto = config.AMQP091
+			start(cfg)
+		},
+	}
+
+	amqp091_amqp = &cobra.Command{
+		Use: "amqp091-amqp",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.AMQP091
+			cfg.ConsumerProto = config.AMQP
+			start(cfg)
+		},
+	}
+
+	amqp091_mqtt = &cobra.Command{
+		Use: "amqp091-mqtt",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.AMQP091
+			cfg.ConsumerProto = config.MQTT
+			start(cfg)
+		},
+	}
+
+	amqp091_stomp = &cobra.Command{
+		Use: "amqp091-stomp",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.AMQP091
+			cfg.ConsumerProto = config.STOMP
+			start(cfg)
+		},
+	}
+
 	versionCmd = &cobra.Command{
 		Use: "version",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -320,6 +361,10 @@ func RootCmd() *cobra.Command {
 	rootCmd.AddCommand(mqtt_mqtt)
 	rootCmd.AddCommand(mqtt_amqp)
 	rootCmd.AddCommand(mqtt_stomp)
+	rootCmd.AddCommand(amqp091_amqp091)
+	rootCmd.AddCommand(amqp091_amqp)
+	rootCmd.AddCommand(amqp091_mqtt)
+	rootCmd.AddCommand(amqp091_stomp)
 	rootCmd.AddCommand(versionCmd)
 
 	return rootCmd
@@ -502,7 +547,7 @@ func startPublishers(ctx context.Context, wg *sync.WaitGroup, startPublishing ch
 				// then we close the channel to allow all of them to start publishing "at once"
 				// but each publisher sleeps for a random sub-second time, to avoid burts of
 				// messages being published
-				p.Start(ctx, publisherReady, startPublishing)
+				p.Start(publisherReady, startPublishing)
 			}()
 			<-publisherReady
 		}
@@ -551,6 +596,8 @@ func defaultUri(proto string) string {
 	uri := "localhost"
 	switch proto {
 	case "amqp":
+		uri = "amqp://localhost/"
+	case "amqp091":
 		uri = "amqp://localhost/"
 	case "stomp":
 		uri = "stomp://localhost:61613"

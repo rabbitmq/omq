@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rabbitmq/omq/pkg/amqp091"
 	"github.com/rabbitmq/omq/pkg/amqp10"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/mqtt"
@@ -11,7 +12,7 @@ import (
 )
 
 type Publisher interface {
-	Start(context.Context, chan bool, chan bool)
+	Start(chan bool, chan bool)
 }
 
 type Consumer interface {
@@ -24,6 +25,12 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) (Publisher, er
 		p := amqp10.NewPublisher(ctx, cfg, id)
 		if p == nil {
 			return nil, fmt.Errorf("failed to create an AMQP-1.0 publisher")
+		}
+		return p, nil
+	case config.AMQP091:
+		p := amqp091.NewPublisher(ctx, cfg, id)
+		if p == nil {
+			return nil, fmt.Errorf("failed to create an AMQP-0.9.1 publisher")
 		}
 		return p, nil
 	case config.STOMP:

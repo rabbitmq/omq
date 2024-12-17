@@ -21,6 +21,7 @@ type StompPublisher struct {
 	Connection *stomp.Conn
 	Topic      string
 	Config     config.Config
+	ctx        context.Context
 	msg        []byte
 	whichUri   int
 }
@@ -31,6 +32,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *StompPublishe
 		Connection: nil,
 		Topic:      utils.InjectId(cfg.PublishTo, id),
 		Config:     cfg,
+		ctx:        ctx,
 	}
 
 	if cfg.SpreadConnections {
@@ -71,13 +73,13 @@ func (p *StompPublisher) Connect() {
 	}
 }
 
-func (p *StompPublisher) Start(ctx context.Context, publisherReady chan bool, startPublishing chan bool) {
+func (p *StompPublisher) Start(publisherReady chan bool, startPublishing chan bool) {
 	p.msg = utils.MessageBody(p.Config.Size)
 
 	close(publisherReady)
 
 	select {
-	case <-ctx.Done():
+	case <-p.ctx.Done():
 		return
 	case <-startPublishing:
 		// short random delay to avoid all publishers publishing at the same time
@@ -89,28 +91,28 @@ func (p *StompPublisher) Start(ctx context.Context, publisherReady chan bool, st
 	var farewell string
 	if p.Config.Rate == 0 {
 		// idle connection
-		<-ctx.Done()
+		<-p.ctx.Done()
 		farewell = "context cancelled"
 	} else {
-		farewell = p.StartPublishing(ctx)
+		farewell = p.StartPublishing()
 	}
 	p.Stop(farewell)
 }
 
-func (p *StompPublisher) StartPublishing(ctx context.Context) string {
+func (p *StompPublisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent atomic.Int64
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.ctx.Done():
 			return "context cancelled"
 		default:
 			if msgSent.Add(1) > int64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
-				_ = limiter.Wait(ctx)
+				_ = limiter.Wait(p.ctx)
 			}
 			err := p.Send()
 			if err != nil {

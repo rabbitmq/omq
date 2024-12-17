@@ -1,6 +1,8 @@
 package mqtt
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/rabbitmq/omq/pkg/config"
@@ -16,7 +18,7 @@ var _ = Context("MQTT 3.1/3.1.1 client", func() {
 				CleanSession: true,
 			},
 		}
-		publisher := NewMqttPublisher(cfg, 1)
+		publisher := NewMqttPublisher(context.Background(), cfg, 1)
 		opts := publisher.connectionOptions()
 		Expect(opts.ClientID).To(Equal("my-client-id-1"))
 		Expect(opts.Servers[0].Host).To(Equal("publisher:1883"))
@@ -32,7 +34,7 @@ var _ = Context("MQTT 3.1/3.1.1 client", func() {
 						CleanSession: true,
 					},
 				}
-				publisher := NewMqtt5Publisher(cfg, 1)
+				publisher := NewMqtt5Publisher(context.Background(), cfg, 1)
 				opts := publisher.connectionOptions()
 				Expect(opts.ClientID).To(Equal("my-client-id-1"))
 				Expect(opts.ServerUrls[0].Host).To(Equal("publisher:1883"))

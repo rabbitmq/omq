@@ -117,6 +117,9 @@ var _ = Describe("OMQ CLI", func() {
 		Entry("stomp -> mqtt", "stomp", "/topic/", "mqtt", "/topic/"),
 		Entry("mqtt -> mqtt", "mqtt", "/topic/", "mqtt", "/topic/"),
 		Entry("mqtt -> stomp", "mqtt", "/topic/", "stomp", "/topic/"),
+		Entry("amqp091 -> amqp", "amqp091", "/queues/", "amqp", "/queues/"),               // https://github.com/Azure/go-amqp/issues/313
+		Entry("amqp091 -> mqtt", "amqp091", "/exchanges/amq.topic/", "mqtt", "/topic/"),   // https://github.com/Azure/go-amqp/issues/313
+		Entry("amqp091 -> stomp", "amqp091", "/exchanges/amq.topic/", "stomp", "/topic/"), // https://github.com/Azure/go-amqp/issues/313
 	)
 
 	DescribeTable("supports message priorities for AMQP and STOMP",

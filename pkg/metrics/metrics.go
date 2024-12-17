@@ -34,6 +34,7 @@ var metricsServer *MetricsServer
 var (
 	CommandLineArgs                          *vmetrics.Gauge
 	MessagesPublished                        *vmetrics.Counter
+	MessagesConfirmed                        *vmetrics.Counter
 	MessagesConsumedNormalPriority           *vmetrics.Counter
 	MessagesConsumedHighPriority             *vmetrics.Counter
 	MessagesConsumedOutOfOrderNormalPriority *vmetrics.Counter
@@ -88,6 +89,7 @@ func registerMetrics(globalLabels map[string]string) {
 	highPriorityLabels := labelsToString(high)
 
 	MessagesPublished = vmetrics.GetOrCreateCounter("omq_messages_published_total" + labelsToString(globalLabels))
+	MessagesConfirmed = vmetrics.GetOrCreateCounter("omq_messages_confirmed_total" + labelsToString(globalLabels))
 	MessagesConsumedNormalPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_total` + normalPriorityLabels)
 	MessagesConsumedHighPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_total` + highPriorityLabels)
 	MessagesConsumedOutOfOrderNormalPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + normalPriorityLabels)
@@ -182,6 +184,7 @@ func (m *MetricsServer) Stop() {
 func (m *MetricsServer) PrintSummary() {
 	log.Print("TOTAL PUBLISHED",
 		"messages", MessagesPublished.Get(),
+		"confirmed", MessagesConfirmed.Get(),
 		"rate", fmt.Sprintf("%.2f/s", float64(MessagesPublished.Get())/time.Since(m.started).Seconds()))
 	log.Print("TOTAL CONSUMED",
 		"messages", MessagesConsumedNormalPriority.Get()+MessagesConsumedHighPriority.Get(),
