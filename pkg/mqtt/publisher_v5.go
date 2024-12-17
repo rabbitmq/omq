@@ -21,26 +21,28 @@ type Mqtt5Publisher struct {
 	Connection *autopaho.ConnectionManager
 	Topic      string
 	Config     config.Config
+	ctx        context.Context
 	msg        []byte
 }
 
-func NewMqtt5Publisher(cfg config.Config, id int) Mqtt5Publisher {
+func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) Mqtt5Publisher {
 	topic := publisherTopic(cfg.PublishTo, id)
 	return Mqtt5Publisher{
 		Id:         id,
 		Connection: nil,
 		Topic:      topic,
 		Config:     cfg,
+		ctx:        ctx,
 	}
 }
 
-func (p *Mqtt5Publisher) Connect(ctx context.Context) {
+func (p *Mqtt5Publisher) Connect() {
 	opts := p.connectionOptions()
-	connection, err := autopaho.NewConnection(ctx, opts)
+	connection, err := autopaho.NewConnection(p.ctx, opts)
 	if err != nil {
 		log.Error("publisher connection failed", "id", p.Id, "error", err)
 	}
-	err = connection.AwaitConnection(ctx)
+	err = connection.AwaitConnection(p.ctx)
 	if err != nil {
 		// AwaitConnection only returns an error if the context is cancelled
 		return
@@ -78,15 +80,15 @@ func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 	return opts
 }
 
-func (p Mqtt5Publisher) Start(ctx context.Context, publisherReady chan bool, startPublishing chan bool) {
-	p.Connect(ctx)
+func (p Mqtt5Publisher) Start(publisherReady chan bool, startPublishing chan bool) {
+	p.Connect()
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
 	close(publisherReady)
 
 	select {
-	case <-ctx.Done():
+	case <-p.ctx.Done():
 		return
 	case <-startPublishing:
 		// short random delay to avoid all publishers publishing at the same time
@@ -98,10 +100,10 @@ func (p Mqtt5Publisher) Start(ctx context.Context, publisherReady chan bool, sta
 	var farewell string
 	if p.Config.Rate == 0 {
 		// idle connection
-		<-ctx.Done()
+		<-p.ctx.Done()
 		farewell = "context cancelled"
 	} else {
-		farewell = p.StartPublishing(ctx)
+		farewell = p.StartPublishing()
 	}
 	// TODO it seems that sometimes if we stop quickly after sending
 	// a message, this message is not delivered, even though Publish
@@ -110,30 +112,30 @@ func (p Mqtt5Publisher) Start(ctx context.Context, publisherReady chan bool, sta
 	p.Stop(farewell)
 }
 
-func (p Mqtt5Publisher) StartPublishing(ctx context.Context) string {
+func (p Mqtt5Publisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent atomic.Int64
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.ctx.Done():
 			return "time limit reached"
 		default:
 			if msgSent.Add(1) > int64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
-				_ = limiter.Wait(ctx)
+				_ = limiter.Wait(p.ctx)
 			}
-			p.Send(ctx)
+			p.Send()
 		}
 	}
 }
 
-func (p Mqtt5Publisher) Send(ctx context.Context) {
+func (p Mqtt5Publisher) Send() {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	startTime := time.Now()
-	_, err := p.Connection.Publish(ctx, &paho.Publish{
+	_, err := p.Connection.Publish(p.ctx, &paho.Publish{
 		QoS:     byte(p.Config.MqttPublisher.QoS),
 		Topic:   p.Topic,
 		Payload: p.msg,

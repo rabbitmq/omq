@@ -149,7 +149,7 @@ func (p *Amqp10Publisher) CreateSender() {
 	}
 }
 
-func (p *Amqp10Publisher) Start(ctx context.Context, publisherReady chan bool, startPublishing chan bool) {
+func (p *Amqp10Publisher) Start(publisherReady chan bool, startPublishing chan bool) {
 	p.msg = utils.MessageBody(p.Config.Size)
 
 	var err error
@@ -163,7 +163,7 @@ func (p *Amqp10Publisher) Start(ctx context.Context, publisherReady chan bool, s
 	close(publisherReady)
 
 	select {
-	case <-ctx.Done():
+	case <-p.ctx.Done():
 		return
 	case <-startPublishing:
 		// short random delay to avoid all publishers publishing at the same time
@@ -174,28 +174,28 @@ func (p *Amqp10Publisher) Start(ctx context.Context, publisherReady chan bool, s
 	var farewell string
 	if p.Config.Rate == 0 {
 		// idle connection
-		<-ctx.Done()
+		<-p.ctx.Done()
 		farewell = "context cancelled"
 	} else {
-		farewell = p.StartPublishing(ctx)
+		farewell = p.StartPublishing()
 	}
 	p.Stop(farewell)
 }
 
-func (p *Amqp10Publisher) StartPublishing(ctx context.Context) string {
+func (p *Amqp10Publisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent atomic.Int64
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.ctx.Done():
 			return "context cancelled"
 		default:
 			if msgSent.Add(1) > int64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
-				_ = limiter.Wait(ctx)
+				_ = limiter.Wait(p.ctx)
 			}
 			p.poolWg.Add(1)
 			_ = p.pool.Submit(func() {
@@ -204,9 +204,9 @@ func (p *Amqp10Publisher) StartPublishing(ctx context.Context) string {
 				}()
 				var err error
 				if p.Config.Amqp.SendSettled {
-					err = p.SendSync(ctx)
+					err = p.SendSync()
 				} else {
-					err = p.SendAsync(ctx)
+					err = p.SendAsync()
 				}
 				if err != nil {
 					p.Connect()
@@ -216,20 +216,20 @@ func (p *Amqp10Publisher) StartPublishing(ctx context.Context) string {
 	}
 }
 
-func (p *Amqp10Publisher) SendAsync(ctx context.Context) error {
+func (p *Amqp10Publisher) SendAsync() error {
 	msg := p.prepareMessage()
 
 	startTime := time.Now()
 	if p.Sender == nil {
 		return errors.New("sender is nil")
 	}
-	receipt, err := p.Sender.SendWithReceipt(ctx, msg, nil)
+	receipt, err := p.Sender.SendWithReceipt(p.ctx, msg, nil)
 	if err != nil {
 		select {
-		case <-ctx.Done():
+		case <-p.ctx.Done():
 			return nil
 		default:
-			err = p.handleSendErrors(ctx, err)
+			err = p.handleSendErrors(p.ctx, err)
 			if err != nil {
 				return err
 			}
@@ -240,7 +240,7 @@ func (p *Amqp10Publisher) SendAsync(ctx context.Context) error {
 	return nil
 }
 
-func (p *Amqp10Publisher) SendSync(ctx context.Context) error {
+func (p *Amqp10Publisher) SendSync() error {
 	msg := p.prepareMessage()
 	startTime := time.Now()
 	if p.Sender == nil {
@@ -249,7 +249,7 @@ func (p *Amqp10Publisher) SendSync(ctx context.Context) error {
 	err := p.Sender.Send(context.TODO(), msg, nil)
 	latency := time.Since(startTime)
 	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
-	err = p.handleSendErrors(ctx, err)
+	err = p.handleSendErrors(p.ctx, err)
 	if err != nil {
 		return err
 	}

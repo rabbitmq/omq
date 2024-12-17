@@ -74,7 +74,7 @@ func (m *Mgmt) connection() rmq.IConnection {
 func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	log.Info("Declaring queues...")
 	// declare queues for AMQP publishers
-	if cfg.PublisherProto == config.AMQP && strings.HasPrefix(cfg.PublishTo, "/queues/") {
+	if (cfg.PublisherProto == config.AMQP || cfg.PublisherProto == config.AMQP091) && strings.HasPrefix(cfg.PublishTo, "/queues/") {
 		queueName := strings.TrimPrefix(cfg.PublishTo, "/queues/")
 		for i := 1; i <= cfg.Publishers; i++ {
 			m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
@@ -192,6 +192,27 @@ func parsePublishTo(proto config.Protocol, publishTo string, id int) (string, st
 		if parts[1] == "exchanges" && len(parts) == 4 {
 			exchange = parts[2]
 			routingKey = parts[3]
+		}
+	}
+
+	if proto == config.AMQP091 {
+		if parts[1] == "queues" && len(parts) == 3 {
+			exchange = "amq.default"
+			routingKey = parts[2]
+		}
+
+		if parts[1] == "exchanges" && len(parts) == 3 {
+			exchange = parts[2]
+		}
+
+		if parts[1] == "exchanges" && len(parts) == 4 {
+			exchange = parts[2]
+			routingKey = parts[3]
+		}
+
+		if len(parts) == 2 {
+			exchange = "amq.default"
+			routingKey = parts[1]
 		}
 	}
 

@@ -108,7 +108,7 @@ var _ = Describe("OMQ CLI", func() {
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=1`))
 			Eventually(session).Should(gbytes.Say(`omq_messages_consumed_total{priority="normal"} 1`))
 		},
-		Entry("amqp -> amqp", "amqp", "/queues/", "amqp", "/queues/"), // https://github.com/Azure/go-amqp/issues/313
+		Entry("amqp -> amqp", "amqp", "/queues/", "amqp", "/queues/"),
 		Entry("stomp -> amqp", "stomp", "/topic/", "amqp", "/queues/"),
 		Entry("mqtt -> amqp", "mqtt", "/topic/", "amqp", "/queues/"),
 		Entry("amqp -> stomp", "amqp", "/exchanges/amq.topic/", "stomp", "/topic/"),
@@ -117,6 +117,9 @@ var _ = Describe("OMQ CLI", func() {
 		Entry("stomp -> mqtt", "stomp", "/topic/", "mqtt", "/topic/"),
 		Entry("mqtt -> mqtt", "mqtt", "/topic/", "mqtt", "/topic/"),
 		Entry("mqtt -> stomp", "mqtt", "/topic/", "stomp", "/topic/"),
+		Entry("amqp091 -> amqp", "amqp091", "/queues/", "amqp", "/queues/"),
+		Entry("amqp091 -> mqtt", "amqp091", "/exchanges/amq.topic/", "mqtt", "/topic/"),
+		Entry("amqp091 -> stomp", "amqp091", "/exchanges/amq.topic/", "stomp", "/topic/"),
 	)
 
 	DescribeTable("supports message priorities for AMQP and STOMP",

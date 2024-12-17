@@ -19,20 +19,22 @@ type MqttPublisher struct {
 	Connection mqtt.Client
 	Topic      string
 	Config     config.Config
+	ctx        context.Context
 	msg        []byte
 }
 
-func NewMqttPublisher(cfg config.Config, id int) MqttPublisher {
+func NewMqttPublisher(ctx context.Context, cfg config.Config, id int) MqttPublisher {
 	topic := publisherTopic(cfg.PublishTo, id)
 	return MqttPublisher{
 		Id:         id,
 		Connection: nil,
 		Topic:      topic,
 		Config:     cfg,
+		ctx:        ctx,
 	}
 }
 
-func (p *MqttPublisher) Connect(ctx context.Context) {
+func (p *MqttPublisher) Connect() {
 	var token mqtt.Token
 
 	opts := p.connectionOptions()
@@ -45,7 +47,7 @@ func (p *MqttPublisher) Connect(ctx context.Context) {
 		}
 		log.Error("publisher connection failed", "id", p.Id, "error", token.Error())
 		select {
-		case <-ctx.Done():
+		case <-p.ctx.Done():
 			return
 		case <-time.After(1 * time.Second):
 			continue
@@ -77,21 +79,21 @@ func (p MqttPublisher) connectionOptions() *mqtt.ClientOptions {
 	return opts
 }
 
-func (p MqttPublisher) Start(ctx context.Context, publisherReady chan bool, startPublishing chan bool) {
+func (p MqttPublisher) Start(publisherReady chan bool, startPublishing chan bool) {
 	defer func() {
 		if p.Connection != nil {
 			p.Connection.Disconnect(250)
 		}
 	}()
 
-	p.Connect(ctx)
+	p.Connect()
 
 	p.msg = utils.MessageBody(p.Config.Size)
 
 	close(publisherReady)
 
 	select {
-	case <-ctx.Done():
+	case <-p.ctx.Done():
 		return
 	case <-startPublishing:
 		// short random delay to avoid all publishers publishing at the same time
@@ -103,28 +105,28 @@ func (p MqttPublisher) Start(ctx context.Context, publisherReady chan bool, star
 	var farewell string
 	if p.Config.Rate == 0 {
 		// idle connection
-		<-ctx.Done()
+		<-p.ctx.Done()
 		farewell = "context cancelled"
 	} else {
-		farewell = p.StartPublishing(ctx)
+		farewell = p.StartPublishing()
 	}
 	p.Stop(farewell)
 }
 
-func (p MqttPublisher) StartPublishing(ctx context.Context) string {
+func (p MqttPublisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent atomic.Int64
 	for {
 		select {
-		case <-ctx.Done():
+		case <-p.ctx.Done():
 			return "time limit reached"
 		default:
 			if msgSent.Add(1) > int64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
-				_ = limiter.Wait(ctx)
+				_ = limiter.Wait(p.ctx)
 			}
 			p.Send()
 		}
