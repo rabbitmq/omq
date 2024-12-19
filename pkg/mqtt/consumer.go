@@ -17,19 +17,21 @@ type MqttConsumer struct {
 	Connection mqtt.Client
 	Topic      string
 	Config     config.Config
+	ctx        context.Context
 }
 
-func NewMqttConsumer(cfg config.Config, id int) MqttConsumer {
+func NewMqttConsumer(ctx context.Context, cfg config.Config, id int) MqttConsumer {
 	topic := publisherTopic(cfg.ConsumeFrom, id)
 	return MqttConsumer{
 		Id:         id,
 		Connection: nil,
 		Topic:      topic,
 		Config:     cfg,
+		ctx:        ctx,
 	}
 }
 
-func (c MqttConsumer) Start(ctx context.Context, cosumerReady chan bool) {
+func (c MqttConsumer) Start(cosumerReady chan bool) {
 	msgsReceived := 0
 	previousMessageTimeSent := time.Unix(0, 0)
 
@@ -92,7 +94,7 @@ func (c MqttConsumer) Start(ctx context.Context, cosumerReady chan bool) {
 	// TODO: currently we can consume more than ConsumerCount messages
 	for msgsReceived < c.Config.ConsumeCount {
 		select {
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			c.Stop("time limit reached")
 			return
 		default:

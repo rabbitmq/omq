@@ -20,6 +20,7 @@ type StompConsumer struct {
 	Subscription *stomp.Subscription
 	Topic        string
 	Config       config.Config
+	ctx          context.Context
 	whichUri     int
 }
 
@@ -30,6 +31,7 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *StompConsumer 
 		Subscription: nil,
 		Topic:        utils.InjectId(cfg.ConsumeFrom, id),
 		Config:       cfg,
+		ctx:          ctx,
 		whichUri:     0,
 	}
 
@@ -89,7 +91,7 @@ func (c *StompConsumer) Subscribe() {
 	c.Subscription = sub
 }
 
-func (c *StompConsumer) Start(ctx context.Context, consumerReady chan bool) {
+func (c *StompConsumer) Start(consumerReady chan bool) {
 	c.Subscribe()
 	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "destination", c.Topic)
@@ -135,7 +137,7 @@ func (c *StompConsumer) Start(ctx context.Context, consumerReady chan bool) {
 				i++
 				log.Debug("message acknowledged", "id", c.Id, "terminus", c.Topic)
 			}
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			c.Stop("time limit reached")
 			return
 		}

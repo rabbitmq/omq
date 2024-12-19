@@ -46,14 +46,14 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *Amqp10Consumer
 		consumer.whichUri = (id - 1) % len(cfg.ConsumerUri)
 	}
 
-	consumer.Connect(ctx)
+	consumer.Connect()
 
 	return consumer
 }
 
-func (c *Amqp10Consumer) Connect(ctx context.Context) {
+func (c *Amqp10Consumer) Connect() {
 	if c.Receiver != nil {
-		_ = c.Receiver.Close(ctx)
+		_ = c.Receiver.Close(c.ctx)
 	}
 	if c.Session != nil {
 		_ = c.Session.Close(context.Background())
@@ -72,7 +72,7 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 		uri := c.Config.ConsumerUri[c.whichUri]
 		c.whichUri++
 		hostname, vhost := hostAndVHost(uri)
-		conn, err := amqp.Dial(ctx, uri, &amqp.ConnOptions{
+		conn, err := amqp.Dial(c.ctx, uri, &amqp.ConnOptions{
 			ContainerID: utils.InjectId(c.Config.ConsumerId, c.Id),
 			SASLType:    amqp.SASLTypeAnonymous(),
 			HostName:    vhost,
@@ -82,7 +82,7 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 		})
 		if err != nil {
 			select {
-			case <-ctx.Done():
+			case <-c.ctx.Done():
 				return
 			default:
 				log.Error("consumer failed to connect", "id", c.Id, "error", err.Error())
@@ -95,7 +95,7 @@ func (c *Amqp10Consumer) Connect(ctx context.Context) {
 	}
 
 	for c.Session == nil {
-		session, err := c.Connection.NewSession(ctx, nil)
+		session, err := c.Connection.NewSession(c.ctx, nil)
 		if err != nil {
 			if err == context.Canceled {
 				return
@@ -146,31 +146,31 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 	}
 }
 
-func (c *Amqp10Consumer) Start(ctx context.Context, consumerReady chan bool) {
-	c.CreateReceiver(ctx)
+func (c *Amqp10Consumer) Start(consumerReady chan bool) {
+	c.CreateReceiver(c.ctx)
 	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "terminus", c.Terminus)
 	previousMessageTimeSent := time.Unix(0, 0)
 
 	for i := 1; i <= c.Config.ConsumeCount; {
 		if c.Receiver == nil {
-			c.CreateReceiver(ctx)
+			c.CreateReceiver(c.ctx)
 			log.Debug("consumer subscribed", "id", c.Id, "terminus", c.Terminus)
 		}
 
 		select {
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			c.Stop("time limit reached")
 			return
 		default:
-			msg, err := c.Receiver.Receive(ctx, nil)
+			msg, err := c.Receiver.Receive(c.ctx, nil)
 			if err != nil {
 				if err == context.Canceled {
 					c.Stop("context canceled")
 					return
 				}
 				log.Error("failed to receive a message", "id", c.Id, "terminus", c.Terminus, "error", err.Error())
-				c.Connect(ctx)
+				c.Connect()
 				continue
 			}
 
@@ -200,7 +200,7 @@ func (c *Amqp10Consumer) Start(ctx context.Context, consumerReady chan bool) {
 				time.Sleep(c.Config.ConsumerLatency)
 			}
 
-			outcome, err := c.outcome(ctx, msg)
+			outcome, err := c.outcome(c.ctx, msg)
 			if err != nil {
 				if err == context.Canceled {
 					c.Stop("context canceled")

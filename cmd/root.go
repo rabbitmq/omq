@@ -474,7 +474,7 @@ func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 					log.Error("Error creating consumer: ", "error", err)
 					os.Exit(1)
 				}
-				c.Start(ctx, consumerReady)
+				c.Start(consumerReady)
 			}()
 			// consumers are started one by one and synchronously
 			<-consumerReady

@@ -18,19 +18,21 @@ type Mqtt5Consumer struct {
 	Connection *autopaho.ConnectionManager
 	Topic      string
 	Config     config.Config
+	ctx        context.Context
 }
 
-func NewMqtt5Consumer(cfg config.Config, id int) Mqtt5Consumer {
+func NewMqtt5Consumer(ctx context.Context, cfg config.Config, id int) Mqtt5Consumer {
 	topic := publisherTopic(cfg.ConsumeFrom, id)
 	return Mqtt5Consumer{
 		Id:         id,
 		Connection: nil,
 		Topic:      topic,
 		Config:     cfg,
+		ctx:        ctx,
 	}
 }
 
-func (c Mqtt5Consumer) Start(ctx context.Context, consumerReady chan bool) {
+func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 	msgsReceived := 0
 	previousMessageTimeSent := time.Unix(0, 0)
 
@@ -92,11 +94,11 @@ func (c Mqtt5Consumer) Start(ctx context.Context, consumerReady chan bool) {
 	}
 
 	var err error
-	c.Connection, err = autopaho.NewConnection(ctx, opts)
+	c.Connection, err = autopaho.NewConnection(c.ctx, opts)
 	if err != nil {
 		log.Error("consumer connection failed", "id", c.Id, "error", err)
 	}
-	err = c.Connection.AwaitConnection(ctx)
+	err = c.Connection.AwaitConnection(c.ctx)
 	if err != nil {
 		// AwaitConnection only returns an error if the context is cancelled
 		return
@@ -106,7 +108,7 @@ func (c Mqtt5Consumer) Start(ctx context.Context, consumerReady chan bool) {
 	// TODO: currently we can consume more than ConsumerCount messages
 	for msgsReceived < c.Config.ConsumeCount {
 		select {
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			c.Stop("time limit reached")
 			return
 		default:

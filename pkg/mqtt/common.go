@@ -10,7 +10,7 @@ import (
 )
 
 type Consumer interface {
-	Start(context.Context, chan bool)
+	Start(chan bool)
 }
 
 type Publisher interface {
@@ -19,9 +19,9 @@ type Publisher interface {
 
 func NewConsumer(ctx context.Context, cfg config.Config, id int) Consumer {
 	if cfg.MqttPublisher.Version == 5 {
-		return NewMqtt5Consumer(cfg, id)
+		return NewMqtt5Consumer(ctx, cfg, id)
 	} else {
-		return NewMqttConsumer(cfg, id)
+		return NewMqttConsumer(ctx, cfg, id)
 	}
 }
 
