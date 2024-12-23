@@ -11,7 +11,7 @@ require (
 	github.com/felixge/fgprof v0.9.5
 	github.com/hashicorp/memberlist v0.5.1
 	github.com/michaelklishin/rabbit-hole v1.5.0
-	github.com/onsi/ginkgo/v2 v2.20.2
+	github.com/onsi/ginkgo/v2 v2.22.1
 	github.com/onsi/gomega v1.36.1
 	github.com/panjf2000/ants/v2 v2.10.0
 	github.com/relvacode/iso8601 v1.6.0
