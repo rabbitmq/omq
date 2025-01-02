@@ -11,8 +11,8 @@ require (
 	github.com/felixge/fgprof v0.9.5
 	github.com/hashicorp/memberlist v0.5.1
 	github.com/michaelklishin/rabbit-hole v1.5.0
-	github.com/onsi/ginkgo/v2 v2.20.2
-	github.com/onsi/gomega v1.36.1
+	github.com/onsi/ginkgo/v2 v2.22.2
+	github.com/onsi/gomega v1.36.2
 	github.com/panjf2000/ants/v2 v2.10.0
 	github.com/relvacode/iso8601 v1.6.0
 	github.com/spf13/cobra v1.8.1
@@ -62,7 +62,6 @@ require (
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
-	google.golang.org/protobuf v1.35.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
