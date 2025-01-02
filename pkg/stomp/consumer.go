@@ -181,7 +181,7 @@ func buildSubscribeOpts(cfg config.Config) []func(*frame.Frame) error {
 	var subscribeOpts []func(*frame.Frame) error
 
 	subscribeOpts = append(subscribeOpts,
-		stomp.SubscribeOpt.Header("x-stream-offset", cfg.StreamOffset),
+		stomp.SubscribeOpt.Header("x-stream-offset", offsetToString(cfg.StreamOffset)),
 		stomp.SubscribeOpt.Header("prefetch-count", strconv.Itoa(cfg.ConsumerCredits)))
 
 	if cfg.ConsumerPriority != 0 {
@@ -201,4 +201,17 @@ func buildSubscribeOpts(cfg config.Config) []func(*frame.Frame) error {
 			stomp.SubscribeOpt.Header("x-stream-filter", cfg.StreamFilterValues))
 	}
 	return subscribeOpts
+}
+
+func offsetToString(offset any) string {
+	if s, ok := offset.(string); ok {
+		return s
+	}
+	if t, ok := offset.(time.Time); ok {
+		return "timestamp=" + strconv.FormatInt(t.Unix(), 10)
+	}
+	if i, ok := offset.(int); ok {
+		return "offset=" + strconv.Itoa(i)
+	}
+	return "next"
 }

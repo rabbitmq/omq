@@ -73,15 +73,15 @@ func (m *Mgmt) connection() rmq.IConnection {
 
 func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	log.Info("Declaring queues...")
-	// declare queues for AMQP publishers
+	// declare queues for AMQP 1.0 and 0.9.1 publishers
 	if (cfg.PublisherProto == config.AMQP || cfg.PublisherProto == config.AMQP091) && strings.HasPrefix(cfg.PublishTo, "/queues/") {
 		queueName := strings.TrimPrefix(cfg.PublishTo, "/queues/")
 		for i := 1; i <= cfg.Publishers; i++ {
 			m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
 		}
 	}
-	// declare queues for AMQP consumers
-	if cfg.ConsumerProto == config.AMQP {
+	// declare queues for AMQP 1.0 and 0.9.1 consumers
+	if cfg.ConsumerProto == config.AMQP || cfg.ConsumerProto == config.AMQP091 {
 		if strings.HasPrefix(cfg.ConsumeFrom, "/queues/") {
 			for i := 1; i <= cfg.Consumers; i++ {
 				queueName := strings.TrimPrefix(cfg.ConsumeFrom, "/queues/")

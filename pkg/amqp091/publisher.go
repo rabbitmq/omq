@@ -2,6 +2,7 @@ package amqp091
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
@@ -53,7 +54,6 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp091Publis
 }
 
 func (p *Amqp091Publisher) Connect() {
-	var conn *amqp091.Connection
 	var err error
 
 	if p.Connection != nil {
@@ -67,9 +67,14 @@ func (p *Amqp091Publisher) Connect() {
 		}
 		uri := p.Config.PublisherUri[p.whichUri]
 		p.whichUri++
-		conn, err = amqp091.Dial(uri)
+		config := amqp091.Config{
+			Properties: amqp091.Table{
+				"connection_name": fmt.Sprintf("omq-publisher-%d", p.Id),
+			},
+		}
+		conn, err := amqp091.DialConfig(uri, config)
 		if err != nil {
-			log.Error("connection failed", "id", p.Id, "error", err.Error())
+			log.Error("publisher connection failed", "id", p.Id, "error", err.Error())
 			select {
 			case <-time.After(1 * time.Second):
 				continue

@@ -97,7 +97,7 @@ type Config struct {
 	MessageDurability    bool
 	MessagePriority      string // to allow for "unset" value and STOMP takes strings anyway
 	MessageTTL           time.Duration
-	StreamOffset         string
+	StreamOffset         any
 	StreamFilterValues   string
 	StreamFilterValueSet string
 	ConsumerPriority     int32

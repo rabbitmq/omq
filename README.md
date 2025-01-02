@@ -1,7 +1,6 @@
 ## omq
 
-`omq` is a messaging system client for testing purposes. It currently supports AMQP-1.0, STOMP and MQTT 3.1/3.1.1/5.0
-and partially AMQP 0.9.1 (only for publishing). It is developed mostly for RabbitMQ but might be useful for other brokers
+`omq` is a messaging system client for testing purposes. It currently supports AMQP 1.0, AMQP 0.9.1, STOMP and MQTT 3.1/3.1.1/5.0. It is developed mostly for RabbitMQ but might be useful for other brokers
 as well (some tests against ActiveMQ were performed).
 
 `omq` starts a group of publishers and a group of consumers, in both cases all publishers/consumers are identical,

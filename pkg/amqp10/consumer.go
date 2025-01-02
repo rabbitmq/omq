@@ -3,16 +3,12 @@ package amqp10
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"math/rand"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
-	"github.com/relvacode/iso8601"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 
@@ -268,13 +264,7 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 	var filters []amqp.LinkFilter
 
 	if cfg.StreamOffset != "" {
-		// parse stream offset
-		offset, err := parseStreamOffset(cfg.StreamOffset)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
-			os.Exit(1)
-		}
-		filters = append(filters, amqp.NewLinkFilter("rabbitmq:stream-offset-spec", 0, offset))
+		filters = append(filters, amqp.NewLinkFilter("rabbitmq:stream-offset-spec", 0, cfg.StreamOffset))
 	}
 
 	if cfg.StreamFilterValues != "" {
@@ -298,23 +288,4 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 				}))
 	}
 	return filters
-}
-
-func parseStreamOffset(offset string) (any, error) {
-	switch offset {
-	case "":
-		return nil, nil
-	case "next", "first", "last":
-		return offset, nil
-	default:
-		// check if streamOffset can be parsed as unsigned integer (chunkID)
-		if chunkID, err := strconv.ParseUint(offset, 10, 64); err == nil {
-			return chunkID, nil
-		}
-		// check if streamOffset can be parsed as an ISO 8601 timestamp
-		if timestamp, err := iso8601.ParseString(offset); err == nil {
-			return timestamp, nil
-		}
-	}
-	return nil, fmt.Errorf("invalid stream offset: %s", offset)
 }

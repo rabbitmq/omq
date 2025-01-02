@@ -33,13 +33,16 @@ import (
 var cfg config.Config
 var (
 	amqp_amqp       = &cobra.Command{}
+	amqp_amqp091    = &cobra.Command{}
 	amqp_stomp      = &cobra.Command{}
 	amqp_mqtt       = &cobra.Command{}
 	stomp_stomp     = &cobra.Command{}
 	stomp_amqp      = &cobra.Command{}
+	stomp_amqp091   = &cobra.Command{}
 	stomp_mqtt      = &cobra.Command{}
 	mqtt_mqtt       = &cobra.Command{}
 	mqtt_amqp       = &cobra.Command{}
+	mqtt_amqp091    = &cobra.Command{}
 	mqtt_stomp      = &cobra.Command{}
 	amqp091_amqp091 = &cobra.Command{}
 	amqp091_amqp    = &cobra.Command{}
@@ -53,6 +56,7 @@ var (
 	amqpAppProperties      []string
 	amqpAppPropertyFilters []string
 	amqpPropertyFilters    []string
+	streamOffset           string
 )
 
 var (
@@ -114,6 +118,9 @@ func RootCmd() *cobra.Command {
 	amqpConsumerFlags.StringArrayVar(&amqpPropertyFilters, "amqp-property-filter", []string{},
 		"AMQP property filters, eg. key1=&p:prefix")
 
+	amqp091PublisherFlags := pflag.NewFlagSet("amqp091-publisher", pflag.ContinueOnError)
+	amqp091ConsumerFlags := pflag.NewFlagSet("amqp091-consumer", pflag.ContinueOnError)
+
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",
 		Aliases: []string{"amqp"},
@@ -125,6 +132,17 @@ func RootCmd() *cobra.Command {
 	}
 	amqp_amqp.Flags().AddFlagSet(amqpPublisherFlags)
 	amqp_amqp.Flags().AddFlagSet(amqpConsumerFlags)
+
+	amqp_amqp091 = &cobra.Command{
+		Use: "amqp-amqp091",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.AMQP
+			cfg.ConsumerProto = config.AMQP091
+			start(cfg)
+		},
+	}
+	amqp_amqp.Flags().AddFlagSet(amqpPublisherFlags)
+	amqp_amqp.Flags().AddFlagSet(amqp091ConsumerFlags)
 
 	amqp_stomp = &cobra.Command{
 		Use: "amqp-stomp",
@@ -167,6 +185,16 @@ func RootCmd() *cobra.Command {
 	}
 	stomp_amqp.Flags().AddFlagSet(amqpConsumerFlags)
 
+	stomp_amqp091 = &cobra.Command{
+		Use: "stomp-amqp091",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.STOMP
+			cfg.ConsumerProto = config.AMQP091
+			start(cfg)
+		},
+	}
+	stomp_amqp.Flags().AddFlagSet(amqp091ConsumerFlags)
+
 	stomp_mqtt = &cobra.Command{
 		Use: "stomp-mqtt",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -200,6 +228,17 @@ func RootCmd() *cobra.Command {
 	mqtt_amqp.Flags().AddFlagSet(mqttPublisherFlags)
 	mqtt_amqp.Flags().AddFlagSet(amqpConsumerFlags)
 
+	mqtt_amqp091 = &cobra.Command{
+		Use: "mqtt-amqp091",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.MQTT
+			cfg.ConsumerProto = config.AMQP091
+			start(cfg)
+		},
+	}
+	mqtt_amqp.Flags().AddFlagSet(mqttPublisherFlags)
+	mqtt_amqp.Flags().AddFlagSet(amqp091ConsumerFlags)
+
 	mqtt_stomp = &cobra.Command{
 		Use: "mqtt-stomp",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -219,6 +258,8 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
+	amqp091_amqp091.Flags().AddFlagSet(amqp091PublisherFlags)
+	amqp091_amqp091.Flags().AddFlagSet(amqp091ConsumerFlags)
 
 	amqp091_amqp = &cobra.Command{
 		Use: "amqp091-amqp",
@@ -228,6 +269,8 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
+	amqp091_amqp.Flags().AddFlagSet(amqp091PublisherFlags)
+	amqp091_amqp.Flags().AddFlagSet(amqpConsumerFlags)
 
 	amqp091_mqtt = &cobra.Command{
 		Use: "amqp091-mqtt",
@@ -237,6 +280,7 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
+	amqp091_mqtt.Flags().AddFlagSet(amqp091PublisherFlags)
 
 	amqp091_stomp = &cobra.Command{
 		Use: "amqp091-stomp",
@@ -246,6 +290,7 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
+	amqp091_stomp.Flags().AddFlagSet(amqp091PublisherFlags)
 
 	versionCmd = &cobra.Command{
 		Use: "version",
@@ -304,7 +349,7 @@ func RootCmd() *cobra.Command {
 		"The queue/topic/terminus to consume from (%d will be replaced with the consumer's id)")
 	rootCmd.PersistentFlags().StringVar(&cfg.ConsumerId, "consumer-id", "omq-consumer-%d",
 		"Client ID for AMQP and MQTT consumers (%d => consumer's id, %r => random)")
-	rootCmd.PersistentFlags().StringVar(&cfg.StreamOffset, "stream-offset", "",
+	rootCmd.PersistentFlags().StringVar(&streamOffset, "stream-offset", "",
 		"Stream consumer offset specification (default=next)")
 	rootCmd.PersistentFlags().Int32Var(&cfg.ConsumerPriority, "consumer-priority", 0, "Consumer priority")
 	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerCredits, "consumer-credits", 1,
@@ -353,13 +398,16 @@ func RootCmd() *cobra.Command {
 		"The DNS name that will return members to synchronize with")
 
 	rootCmd.AddCommand(amqp_amqp)
+	rootCmd.AddCommand(amqp_amqp091)
 	rootCmd.AddCommand(amqp_stomp)
 	rootCmd.AddCommand(amqp_mqtt)
 	rootCmd.AddCommand(stomp_stomp)
 	rootCmd.AddCommand(stomp_amqp)
+	rootCmd.AddCommand(stomp_amqp091)
 	rootCmd.AddCommand(stomp_mqtt)
 	rootCmd.AddCommand(mqtt_mqtt)
 	rootCmd.AddCommand(mqtt_amqp)
+	rootCmd.AddCommand(mqtt_amqp091)
 	rootCmd.AddCommand(mqtt_stomp)
 	rootCmd.AddCommand(amqp091_amqp091)
 	rootCmd.AddCommand(amqp091_amqp)
@@ -645,6 +693,12 @@ func sanitizeConfig(cfg *config.Config) error {
 		}
 	}
 
+	offset, err := parseStreamOffset(streamOffset)
+	if err != nil {
+		return fmt.Errorf("invalid stream offset value")
+	}
+	cfg.StreamOffset = offset
+
 	// AMQP application properties
 	cfg.Amqp.AppProperties = make(map[string][]string)
 	for _, val := range amqpAppProperties {
@@ -686,6 +740,26 @@ func sanitizeConfig(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+func parseStreamOffset(offset string) (any, error) {
+	switch offset {
+	case "":
+		return "", nil
+	case "next", "first", "last":
+		return offset, nil
+	default:
+		// check if streamOffset can be parsed as unsigned integer (chunkID)
+		if chunkID, err := strconv.ParseInt(offset, 10, 64); err == nil {
+			return chunkID, nil
+		}
+		// check if streamOffset can be parsed as an ISO 8601 timestamp
+		if timestamp, err := time.Parse(time.RFC3339, offset); err == nil {
+			return timestamp, nil
+		}
+	}
+	// return "", fmt.Errorf("invalid stream offset: %s", offset)
+	return offset, nil //, fmt.Errorf("invalid stream offset: %s", offset)
 }
 
 func handleInterupt(ctx context.Context, cancel context.CancelFunc) {
