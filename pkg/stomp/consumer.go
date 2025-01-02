@@ -72,7 +72,12 @@ func (c *StompConsumer) Connect() {
 
 		if err != nil {
 			log.Error("consumer connection failed", "id", c.Id, "error", err.Error())
-			time.Sleep(1 * time.Second)
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
+				continue
+			}
 		} else {
 			c.Connection = conn
 		}
@@ -83,12 +88,14 @@ func (c *StompConsumer) Subscribe() {
 	var sub *stomp.Subscription
 	var err error
 
-	sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, buildSubscribeOpts(c.Config)...)
-	if err != nil {
-		log.Error("subscription failed", "id", c.Id, "queue", c.Topic, "error", err.Error())
-		return
+	if c.Connection != nil {
+		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, buildSubscribeOpts(c.Config)...)
+		if err != nil {
+			log.Error("subscription failed", "id", c.Id, "queue", c.Topic, "error", err.Error())
+			return
+		}
+		c.Subscription = sub
 	}
-	c.Subscription = sub
 }
 
 func (c *StompConsumer) Start(consumerReady chan bool) {
@@ -99,8 +106,14 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 	previousMessageTimeSent := time.Unix(0, 0)
 
 	for i := 1; i <= c.Config.ConsumeCount; {
-		if c.Subscription == nil {
-			c.Subscribe()
+		for c.Subscription == nil {
+			select {
+			case <-c.ctx.Done():
+				c.Stop("context cancelled")
+				return
+			default:
+				c.Subscribe()
+			}
 		}
 
 		select {
@@ -161,7 +174,7 @@ func (c *StompConsumer) Stop(reason string) {
 			log.Info("failed to disconnect", "id", c.Id, "error", err.Error())
 		}
 	}
-	log.Debug("consumer stopped", "id", c.Id)
+	log.Debug("consumer stopped", "id", c.Id, "reason", reason)
 }
 
 func buildSubscribeOpts(cfg config.Config) []func(*frame.Frame) error {
