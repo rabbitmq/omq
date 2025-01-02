@@ -17,7 +17,7 @@ require (
 	github.com/relvacode/iso8601 v1.6.0
 	github.com/spf13/cobra v1.8.1
 	github.com/thediveo/enumflag/v2 v2.0.5
-	golang.org/x/exp v0.0.0-20241215155358-4a5509556b9e
+	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
 	golang.org/x/time v0.8.0
 )
 
@@ -57,7 +57,7 @@ require (
 	github.com/valyala/histogram v1.2.0 // indirect
 	go.uber.org/goleak v1.3.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
-	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
