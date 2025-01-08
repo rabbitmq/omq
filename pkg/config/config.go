@@ -108,6 +108,7 @@ type Config struct {
 	LogOutOfOrder        bool
 	PrintAllMetrics      bool
 	ConsumerStartupDelay time.Duration
+	TCPNoDelay           bool
 }
 
 func NewConfig() Config {

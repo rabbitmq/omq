@@ -83,6 +83,7 @@ func (p *Amqp10Publisher) Connect() {
 			TLSConfig: &tls.Config{
 				ServerName: hostname,
 			},
+			TCPNoDelay: &p.Config.TCPNoDelay,
 		})
 
 		if err != nil {

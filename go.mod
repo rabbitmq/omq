@@ -2,6 +2,8 @@ module github.com/rabbitmq/omq
 
 go 1.23.0
 
+replace github.com/Azure/go-amqp => github.com/mkuratczyk/go-amqp v0.0.0-20250107231955-7ba9aa503a31
+
 require (
 	github.com/Azure/go-amqp v1.4.0-beta.1
 	github.com/VictoriaMetrics/metrics v1.35.1

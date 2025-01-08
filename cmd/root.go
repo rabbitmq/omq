@@ -371,6 +371,8 @@ func RootCmd() *cobra.Command {
 		"Binding key for queue declarations")
 	rootCmd.PersistentFlags().StringVar(&cfg.Exchange, "exchange", "",
 		"Exchange for binding declarations")
+	rootCmd.PersistentFlags().BoolVar(&cfg.TCPNoDelay, "tcp-nodelay", true,
+		"TCP_NODELAY (Nagle's algorithm)")
 
 	// messages
 	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message payload size in bytes")

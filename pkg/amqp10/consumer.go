@@ -75,6 +75,7 @@ func (c *Amqp10Consumer) Connect() {
 			TLSConfig: &tls.Config{
 				ServerName: hostname,
 			},
+			TCPNoDelay: &c.Config.TCPNoDelay,
 		})
 		if err != nil {
 			select {
