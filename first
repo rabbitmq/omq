@@ -1,0 +1,9 @@
+id,time (s),published (msg/s),returned (msg/s),confirmed (msg/s),nacked (msg/s),received (msg/s),min consumer latency (ms),median consumer latency (ms),75th p. consumer latency (ms),95th p. consumer latency (ms),99th p. consumer latency (ms),min confirm latency (ms),median confirm latency (ms),75th p. confirm latency (ms),95th p. confirm latency (ms),99th p. confirm latency (ms)
+test-214213-943,1.003,65248,,,,19044,4,322,484,606,627,,,,,
+test-214213-943,2.002,69517,,,,21234,637,999,1187,1321,1347,,,,,
+test-214213-943,3.003,69568,,,,21191,1352,1712,1882,2023,2048,,,,,
+test-214213-943,4.001,69013,,,,20811,2059,2401,2585,2725,2754,,,,,
+test-214213-943,5.000,70586,,,,21090,2762,3102,3291,3420,3444,,,,,
+test-214213-943,6.001,71403,,,,21019,3450,3781,3965,4112,4138,,,,,
+test-214213-943,7.003,69684,,,,21061,4148,4497,4680,4810,4848,,,,,
+test-214213-943,8.005,70996,,,,21150,4858,5194,5372,5520,5543,,,,,
