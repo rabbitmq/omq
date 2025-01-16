@@ -253,8 +253,10 @@ func (c *Amqp10Consumer) Stop(reason string) {
 }
 
 func buildLinkProperties(cfg config.Config) map[string]any {
-	props := map[string]any{
-		"rabbitmq:priority": cfg.ConsumerPriority,
+	props := map[string]any{}
+
+	if cfg.ConsumerPriority != 0 {
+		props["rabbitmq:priority"] = cfg.ConsumerPriority
 	}
 
 	return props
