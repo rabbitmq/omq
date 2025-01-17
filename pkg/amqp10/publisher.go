@@ -321,6 +321,9 @@ func (p *Amqp10Publisher) handleSent(receipt *amqp.SendReceipt, published time.T
 func (p *Amqp10Publisher) Stop(reason string) {
 	p.poolWg.Wait()
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
+	if p.Sender != nil {
+		_ = p.Sender.Close(context.Background())
+	}
 	if p.Session != nil {
 		_ = p.Session.Close(context.Background())
 	}

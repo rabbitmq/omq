@@ -243,6 +243,9 @@ func pastTense(outcome string) string {
 }
 
 func (c *Amqp10Consumer) Stop(reason string) {
+	if c.Receiver != nil {
+		_ = c.Receiver.Close(context.Background())
+	}
 	if c.Session != nil {
 		_ = c.Session.Close(context.Background())
 	}
