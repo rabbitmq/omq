@@ -26,6 +26,8 @@ func GetEndpoints(serviceName string) ([]string, error) {
 	namespace := os.Getenv("MY_POD_NAMESPACE")
 	url := fmt.Sprintf("https://%s:%s/api/v1/namespaces/%s/endpoints/%s", host, port, namespace, serviceName)
 
+	log.Info("Getting endpoints from Kubernetes", "url", url)
+
 	token, err := os.ReadFile(tokenFile)
 	if err != nil {
 		log.Error("Can't read the Kubernetes token", "error", err.Error())
@@ -65,6 +67,10 @@ func GetEndpoints(serviceName string) ([]string, error) {
 	responseData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error("", "error", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return []string{}, fmt.Errorf("Kubernetes API returned an error: %s", resp.Status)
 	}
 	return parseEndpoints(responseData)
 }

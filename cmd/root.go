@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand/v2"
 	"os"
 	"os/signal"
 	"sort"
@@ -14,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/exp/rand"
 
 	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
@@ -480,8 +481,8 @@ func start(cfg config.Config) {
 	wg.Wait()
 }
 
-func joinCluster(expectedInstance int, serviceName string) {
-	if expectedInstance == 1 {
+func joinCluster(expectedInstances int, serviceName string) {
+	if expectedInstances == 1 {
 		return
 	}
 
@@ -501,24 +502,22 @@ func joinCluster(expectedInstance int, serviceName string) {
 			time.Sleep(time.Second)
 			continue
 		}
-		if len(ips) >= expectedInstance {
-			log.Info("reached the expected number of instances", "expected instances", expectedInstance, "current instances", len(ips))
+		if len(ips) == expectedInstances {
+			log.Info("reached the expected number of endpoints", "expected", expectedInstances, "current", len(ips))
 			break
 		}
-		log.Info("waiting for the expected number of IPs to be returned from the endpoint", "exepcted", expectedInstance, "current", len(ips))
+		log.Info("waiting for the expected number of IPs to be returned from the endpoint", "exepcted", expectedInstances, "current", len(ips))
 		time.Sleep(time.Second)
 	}
 
 	sort.Strings(ips)
 
-	list, err := memberlist.Create(memberlist.DefaultLANConfig())
+	memberlistConfig := memberlist.DefaultLANConfig()
+	memberlistConfig.PushPullInterval = 0
+	list, err := memberlist.Create(memberlistConfig)
 	if err != nil {
 		panic("Failed to create memberlist: " + err.Error())
 	}
-
-	log.Info("joining all IPs found", "IPs", ips)
-
-	time.Sleep(time.Duration(1000+rand.IntN(1000)) * time.Millisecond)
 
 	// join the cluster
 	for {
@@ -529,22 +528,23 @@ func joinCluster(expectedInstance int, serviceName string) {
 			break
 		}
 		log.Info("failed to join cluster; retrying...", "error", err)
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * 100)
 	}
 
 	// wait until the expected number of members is reached
 	for {
 		members := list.Members()
-		if len(members) >= expectedInstance {
-			log.Info("reached the expected number of instances", "expected instances", expectedInstance, "current cluster size", len(members))
+		if len(members) == expectedInstances {
+			log.Info("reached the expected number of instances", "expected", expectedInstances, "current", len(members))
 			break
 		}
-		log.Info("waiting for more instances to join the cluster", "expected instances", expectedInstance, "current cluster size", len(members))
-		time.Sleep(time.Second)
+		log.Info("waiting for more instances to join the cluster", "expected", expectedInstances, "current cluster size", len(members))
+		time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
 	}
 
+	// we only want to synchronize the start - we can leave the cluster soon after
 	go func() {
-		time.Sleep(30 * time.Second)
+		time.Sleep(5 * time.Second)
 		log.Info("leaving the cluster")
 		_ = list.Leave(time.Second)
 		_ = list.Shutdown()
