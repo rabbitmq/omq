@@ -6,11 +6,13 @@ jobs:
   publish:
     name: Publish dev OCI
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
     steps:
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
       - uses: actions/checkout@v4
 
-      - uses: ko-build/setup-ko@v0.6
+      - uses: ko-build/setup-ko@v0.7
       - run: ko build
