@@ -255,6 +255,7 @@ func (p *Amqp10Publisher) SendSync() error {
 	}
 	// rejected messages are not counted as published, maybe they should be?
 	metrics.MessagesPublished.Inc()
+	metrics.MessagesConfirmed.Inc()
 	metrics.PublishingLatency.Update(latency.Seconds())
 	return nil
 }
@@ -299,6 +300,7 @@ func (p *Amqp10Publisher) handleSent(receipt *amqp.SendReceipt, published time.T
 	case *amqp.StateAccepted:
 		// only accepted messages are counted as published; perhaps we should count other outcomes?
 		metrics.MessagesPublished.Inc()
+		metrics.MessagesConfirmed.Inc()
 		metrics.PublishingLatency.Update(latency.Seconds())
 	case *amqp.StateModified:
 		// message must be modified and resent before it can be processed.
