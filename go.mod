@@ -15,7 +15,7 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/panjf2000/ants/v2 v2.11.1
 	github.com/rabbitmq/amqp091-go v1.10.0
-	github.com/spf13/cobra v1.8.1
+	github.com/spf13/cobra v1.9.1
 	github.com/thediveo/enumflag/v2 v2.0.7
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
 	golang.org/x/time v0.10.0
