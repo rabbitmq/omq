@@ -3,7 +3,7 @@ package amqp091
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -105,7 +105,7 @@ func (p *Amqp091Publisher) Start(publisherReady chan bool, startPublishing chan 
 		return
 	case <-startPublishing:
 		// short random delay to avoid all publishers publishing at the same time
-		time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+		time.Sleep(time.Duration(rand.IntN(1000)) * time.Millisecond)
 	}
 
 	log.Info("publisher started", "id", p.Id, "rate", utils.Rate(p.Config.Rate), "exchange", p.exchange, "routing key", p.routingKey)

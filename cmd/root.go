@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"os"
 	"os/signal"
 	"sort"
@@ -13,8 +14,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"golang.org/x/exp/rand"
 
 	"github.com/rabbitmq/omq/pkg/common"
 	"github.com/rabbitmq/omq/pkg/config"
@@ -539,7 +538,7 @@ func joinCluster(expectedInstances int, serviceName string) {
 			break
 		}
 		log.Info("waiting for more instances to join the cluster", "expected", expectedInstances, "current cluster size", len(members))
-		time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+		time.Sleep(time.Duration(rand.IntN(100)) * time.Millisecond)
 	}
 
 	// we only want to synchronize the start - we can leave the cluster soon after

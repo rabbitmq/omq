@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"context"
+	"math/rand/v2"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
-	"golang.org/x/exp/rand"
 
 	"github.com/rabbitmq/omq/pkg/metrics"
 )
@@ -92,7 +92,7 @@ func (p Mqtt5Publisher) Start(publisherReady chan bool, startPublishing chan boo
 		return
 	case <-startPublishing:
 		// short random delay to avoid all publishers publishing at the same time
-		time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+		time.Sleep(time.Duration(rand.IntN(1000)) * time.Millisecond)
 	}
 
 	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)

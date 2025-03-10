@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -167,7 +167,7 @@ func (p *Amqp10Publisher) Start(publisherReady chan bool, startPublishing chan b
 		return
 	case <-startPublishing:
 		// short random delay to avoid all publishers publishing at the same time
-		time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+		time.Sleep(time.Duration(rand.IntN(1000)) * time.Millisecond)
 	}
 
 	log.Info("publisher started", "id", p.Id, "rate", utils.Rate(p.Config.Rate), "destination", p.Terminus)

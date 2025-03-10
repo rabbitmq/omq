@@ -3,7 +3,7 @@ package amqp10
 import (
 	"context"
 	"crypto/tls"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -221,7 +221,7 @@ func (c *Amqp10Consumer) outcome(ctx context.Context, msg *amqp.Message) (string
 		return "accept", c.Receiver.AcceptMessage(ctx, msg)
 	}
 
-	n := rand.Intn(100)
+	n := rand.IntN(100)
 	if n < c.Config.Amqp.ReleaseRate {
 		return "release", c.Receiver.ReleaseMessage(ctx, msg)
 	} else if n < c.Config.Amqp.ReleaseRate+c.Config.Amqp.RejectRate {
