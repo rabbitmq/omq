@@ -11,7 +11,7 @@ require (
 	github.com/felixge/fgprof v0.9.5
 	github.com/hashicorp/memberlist v0.5.3
 	github.com/michaelklishin/rabbit-hole v1.5.0
-	github.com/onsi/ginkgo/v2 v2.22.2
+	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
 	github.com/panjf2000/ants/v2 v2.11.2
 	github.com/rabbitmq/amqp091-go v1.10.0
