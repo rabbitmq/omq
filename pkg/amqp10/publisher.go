@@ -276,7 +276,7 @@ func (p *Amqp10Publisher) handleSendErrors(ctx context.Context, err error) error
 		}
 
 		if errors.As(err, &linkErr) {
-			log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", connErr.Error())
+			log.Error("publisher link failure; reconnecting...", "id", p.Id, "error", linkErr.Error())
 			return err
 		}
 
