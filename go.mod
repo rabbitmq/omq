@@ -1,6 +1,7 @@
 module github.com/rabbitmq/omq
 
 go 1.24.0
+
 require (
 	github.com/Azure/go-amqp v1.4.0
 	github.com/VictoriaMetrics/metrics v1.35.2
@@ -11,7 +12,7 @@ require (
 	github.com/hashicorp/memberlist v0.5.3
 	github.com/michaelklishin/rabbit-hole v1.5.0
 	github.com/onsi/ginkgo/v2 v2.23.4
-	github.com/onsi/gomega v1.36.3
+	github.com/onsi/gomega v1.37.0
 	github.com/panjf2000/ants/v2 v2.11.2
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/spf13/cobra v1.9.1
