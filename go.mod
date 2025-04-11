@@ -1,11 +1,10 @@
 module github.com/rabbitmq/omq
 
 go 1.24.0
-
 require (
 	github.com/Azure/go-amqp v1.4.0
 	github.com/VictoriaMetrics/metrics v1.35.2
-	github.com/charmbracelet/log v0.4.0
+	github.com/charmbracelet/log v0.4.1
 	github.com/eclipse/paho.golang v0.22.0
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/felixge/fgprof v0.9.5
