@@ -106,8 +106,8 @@ func WrappedSequence(len int, start int) []int {
 }
 
 func InjectId(s string, id int) string {
-	s = strings.Replace(s, "%d", strconv.Itoa(id), -1)
-	return strings.Replace(s, "%r", strconv.Itoa(rand.Int()), -1)
+	s = strings.ReplaceAll(s, "%d", strconv.Itoa(id))
+	return strings.ReplaceAll(s, "%r", strconv.Itoa(rand.Int()))
 }
 
 func Rate(rate float32) string {

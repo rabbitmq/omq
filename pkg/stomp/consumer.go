@@ -62,7 +62,7 @@ func (c *StompConsumer) Connect() {
 		c.whichUri++
 		parsedUri := utils.ParseURI(uri, "stomp", "61613")
 
-		var o []func(*stomp.Conn) error = []func(*stomp.Conn) error{
+		var o = []func(*stomp.Conn) error{
 			stomp.ConnOpt.Login(parsedUri.Username, parsedUri.Password),
 			stomp.ConnOpt.Host("/"), // TODO
 		}

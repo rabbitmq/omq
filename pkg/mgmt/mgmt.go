@@ -12,7 +12,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
-	rmq "github.com/rabbitmq/rabbitmq-amqp-go-client/rabbitmq_amqp"
+	rmq "github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
 )
 
 var (
@@ -22,7 +22,7 @@ var (
 
 type Mgmt struct {
 	ctx            context.Context
-	conn           rmq.IConnection
+	conn           *rmq.AmqpConnection
 	declaredQueues map[string]bool
 	uris           []string
 	cleanupQueues  bool
@@ -40,18 +40,18 @@ func Start(ctx context.Context, uris []string, cleanupQueues bool) *Mgmt {
 	return instance
 }
 
-func (m *Mgmt) connection() rmq.IConnection {
+func (m *Mgmt) connection() *rmq.AmqpConnection {
 	if len(m.uris) == 0 {
 		return nil
 	}
 
-	if m.conn != nil && m.conn.Status() == rmq.Open {
+	if m.conn != nil {
 		return m.conn
 	}
 
 	for {
 		// TODO support multiple URIs
-		conn, err := rmq.Dial(context.TODO(), m.uris[0], &amqp.ConnOptions{
+		conn, err := rmq.Dial(context.TODO(), m.uris[0], &rmq.AmqpConnOptions{
 			SASLType:    amqp.SASLTypeAnonymous(),
 			ContainerID: "omq-management",
 		})
@@ -107,19 +107,19 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	}
 }
 
-func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) rmq.IQueueInfo {
+func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.AmqpQueueInfo {
 	if cfg.Queues == config.Predeclared || m.declaredQueues[queueName] {
 		return nil
 	}
 
-	var queueType rmq.QueueType
+	var queueSpec rmq.IQueueSpecification
 	switch cfg.Queues {
 	case config.Classic:
-		queueType = rmq.QueueType{Type: rmq.Classic}
+		queueSpec = &rmq.ClassicQueueSpecification{Name: queueName}
 	case config.Quorum:
-		queueType = rmq.QueueType{Type: rmq.Quorum}
+		queueSpec = &rmq.QuorumQueueSpecification{Name: queueName}
 	case config.Stream:
-		queueType = rmq.QueueType{Type: rmq.Stream}
+		queueSpec = &rmq.StreamQueueSpecification{Name: queueName}
 	}
 
 	conn := instance.connection()
@@ -127,10 +127,7 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) rmq.I
 		return nil
 	}
 
-	qi, err := conn.Management().DeclareQueue(context.TODO(), &rmq.QueueSpecification{
-		Name:      queueName,
-		QueueType: queueType,
-	})
+	qi, err := conn.Management().DeclareQueue(context.TODO(), queueSpec)
 	if err != nil {
 		log.Error("Failed to declare queue", "name", queueName, "error", err)
 		os.Exit(1)
@@ -154,7 +151,7 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) rmq.I
 	}
 
 	if exchangeName != "amq.default" {
-		_, err = instance.connection().Management().Bind(context.TODO(), &rmq.BindingSpecification{
+		_, err = instance.connection().Management().Bind(context.TODO(), &rmq.ExchangeToQueueBindingSpecification{
 			SourceExchange:   exchangeName,
 			DestinationQueue: queueName,
 			BindingKey:       routingKey,
@@ -257,7 +254,7 @@ func (m *Mgmt) DeleteDeclaredQueues() {
 
 	log.Info("Deleting queues...")
 	for queueName := range m.declaredQueues {
-		if m.conn == nil || m.conn.Status() != rmq.Open {
+		if m.conn == nil {
 			log.Info("Management connection lost; some queues were not deleted")
 			return
 		}
@@ -270,7 +267,7 @@ func (m *Mgmt) DeleteDeclaredQueues() {
 }
 
 func (m *Mgmt) DeleteQueue(ctx context.Context, name string) error {
-	if m.conn == nil || m.conn.Status() != rmq.Open {
+	if m.conn == nil {
 		return errors.New("management connection lost")
 	}
 	return m.conn.Management().DeleteQueue(ctx, name)
@@ -278,7 +275,7 @@ func (m *Mgmt) DeleteQueue(ctx context.Context, name string) error {
 
 func (m *Mgmt) Stop() {
 	m.DeleteDeclaredQueues()
-	if m.conn != nil && m.conn.Status() == rmq.Open {
-		m.conn.Close(context.Background())
+	if m.conn != nil {
+		_ = m.conn.Close(context.Background())
 	}
 }

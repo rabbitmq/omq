@@ -62,7 +62,9 @@ func GetEndpoints(serviceName string) ([]string, error) {
 		log.Error("Can't connect to the Kubernetes API", "error", err.Error())
 		os.Exit(1)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	responseData, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -70,7 +72,7 @@ func GetEndpoints(serviceName string) ([]string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return []string{}, fmt.Errorf("Kubernetes API returned an error: %s", resp.Status)
+		return []string{}, fmt.Errorf("kubernetes API returned an error: %s", resp.Status)
 	}
 	return parseEndpoints(responseData)
 }

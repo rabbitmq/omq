@@ -612,7 +612,7 @@ func setUris(cfg *config.Config, command string) error {
 			managementUri = []string{defaultUri("amqp")}
 		} else {
 			if cfg.Queues != config.Predeclared {
-				return errors.New("Not sure where to connect to declare the queues; please set --management-uri")
+				return errors.New("not sure where to connect to declare the queues; please set --management-uri")
 			}
 		}
 	}
