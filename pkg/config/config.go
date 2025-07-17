@@ -55,6 +55,7 @@ type AmqpOptions struct {
 	PropertyFilters    map[string]string
 	AppProperties      map[string][]string
 	AppPropertyFilters map[string]string
+	SQLFilter          string
 }
 
 type MqttOptions struct {

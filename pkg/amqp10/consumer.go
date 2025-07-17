@@ -292,5 +292,9 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 					amqp.Symbol(property): filterExpression,
 				}))
 	}
+	if cfg.Amqp.SQLFilter != "" {
+		filters = append(filters, amqp.NewLinkFilter("sql-filter", 0x120,
+			cfg.Amqp.SQLFilter))
+	}
 	return filters
 }

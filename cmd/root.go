@@ -117,6 +117,8 @@ func RootCmd() *cobra.Command {
 		"AMQP application property filters, eg. key1=&p:prefix")
 	amqpConsumerFlags.StringArrayVar(&amqpPropertyFilters, "amqp-property-filter", []string{},
 		"AMQP property filters, eg. key1=&p:prefix")
+	amqpConsumerFlags.StringVar(&cfg.Amqp.SQLFilter, "amqp-sql-filter", "",
+		"AMQP SQL Filter expression eg 'proprties.subject LIKE 'foo-%'")
 
 	amqp091PublisherFlags := pflag.NewFlagSet("amqp091-publisher", pflag.ContinueOnError)
 	amqp091ConsumerFlags := pflag.NewFlagSet("amqp091-consumer", pflag.ContinueOnError)
