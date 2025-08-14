@@ -200,6 +200,38 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 
+	Describe("supports AMQP Message Annotations", func() {
+		It("should set annotations and they should be present when consuming", func() {
+			args := []string{
+				"amqp",
+				"--pmessages=3",
+				"--publish-to=/queues/stream-with-verified-annotations",
+				"--consume-from=/queues/stream-with-verified-annotations",
+				"--amqp-msg-annotation", "x-test-key=value1,value2,value3",
+				"--queues=stream",
+				"--cleanup-queues=true",
+				"--time=3s",
+				"--log-level=debug",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+
+			// Get the full stderr output before any gbytes operations consume it
+			output, _ := io.ReadAll(session.Err)
+			outputStr := string(output)
+
+			// Verify basic functionality
+			Expect(outputStr).To(ContainSubstring("TOTAL PUBLISHED messages=3"))
+			Expect(outputStr).To(ContainSubstring("TOTAL CONSUMED messages=3"))
+
+			// Verify that message annotations are actually present in consumed messages
+			Expect(outputStr).To(ContainSubstring("x-test-key:value1"))
+			Expect(outputStr).To(ContainSubstring("x-test-key:value2"))
+			Expect(outputStr).To(ContainSubstring("x-test-key:value3"))
+		})
+	})
+
 	Describe("supports Fan-In from MQTT to AMQP", func() {
 		It("should fan-in messages from MQTT to AMQP", func() {
 			args := []string{

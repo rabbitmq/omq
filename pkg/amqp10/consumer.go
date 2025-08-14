@@ -189,7 +189,8 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 				"size", len(payload),
 				"priority", priority,
 				"latency", latency,
-				"appProps", msg.ApplicationProperties)
+				"appProps", msg.ApplicationProperties,
+				"annotations", msg.Annotations)
 
 			if c.Config.ConsumerLatency > 0 {
 				log.Debug("consumer latency", "id", c.Id, "latency", c.Config.ConsumerLatency)
