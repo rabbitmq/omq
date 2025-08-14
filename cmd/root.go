@@ -54,6 +54,7 @@ var (
 var (
 	metricTags             []string
 	amqpAppProperties      []string
+	amqpMsgAnnotations     []string
 	amqpAppPropertyFilters []string
 	amqpPropertyFilters    []string
 	streamOffset           string
@@ -99,7 +100,9 @@ func RootCmd() *cobra.Command {
 	amqpPublisherFlags := pflag.NewFlagSet("amqp-publisher", pflag.ContinueOnError)
 
 	amqpPublisherFlags.StringArrayVar(&amqpAppProperties, "amqp-app-property", []string{},
-		"AMQP application properties, eg. key1=val1,val2")
+		"AMQP application properties, eg. key1=val1,key2=val2")
+	amqpPublisherFlags.StringArrayVar(&amqpMsgAnnotations, "amqp-msg-annotation", []string{},
+		"AMQP message annotations, eg. key1=val1,key2=val2")
 	amqpPublisherFlags.StringSliceVar(&cfg.Amqp.Subjects, "amqp-subject", []string{},
 		"AMQP 1.0 message subject(s)")
 	amqpPublisherFlags.StringSliceVar(&cfg.Amqp.To, "amqp-to", []string{},
@@ -708,6 +711,16 @@ func sanitizeConfig(cfg *config.Config) error {
 			return fmt.Errorf("invalid AMQP application property: %s, use key=v1,v2 format", val)
 		}
 		cfg.Amqp.AppProperties[parts[0]] = strings.Split(parts[1], ",")
+	}
+
+	// AMQP message annotations
+	cfg.Amqp.MsgAnnotations = make(map[string][]string)
+	for _, val := range amqpMsgAnnotations {
+		parts := strings.Split(val, "=")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid AMQP message annotation: %s, use key1=v1,key2=v2 format", val)
+		}
+		cfg.Amqp.MsgAnnotations[parts[0]] = strings.Split(parts[1], ",")
 	}
 
 	// AMQP application property filters

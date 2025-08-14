@@ -54,6 +54,7 @@ type AmqpOptions struct {
 	RejectRate         int
 	PropertyFilters    map[string]string
 	AppProperties      map[string][]string
+	MsgAnnotations     map[string][]string
 	AppPropertyFilters map[string]string
 	SQLFilter          string
 }

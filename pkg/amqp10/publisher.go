@@ -346,6 +346,15 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 		}
 	}
 
+	if len(p.Config.Amqp.MsgAnnotations) > 0 {
+		if msg.Annotations == nil {
+			msg.Annotations = make(map[interface{}]interface{})
+		}
+		for key, val := range p.Config.Amqp.MsgAnnotations {
+			msg.Annotations[key] = val[metrics.MessagesPublished.Get()%uint64(len(val))]
+		}
+	}
+
 	if len(p.Config.Amqp.Subjects) > 0 {
 		msg.Properties.Subject = &p.Config.Amqp.Subjects[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.Subjects))]
 	}
