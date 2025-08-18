@@ -41,6 +41,23 @@ func CalculateEndToEndLatency(payload *[]byte) (time.Time, time.Duration) {
 	return timeSent, latency
 }
 
+// CalculateDelayAccuracy calculates the accuracy of delayed message delivery.
+// It compares the expected delivery time (timeSent + delay) with the actual delivery time.
+// Returns the delay accuracy (negative means early, positive means late) and whether the message was delayed.
+func CalculateDelayAccuracy(payload *[]byte, delayMs int64) (time.Duration, bool) {
+	if len(*payload) < 12 || delayMs <= 0 {
+		// message sent without latency tracking or no delay specified
+		return 0, false
+	}
+
+	now := time.Now()
+	timeSent := FormatTimestamp(binary.BigEndian.Uint64((*payload)[4:]))
+	expectedDeliveryTime := timeSent.Add(time.Duration(delayMs) * time.Millisecond)
+	delayAccuracy := now.Sub(expectedDeliveryTime)
+
+	return delayAccuracy, true
+}
+
 func FormatTimestamp(timestamp uint64) time.Time {
 	var t time.Time
 	// should be updated before the year 2100 ;)

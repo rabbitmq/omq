@@ -39,8 +39,10 @@ var (
 	MessagesConsumedHighPriority             *vmetrics.Counter
 	MessagesConsumedOutOfOrderNormalPriority *vmetrics.Counter
 	MessagesConsumedOutOfOrderHighPriority   *vmetrics.Counter
+	MessagesDeliveredTooEarly                *vmetrics.Counter
 	PublishingLatency                        *vmetrics.Summary
 	EndToEndLatency                          *vmetrics.Summary
+	DelayAccuracy                            *vmetrics.Summary
 )
 
 func startServer() {
@@ -94,8 +96,10 @@ func registerMetrics(globalLabels map[string]string) {
 	MessagesConsumedHighPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_total` + highPriorityLabels)
 	MessagesConsumedOutOfOrderNormalPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + normalPriorityLabels)
 	MessagesConsumedOutOfOrderHighPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + highPriorityLabels)
+	MessagesDeliveredTooEarly = vmetrics.GetOrCreateCounter("omq_early_messages_total" + labelsToString(globalLabels))
 	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`+labelsToString(globalLabels), 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
 	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labelsToString(globalLabels), 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
+	DelayAccuracy = vmetrics.GetOrCreateSummaryExt(`omq_delay_accuracy_seconds`+labelsToString(globalLabels), 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
 }
 
 func registerCommandLineMetric(cfg config.Config, globalLabels map[string]string) {

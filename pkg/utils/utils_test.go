@@ -24,6 +24,63 @@ var _ = Context("Utils", func() {
 		Entry("When using milliseconds", "milliseconds", true),
 	)
 
+	Describe("Delay accuracy calculation", func() {
+		It("should calculate delay accuracy correctly for delayed messages", func() {
+			testMsg := utils.MessageBody(100)
+			utils.UpdatePayload(false, &testMsg)
+
+			// Simulate a 100ms delay
+			delayMs := int64(100)
+			time.Sleep(50 * time.Millisecond) // Sleep less than the delay
+
+			delayAccuracy, isDelayed := utils.CalculateDelayAccuracy(&testMsg, delayMs)
+
+			Expect(isDelayed).To(BeTrue())
+			// Should be negative (early) since we slept less than the delay
+			Expect(delayAccuracy).To(BeNumerically("<", 0))
+			// Should be around -50ms (we slept 50ms less than the 100ms delay)
+			Expect(delayAccuracy.Milliseconds()).To(BeNumerically(">", -60))
+			Expect(delayAccuracy.Milliseconds()).To(BeNumerically("<", -40))
+		})
+
+		It("should return false for messages without delay", func() {
+			testMsg := utils.MessageBody(100)
+			utils.UpdatePayload(false, &testMsg)
+
+			delayAccuracy, isDelayed := utils.CalculateDelayAccuracy(&testMsg, 0)
+
+			Expect(isDelayed).To(BeFalse())
+			Expect(delayAccuracy).To(Equal(time.Duration(0)))
+		})
+
+		It("should return false for messages without latency tracking", func() {
+			testMsg := utils.MessageBody(8) // Too small for latency tracking
+
+			delayAccuracy, isDelayed := utils.CalculateDelayAccuracy(&testMsg, 100)
+
+			Expect(isDelayed).To(BeFalse())
+			Expect(delayAccuracy).To(Equal(time.Duration(0)))
+		})
+
+		It("should calculate positive delay accuracy for late messages", func() {
+			testMsg := utils.MessageBody(100)
+			utils.UpdatePayload(false, &testMsg)
+
+			// Simulate a 50ms delay but sleep for 100ms
+			delayMs := int64(50)
+			time.Sleep(100 * time.Millisecond)
+
+			delayAccuracy, isDelayed := utils.CalculateDelayAccuracy(&testMsg, delayMs)
+
+			Expect(isDelayed).To(BeTrue())
+			// Should be positive (late) since we slept more than the delay
+			Expect(delayAccuracy).To(BeNumerically(">", 0))
+			// Should be around +50ms (we slept 50ms more than the 50ms delay)
+			Expect(delayAccuracy.Milliseconds()).To(BeNumerically(">", 40))
+			Expect(delayAccuracy.Milliseconds()).To(BeNumerically("<", 60))
+		})
+	})
+
 	Describe("URI Parsing", func() {
 		type test struct {
 			rawURI        string

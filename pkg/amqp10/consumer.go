@@ -3,7 +3,9 @@ package amqp10
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"math/rand/v2"
+	"strconv"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -174,6 +176,42 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 			priority := int(msg.Header.Priority)
 			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 			metrics.EndToEndLatency.UpdateDuration(timeSent)
+
+			// Check for delayed message accuracy
+			if msg.Annotations != nil {
+				if xDelayValue, exists := msg.Annotations["x-delay"]; exists {
+					var delayMs int64
+					var parsed bool
+
+					if val, ok := xDelayValue.(int64); ok {
+						delayMs = val
+						parsed = true
+					} else if val, ok := xDelayValue.(int32); ok {
+						delayMs = int64(val)
+						parsed = true
+					} else if val, ok := xDelayValue.(int); ok {
+						delayMs = int64(val)
+						parsed = true
+					} else if val, ok := xDelayValue.(string); ok {
+						if parsedVal, err := strconv.ParseInt(val, 10, 64); err == nil {
+							delayMs = parsedVal
+							parsed = true
+						}
+					}
+
+					if parsed {
+						delayAccuracy, isDelayed := utils.CalculateDelayAccuracy(&payload, delayMs)
+						if isDelayed {
+							metrics.DelayAccuracy.Update(delayAccuracy.Seconds())
+							if delayAccuracy < 0 {
+								metrics.MessagesDeliveredTooEarly.Inc()
+							}
+						}
+					} else {
+						log.Debug("could not parse x-delay annotation", "value", xDelayValue, "type", fmt.Sprintf("%T", xDelayValue))
+					}
+				}
+			}
 
 			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
 				metrics.MessagesConsumedOutOfOrderMetric(priority).Inc()
