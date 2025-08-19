@@ -334,6 +334,16 @@ func (p *Amqp10Publisher) Stop(reason string) {
 	}
 }
 
+// maybeConvertToInt converts string values to integers if they look like integers
+func maybeConvertToInt(value string) any {
+	// Try to parse as int64 first
+	if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return intVal
+	}
+	// If it's not an integer, return as string
+	return value
+}
+
 func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	msg := amqp.NewMessage(p.msg)
@@ -342,7 +352,8 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	if len(p.Config.Amqp.AppProperties) > 0 {
 		msg.ApplicationProperties = make(map[string]any)
 		for key, val := range p.Config.Amqp.AppProperties {
-			msg.ApplicationProperties[key] = val[metrics.MessagesPublished.Get()%uint64(len(val))]
+			stringValue := val[metrics.MessagesPublished.Get()%uint64(len(val))]
+			msg.ApplicationProperties[key] = maybeConvertToInt(stringValue)
 		}
 	}
 
@@ -351,7 +362,8 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 			msg.Annotations = make(map[interface{}]interface{})
 		}
 		for key, val := range p.Config.Amqp.MsgAnnotations {
-			msg.Annotations[key] = val[metrics.MessagesPublished.Get()%uint64(len(val))]
+			stringValue := val[metrics.MessagesPublished.Get()%uint64(len(val))]
+			msg.Annotations[key] = maybeConvertToInt(stringValue)
 		}
 	}
 
