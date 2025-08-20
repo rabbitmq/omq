@@ -146,8 +146,8 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
-	amqp_amqp.Flags().AddFlagSet(amqpPublisherFlags)
-	amqp_amqp.Flags().AddFlagSet(amqp091ConsumerFlags)
+	amqp_amqp091.Flags().AddFlagSet(amqpPublisherFlags)
+	amqp_amqp091.Flags().AddFlagSet(amqp091ConsumerFlags)
 
 	amqp_stomp = &cobra.Command{
 		Use: "amqp-stomp",
