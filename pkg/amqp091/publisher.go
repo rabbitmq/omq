@@ -21,6 +21,7 @@ type Amqp091Publisher struct {
 	Connection       *amqp091.Connection
 	Channel          *amqp091.Channel
 	confirms         chan amqp091.Confirmation
+	returns          chan amqp091.Return
 	publishTimes     map[uint64]time.Time
 	publishTimesLock sync.Mutex
 	exchange         string
@@ -91,8 +92,10 @@ func (p *Amqp091Publisher) Connect() {
 		time.Sleep(1 * time.Second)
 	}
 	p.confirms = make(chan amqp091.Confirmation) // p.Config.MaxInFlight ?
+	p.returns = make(chan amqp091.Return)
 	_ = p.Channel.Confirm(false)
 	p.Channel.NotifyPublish(p.confirms)
+	p.Channel.NotifyReturn(p.returns)
 }
 
 func (p *Amqp091Publisher) Start(publisherReady chan bool, startPublishing chan bool) {
@@ -124,6 +127,7 @@ func (p *Amqp091Publisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	go p.handleConfirms()
+	go p.handleReturns()
 
 	var msgSent atomic.Int64
 	for {
@@ -153,7 +157,7 @@ func (p *Amqp091Publisher) SendAsync(n uint64) error {
 	msg := p.prepareMessage()
 
 	p.setPublishTime(n, time.Now())
-	err := p.Channel.PublishWithContext(p.ctx, p.exchange, p.routingKey, false, false, msg)
+	err := p.Channel.PublishWithContext(p.ctx, p.exchange, p.routingKey, p.Config.Amqp091.Mandatory, false, msg)
 	return err
 }
 
@@ -176,6 +180,18 @@ func (p *Amqp091Publisher) handleConfirms() {
 	}
 }
 
+func (p *Amqp091Publisher) handleReturns() {
+	for returned := range p.returns {
+		metrics.MessagesReturned.Inc()
+		log.Debug("message returned by broker (unroutable)",
+			"id", p.Id,
+			"reply_code", returned.ReplyCode,
+			"reply_text", returned.ReplyText,
+			"exchange", returned.Exchange,
+			"routing_key", returned.RoutingKey)
+	}
+}
+
 func (p *Amqp091Publisher) Stop(reason string) {
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	for len(p.publishTimes) > 0 {
@@ -191,10 +207,20 @@ func (p *Amqp091Publisher) Stop(reason string) {
 
 func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
-	return amqp091.Publishing{
+
+	msg := amqp091.Publishing{
 		DeliveryMode: amqp091.Persistent,
 		Body:         p.msg,
 	}
+
+	if len(p.Config.Amqp091.Headers) > 0 {
+		msg.Headers = make(amqp091.Table)
+		for key, value := range p.Config.Amqp091.Headers {
+			msg.Headers[key] = value
+		}
+	}
+
+	return msg
 }
 
 func (p *Amqp091Publisher) setPublishTime(deliveryTag uint64, t time.Time) {

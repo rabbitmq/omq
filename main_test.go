@@ -489,6 +489,106 @@ var _ = Describe("OMQ CLI", func() {
 			Eventually(session.Out).Should(gbytes.Say(`omq_args{command_line="amqp -t /queues/omq-args -T /queues/omq-args -C 0 -D 0 --queues classic"} 1`))
 		})
 	})
+
+	Describe("AMQP 0.9.1 mandatory flag", func() {
+		It("should receive negative ack when mandatory=true and no matching bindings exist", func() {
+			args := []string{
+				"amqp091",
+				"--pmessages=1",
+				"--consumers=0",
+				"--publish-to=/exchanges/amq.topic/unroutable-test-key",
+				"--amqp091-mandatory",
+				"--time=2s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_published_total`)).Should(Equal(1.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_messages_returned_total`)).Should(Equal(1.0))
+		})
+
+		It("should work normally when mandatory=false and no matching bindings exist", func() {
+			args := []string{
+				"amqp091",
+				"--pmessages=1",
+				"--consumers=0",
+				"--publish-to=/exchanges/amq.topic/unroutable-test-key-no-mandatory",
+				"--time=2s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_published_total`)).Should(Equal(1.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_messages_returned_total`)).Should(Equal(0.0))
+		})
+
+		It("should work normally when mandatory=true and matching bindings exist", func() {
+			args := []string{
+				"amqp091",
+				"--pmessages=1",
+				"--cmessages=1",
+				"--publish-to=/queues/mandatory-test-queue",
+				"--consume-from=/queues/mandatory-test-queue",
+				"--amqp091-mandatory",
+				"--queues=classic",
+				"--cleanup-queues=true",
+				"--time=3s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_published_total`)).Should(Equal(1.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="normal"}`)).Should(Equal(1.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_messages_returned_total`)).Should(Equal(0.0))
+		})
+	})
+
+	Describe("AMQP 0.9.1 headers", func() {
+		It("should transmit and receive headers with different types correctly", func() {
+			args := []string{
+				"amqp091",
+				"--pmessages=1",
+				"--cmessages=1",
+				"--publish-to=/queues/headers-test",
+				"--consume-from=/queues/headers-test",
+				"--amqp091-headers=name=test-message,priority=5,rate=2.5,enabled=true",
+				"--queues=classic",
+				"--cleanup-queues=true",
+				"--time=3s",
+				"--log-level=debug",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Err)
+			outputStr := string(output)
+
+			Expect(outputStr).To(ContainSubstring("TOTAL PUBLISHED messages=1"))
+			Expect(outputStr).To(ContainSubstring("TOTAL CONSUMED messages=1"))
+
+			Expect(outputStr).To(ContainSubstring("name:test-message"))
+			Expect(outputStr).To(ContainSubstring("priority:5"))
+			Expect(outputStr).To(ContainSubstring("rate:2.5"))
+			Expect(outputStr).To(ContainSubstring("enabled:true"))
+		})
+	})
 })
 
 func omq(args []string) *gexec.Session {

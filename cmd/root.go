@@ -57,6 +57,7 @@ var (
 	amqpMsgAnnotations     []string
 	amqpAppPropertyFilters []string
 	amqpPropertyFilters    []string
+	amqp091Headers         []string
 	streamOffset           string
 )
 
@@ -125,6 +126,11 @@ func RootCmd() *cobra.Command {
 
 	amqp091PublisherFlags := pflag.NewFlagSet("amqp091-publisher", pflag.ContinueOnError)
 	amqp091ConsumerFlags := pflag.NewFlagSet("amqp091-consumer", pflag.ContinueOnError)
+
+	amqp091PublisherFlags.BoolVar(&cfg.Amqp091.Mandatory, "amqp091-mandatory", false,
+		"Set the mandatory flag when publishing messages")
+	amqp091PublisherFlags.StringArrayVar(&amqp091Headers, "amqp091-headers", []string{},
+		"AMQP 0.9.1 message headers in format 'key1=value1,key2=value2'. Numbers are automatically detected and sent as numeric types.")
 
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",
@@ -742,6 +748,8 @@ func sanitizeConfig(cfg *config.Config) error {
 		}
 		cfg.Amqp.PropertyFilters[parts[0]] = parts[1]
 	}
+
+	cfg.Amqp091.Headers = utils.ParseHeaders(amqp091Headers)
 
 	// split metric tags into key-value pairs
 	cfg.MetricTags = make(map[string]string)

@@ -152,3 +152,30 @@ func RateLimiter(publishRate float32) *rate.Limiter {
 func AntsPool(maxInFlight int) (*ants.Pool, error) {
 	return ants.NewPool(maxInFlight, ants.WithExpiryDuration(time.Duration(10*time.Second)), ants.WithNonblocking(false))
 }
+
+// ParseHeaders parses header strings in the format "key1=value1,key2=value2"
+// and converts numeric values to appropriate types (int64 or float64)
+func ParseHeaders(headerStrings []string) map[string]interface{} {
+	headers := make(map[string]interface{})
+
+	for _, headerString := range headerStrings {
+		pairs := strings.Split(headerString, ",")
+		for _, pair := range pairs {
+			parts := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+
+				if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+					headers[key] = intVal
+				} else if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
+					headers[key] = floatVal
+				} else {
+					headers[key] = value
+				}
+			}
+		}
+	}
+
+	return headers
+}

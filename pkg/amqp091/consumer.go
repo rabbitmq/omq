@@ -150,12 +150,22 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 			}
 			previousMessageTimeSent = timeSent
 
+			headerInfo := ""
+			if len(msg.Headers) > 0 {
+				headerPairs := make([]string, 0, len(msg.Headers))
+				for key, value := range msg.Headers {
+					headerPairs = append(headerPairs, fmt.Sprintf("%s:%v", key, value))
+				}
+				headerInfo = fmt.Sprintf(" headers=[%s]", strings.Join(headerPairs, ","))
+			}
+
 			log.Debug("message received",
 				"id", c.Id,
 				"terminus", c.Terminus,
 				"size", len(payload),
 				"priority", priority,
-				"latency", latency)
+				"latency", latency,
+				"headers", headerInfo)
 
 			if c.Config.ConsumerLatency > 0 {
 				log.Debug("consumer latency", "id", c.Id, "latency", c.Config.ConsumerLatency)

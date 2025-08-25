@@ -66,6 +66,11 @@ type MqttOptions struct {
 	SessionExpiryInterval time.Duration
 }
 
+type Amqp091Options struct {
+	Mandatory bool
+	Headers   map[string]interface{}
+}
+
 type Config struct {
 	ExpectedInstances    int
 	SyncName             string
@@ -104,6 +109,7 @@ type Config struct {
 	StreamFilterValueSet string
 	ConsumerPriority     int32
 	Amqp                 AmqpOptions
+	Amqp091              Amqp091Options
 	MqttPublisher        MqttOptions
 	MqttConsumer         MqttOptions
 	MetricTags           map[string]string
