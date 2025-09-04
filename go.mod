@@ -3,7 +3,7 @@ module github.com/rabbitmq/omq
 go 1.24.0
 
 require (
-	github.com/Azure/go-amqp v1.4.0
+	github.com/Azure/go-amqp v1.5.0
 	github.com/VictoriaMetrics/metrics v1.39.1
 	github.com/charmbracelet/log v0.4.2
 	github.com/eclipse/paho.golang v0.22.0
@@ -15,16 +15,16 @@ require (
 	github.com/onsi/gomega v1.38.0
 	github.com/panjf2000/ants/v2 v2.11.3
 	github.com/rabbitmq/amqp091-go v1.10.0
-	github.com/spf13/cobra v1.9.1
+	github.com/spf13/cobra v1.10.1
 	github.com/thediveo/enumflag/v2 v2.0.7
-	golang.org/x/exp v0.0.0-20250811191247-51f88131bc50
+	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b
 	golang.org/x/time v0.12.0
 )
 
 require (
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/colorprofile v0.3.1 // indirect
+	github.com/charmbracelet/colorprofile v0.3.2 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.10.1 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
@@ -36,7 +36,7 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/pprof v0.0.0-20250630185457-6e76a2b096b5 // indirect
+	github.com/google/pprof v0.0.0-20250903194437-c28834ac2320 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -75,6 +75,6 @@ require (
 require (
 	github.com/go-stomp/stomp/v3 v3.1.3
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/rabbitmq/rabbitmq-amqp-go-client v0.1.1
-	github.com/spf13/pflag v1.0.7
+	github.com/rabbitmq/rabbitmq-amqp-go-client v0.2.0
+	github.com/spf13/pflag v1.0.10
 )
