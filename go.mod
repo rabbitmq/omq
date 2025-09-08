@@ -18,7 +18,7 @@ require (
 	github.com/spf13/cobra v1.10.1
 	github.com/thediveo/enumflag/v2 v2.0.7
 	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b
-	golang.org/x/time v0.12.0
+	golang.org/x/time v0.13.0
 )
 
 require (
