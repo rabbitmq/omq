@@ -6,7 +6,7 @@ require (
 	github.com/Azure/go-amqp v1.5.0
 	github.com/VictoriaMetrics/metrics v1.39.1
 	github.com/charmbracelet/log v0.4.2
-	github.com/eclipse/paho.golang v0.22.0
+	github.com/eclipse/paho.golang v0.23.0
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/felixge/fgprof v0.9.5
 	github.com/hashicorp/memberlist v0.5.3
@@ -18,7 +18,7 @@ require (
 	github.com/spf13/cobra v1.10.1
 	github.com/thediveo/enumflag/v2 v2.0.7
 	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b
-	golang.org/x/time v0.12.0
+	golang.org/x/time v0.13.0
 )
 
 require (
@@ -63,10 +63,10 @@ require (
 	github.com/valyala/histogram v1.2.0 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
-	golang.org/x/mod v0.27.0 // indirect
+	golang.org/x/mod v0.28.0 // indirect
 	golang.org/x/net v0.43.0 // indirect
-	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	golang.org/x/tools v0.36.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
