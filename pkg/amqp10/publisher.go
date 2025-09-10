@@ -1,6 +1,7 @@
 package amqp10
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -357,12 +358,46 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 		}
 	}
 
+	// Handle template-based application properties
+	if len(p.Config.Amqp.AppPropertyTemplates) > 0 {
+		if msg.ApplicationProperties == nil {
+			msg.ApplicationProperties = make(map[string]any)
+		}
+		for key, tmpl := range p.Config.Amqp.AppPropertyTemplates {
+			var buf bytes.Buffer
+			err := tmpl.Execute(&buf, nil)
+			if err != nil {
+				log.Debug("template execution failed for application property", "key", key, "error", err)
+				continue
+			}
+			stringValue := buf.String()
+			msg.ApplicationProperties[key] = maybeConvertToInt(stringValue)
+		}
+	}
+
 	if len(p.Config.Amqp.MsgAnnotations) > 0 {
 		if msg.Annotations == nil {
 			msg.Annotations = make(map[interface{}]interface{})
 		}
 		for key, val := range p.Config.Amqp.MsgAnnotations {
 			stringValue := val[metrics.MessagesPublished.Get()%uint64(len(val))]
+			msg.Annotations[key] = maybeConvertToInt(stringValue)
+		}
+	}
+
+	// Handle template-based message annotations
+	if len(p.Config.Amqp.MsgAnnotationTemplates) > 0 {
+		if msg.Annotations == nil {
+			msg.Annotations = make(map[interface{}]interface{})
+		}
+		for key, tmpl := range p.Config.Amqp.MsgAnnotationTemplates {
+			var buf bytes.Buffer
+			err := tmpl.Execute(&buf, nil)
+			if err != nil {
+				log.Debug("template execution failed for annotation", "key", key, "error", err)
+				continue
+			}
+			stringValue := buf.String()
 			msg.Annotations[key] = maybeConvertToInt(stringValue)
 		}
 	}

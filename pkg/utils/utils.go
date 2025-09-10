@@ -7,10 +7,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"golang.org/x/time/rate"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/panjf2000/ants/v2"
 	"github.com/rabbitmq/omq/pkg/log"
 )
@@ -178,4 +180,43 @@ func ParseHeaders(headerStrings []string) map[string]interface{} {
 	}
 
 	return headers
+}
+
+// ParseHeadersWithTemplates parses header strings and separates templates from regular values
+// Returns both regular headers and template headers
+func ParseHeadersWithTemplates(headerStrings []string) (map[string]interface{}, map[string]*template.Template, error) {
+	headers := make(map[string]interface{})
+	templates := make(map[string]*template.Template)
+
+	for _, headerString := range headerStrings {
+		pairs := strings.Split(headerString, ",")
+		for _, pair := range pairs {
+			parts := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+
+				// Check if it's a template
+				if strings.Contains(value, "{{") && strings.Contains(value, "}}") {
+					// Parse as template
+					tmpl, err := template.New("header").Funcs(sprig.FuncMap()).Parse(value)
+					if err != nil {
+						return nil, nil, err
+					}
+					templates[key] = tmpl
+				} else {
+					// Parse as regular value
+					if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+						headers[key] = intVal
+					} else if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
+						headers[key] = floatVal
+					} else {
+						headers[key] = value
+					}
+				}
+			}
+		}
+	}
+
+	return headers, templates, nil
 }

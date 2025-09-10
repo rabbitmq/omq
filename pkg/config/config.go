@@ -1,8 +1,11 @@
 package config
 
 import (
+	"strings"
+	"text/template"
 	"time"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/thediveo/enumflag/v2"
 )
 
@@ -47,16 +50,18 @@ var QueueTypes = map[QueueType][]string{
 }
 
 type AmqpOptions struct {
-	Subjects           []string
-	To                 []string
-	SendSettled        bool
-	ReleaseRate        int
-	RejectRate         int
-	PropertyFilters    map[string]string
-	AppProperties      map[string][]string
-	MsgAnnotations     map[string][]string
-	AppPropertyFilters map[string]string
-	SQLFilter          string
+	Subjects               []string
+	To                     []string
+	SendSettled            bool
+	ReleaseRate            int
+	RejectRate             int
+	PropertyFilters        map[string]string
+	AppProperties          map[string][]string
+	AppPropertyTemplates   map[string]*template.Template
+	MsgAnnotations         map[string][]string
+	MsgAnnotationTemplates map[string]*template.Template
+	AppPropertyFilters     map[string]string
+	SQLFilter              string
 }
 
 type MqttOptions struct {
@@ -67,8 +72,9 @@ type MqttOptions struct {
 }
 
 type Amqp091Options struct {
-	Mandatory bool
-	Headers   map[string]interface{}
+	Mandatory       bool
+	Headers         map[string]interface{}
+	HeaderTemplates map[string]*template.Template
 }
 
 type Config struct {
@@ -122,4 +128,19 @@ func NewConfig() Config {
 	return Config{
 		QueueDurability: Configuration,
 	}
+}
+
+// ParseTemplateValue parses a value and determines if it's a template or regular value.
+// Returns the parsed template and a boolean indicating if it's a template.
+func ParseTemplateValue(value string) (*template.Template, bool, error) {
+	// Check if the value contains template syntax ({{ }})
+	if strings.Contains(value, "{{") && strings.Contains(value, "}}") {
+		// Parse as template
+		tmpl, err := template.New("template").Funcs(sprig.FuncMap()).Parse(value)
+		if err != nil {
+			return nil, false, err
+		}
+		return tmpl, true, nil
+	}
+	return nil, false, nil
 }

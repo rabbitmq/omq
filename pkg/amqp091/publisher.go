@@ -1,9 +1,11 @@
 package amqp091
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand/v2"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -217,6 +219,30 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 		msg.Headers = make(amqp091.Table)
 		for key, value := range p.Config.Amqp091.Headers {
 			msg.Headers[key] = value
+		}
+	}
+
+	// Handle template-based headers
+	if len(p.Config.Amqp091.HeaderTemplates) > 0 {
+		if msg.Headers == nil {
+			msg.Headers = make(amqp091.Table)
+		}
+		for key, tmpl := range p.Config.Amqp091.HeaderTemplates {
+			var buf bytes.Buffer
+			err := tmpl.Execute(&buf, nil)
+			if err != nil {
+				log.Debug("template execution failed for header", "key", key, "error", err)
+				continue
+			}
+			stringValue := buf.String()
+			// Convert to appropriate type like the original ParseHeaders function
+			if intVal, err := strconv.ParseInt(stringValue, 10, 64); err == nil {
+				msg.Headers[key] = intVal
+			} else if floatVal, err := strconv.ParseFloat(stringValue, 64); err == nil {
+				msg.Headers[key] = floatVal
+			} else {
+				msg.Headers[key] = stringValue
+			}
 		}
 	}
 

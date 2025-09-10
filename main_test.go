@@ -232,6 +232,59 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 
+	Describe("supports AMQP Message Annotation Templates", func() {
+		It("should evaluate templates and set dynamic annotation values", func() {
+			args := []string{
+				"amqp",
+				"--pmessages=1",
+				"--publish-to=/queues/stream-with-template-annotations",
+				"--consume-from=/queues/stream-with-template-annotations",
+				"--amqp-msg-annotation", "x-counter={{ add 1 2 }}",
+				"--queues=stream",
+				"--cleanup-queues=true",
+				"--time=3s",
+				"--log-level=debug",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Err)
+			outputStr := string(output)
+
+			Expect(outputStr).To(ContainSubstring("TOTAL PUBLISHED messages=1"))
+			Expect(outputStr).To(ContainSubstring("TOTAL CONSUMED messages=1"))
+			Expect(outputStr).To(ContainSubstring("x-counter:3"))
+		})
+	})
+
+	Describe("supports AMQP091 Header Templates", func() {
+		It("should evaluate templates and set dynamic header values", func() {
+			args := []string{
+				"amqp091",
+				"--pmessages=1",
+				"--cmessages=1",
+				"--publish-to=/queues/stream-with-template-headers",
+				"--consume-from=/queues/stream-with-template-headers",
+				"--amqp091-headers", "x-counter={{ add 5 10 }}",
+				"--queues=classic",
+				"--cleanup-queues=true",
+				"--time=3s",
+				"--log-level=debug",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Err)
+			outputStr := string(output)
+
+			Expect(outputStr).To(ContainSubstring("TOTAL PUBLISHED messages=1"))
+			Expect(outputStr).To(ContainSubstring("TOTAL CONSUMED messages=1"))
+			Expect(outputStr).To(ContainSubstring("x-counter:15"))
+		})
+	})
+
 	Describe("supports Fan-In from MQTT to AMQP", func() {
 		It("should fan-in messages from MQTT to AMQP", func() {
 			args := []string{

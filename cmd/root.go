@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"text/template"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/common"
@@ -711,22 +712,46 @@ func sanitizeConfig(cfg *config.Config) error {
 
 	// AMQP application properties
 	cfg.Amqp.AppProperties = make(map[string][]string)
+	cfg.Amqp.AppPropertyTemplates = make(map[string]*template.Template)
 	for _, val := range amqpAppProperties {
 		parts := strings.Split(val, "=")
 		if len(parts) != 2 {
 			return fmt.Errorf("invalid AMQP application property: %s, use key=v1,v2 format", val)
 		}
-		cfg.Amqp.AppProperties[parts[0]] = strings.Split(parts[1], ",")
+
+		tmpl, isTemplate, err := config.ParseTemplateValue(parts[1])
+		if err != nil {
+			return fmt.Errorf("invalid template in AMQP application property %s: %v", parts[0], err)
+		}
+
+		if isTemplate {
+			cfg.Amqp.AppPropertyTemplates[parts[0]] = tmpl
+		} else {
+			// Parse as regular comma-separated values
+			cfg.Amqp.AppProperties[parts[0]] = strings.Split(parts[1], ",")
+		}
 	}
 
 	// AMQP message annotations
 	cfg.Amqp.MsgAnnotations = make(map[string][]string)
+	cfg.Amqp.MsgAnnotationTemplates = make(map[string]*template.Template)
 	for _, val := range amqpMsgAnnotations {
 		parts := strings.Split(val, "=")
 		if len(parts) != 2 {
 			return fmt.Errorf("invalid AMQP message annotation: %s, use key=v1,v2 format", val)
 		}
-		cfg.Amqp.MsgAnnotations[parts[0]] = strings.Split(parts[1], ",")
+
+		tmpl, isTemplate, err := config.ParseTemplateValue(parts[1])
+		if err != nil {
+			return fmt.Errorf("invalid template in AMQP message annotation %s: %v", parts[0], err)
+		}
+
+		if isTemplate {
+			cfg.Amqp.MsgAnnotationTemplates[parts[0]] = tmpl
+		} else {
+			// Parse as regular comma-separated values
+			cfg.Amqp.MsgAnnotations[parts[0]] = strings.Split(parts[1], ",")
+		}
 	}
 
 	// AMQP application property filters
@@ -749,7 +774,13 @@ func sanitizeConfig(cfg *config.Config) error {
 		cfg.Amqp.PropertyFilters[parts[0]] = parts[1]
 	}
 
-	cfg.Amqp091.Headers = utils.ParseHeaders(amqp091Headers)
+	// Parse AMQP091 headers with template support
+	headers, headerTemplates, err := utils.ParseHeadersWithTemplates(amqp091Headers)
+	if err != nil {
+		return fmt.Errorf("invalid template in AMQP091 header: %v", err)
+	}
+	cfg.Amqp091.Headers = headers
+	cfg.Amqp091.HeaderTemplates = headerTemplates
 
 	// split metric tags into key-value pairs
 	cfg.MetricTags = make(map[string]string)
