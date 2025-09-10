@@ -212,8 +212,8 @@ func (m MetricsServer) PrintAll() {
 		return
 	}
 
-	metrics := strings.Split(string(body), "\n")
-	for _, metric := range metrics {
+	metrics := strings.SplitSeq(string(body), "\n")
+	for metric := range metrics {
 		if strings.HasPrefix(metric, "omq_") {
 			fmt.Println(metric)
 		}

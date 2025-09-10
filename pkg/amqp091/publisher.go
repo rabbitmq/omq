@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"strconv"
 	"strings"
@@ -217,9 +218,7 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 
 	if len(p.Config.Amqp091.Headers) > 0 {
 		msg.Headers = make(amqp091.Table)
-		for key, value := range p.Config.Amqp091.Headers {
-			msg.Headers[key] = value
-		}
+		maps.Copy(msg.Headers, p.Config.Amqp091.Headers)
 	}
 
 	// Handle template-based headers

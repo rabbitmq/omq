@@ -73,7 +73,7 @@ type MqttOptions struct {
 
 type Amqp091Options struct {
 	Mandatory       bool
-	Headers         map[string]interface{}
+	Headers         map[string]any
 	HeaderTemplates map[string]*template.Template
 }
 

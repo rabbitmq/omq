@@ -23,18 +23,18 @@ func Setup() {
 	logger.SetLevel(Level)
 }
 
-func Debug(msg interface{}, keyvals ...interface{}) {
+func Debug(msg any, keyvals ...any) {
 	logger.Debug(msg, keyvals...)
 }
 
-func Info(msg interface{}, keyvals ...interface{}) {
+func Info(msg any, keyvals ...any) {
 	logger.Info(msg, keyvals...)
 }
 
-func Error(msg interface{}, keyvals ...interface{}) {
+func Error(msg any, keyvals ...any) {
 	logger.Error(msg, keyvals...)
 }
 
-func Print(msg interface{}, keyvals ...interface{}) {
+func Print(msg any, keyvals ...any) {
 	logger.Print(msg, keyvals...)
 }

@@ -377,7 +377,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 
 	if len(p.Config.Amqp.MsgAnnotations) > 0 {
 		if msg.Annotations == nil {
-			msg.Annotations = make(map[interface{}]interface{})
+			msg.Annotations = make(map[any]any)
 		}
 		for key, val := range p.Config.Amqp.MsgAnnotations {
 			stringValue := val[metrics.MessagesPublished.Get()%uint64(len(val))]
@@ -388,7 +388,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	// Handle template-based message annotations
 	if len(p.Config.Amqp.MsgAnnotationTemplates) > 0 {
 		if msg.Annotations == nil {
-			msg.Annotations = make(map[interface{}]interface{})
+			msg.Annotations = make(map[any]any)
 		}
 		for key, tmpl := range p.Config.Amqp.MsgAnnotationTemplates {
 			var buf bytes.Buffer

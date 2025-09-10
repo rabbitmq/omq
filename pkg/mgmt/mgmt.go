@@ -82,9 +82,9 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	}
 	// declare queues for AMQP 1.0 and 0.9.1 consumers
 	if cfg.ConsumerProto == config.AMQP || cfg.ConsumerProto == config.AMQP091 {
-		if strings.HasPrefix(cfg.ConsumeFrom, "/queues/") {
+		if after, ok := strings.CutPrefix(cfg.ConsumeFrom, "/queues/"); ok {
 			for i := 1; i <= cfg.Consumers; i++ {
-				queueName := strings.TrimPrefix(cfg.ConsumeFrom, "/queues/")
+				queueName := after
 				m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
 			}
 		} else {

@@ -99,7 +99,6 @@ var _ = Context("Utils", func() {
 		}
 
 		for _, tc := range tests {
-			tc := tc
 			It("should parse URI "+tc.rawURI+"-"+tc.defaultPort, func() {
 				parsed := utils.ParseURI(tc.rawURI, tc.defaultScheme, tc.defaultPort)
 				Expect(parsed.Broker).To(Equal(tc.broker))
@@ -126,7 +125,6 @@ var _ = Context("Utils", func() {
 		}
 
 		for n, tc := range tests {
-			tc := tc
 			It("should generate wrapped sequence "+strconv.Itoa(n), func() {
 				Expect(utils.WrappedSequence(tc.length, tc.start)).To(Equal(tc.expectedSequence))
 			})

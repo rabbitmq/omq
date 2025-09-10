@@ -118,7 +118,7 @@ func WrappedSequence(len int, start int) []int {
 		start = start % len
 	}
 	seq := make([]int, len)
-	for i := 0; i < len; i++ {
+	for i := range len {
 		seq[i] = (start + i) % len
 	}
 	return seq
@@ -157,12 +157,12 @@ func AntsPool(maxInFlight int) (*ants.Pool, error) {
 
 // ParseHeaders parses header strings in the format "key1=value1,key2=value2"
 // and converts numeric values to appropriate types (int64 or float64)
-func ParseHeaders(headerStrings []string) map[string]interface{} {
-	headers := make(map[string]interface{})
+func ParseHeaders(headerStrings []string) map[string]any {
+	headers := make(map[string]any)
 
 	for _, headerString := range headerStrings {
-		pairs := strings.Split(headerString, ",")
-		for _, pair := range pairs {
+		pairs := strings.SplitSeq(headerString, ",")
+		for pair := range pairs {
 			parts := strings.SplitN(strings.TrimSpace(pair), "=", 2)
 			if len(parts) == 2 {
 				key := strings.TrimSpace(parts[0])
@@ -184,13 +184,13 @@ func ParseHeaders(headerStrings []string) map[string]interface{} {
 
 // ParseHeadersWithTemplates parses header strings and separates templates from regular values
 // Returns both regular headers and template headers
-func ParseHeadersWithTemplates(headerStrings []string) (map[string]interface{}, map[string]*template.Template, error) {
-	headers := make(map[string]interface{})
+func ParseHeadersWithTemplates(headerStrings []string) (map[string]any, map[string]*template.Template, error) {
+	headers := make(map[string]any)
 	templates := make(map[string]*template.Template)
 
 	for _, headerString := range headerStrings {
-		pairs := strings.Split(headerString, ",")
-		for _, pair := range pairs {
+		pairs := strings.SplitSeq(headerString, ",")
+		for pair := range pairs {
 			parts := strings.SplitN(strings.TrimSpace(pair), "=", 2)
 			if len(parts) == 2 {
 				key := strings.TrimSpace(parts[0])
