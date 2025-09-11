@@ -167,9 +167,21 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 				"latency", latency,
 				"headers", headerInfo)
 
-			if c.Config.ConsumerLatency > 0 {
-				log.Debug("consumer latency", "id", c.Id, "latency", c.Config.ConsumerLatency)
-				time.Sleep(c.Config.ConsumerLatency)
+			// Handle consumer latency (always use template)
+			var consumerLatency time.Duration
+			if c.Config.ConsumerLatencyTemplate != nil {
+				latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, "consumer latency")
+				if parsedLatency, err := time.ParseDuration(latencyStr); err == nil {
+					consumerLatency = parsedLatency
+				} else {
+					log.Error("failed to parse template-generated latency", "value", latencyStr, "error", err)
+					os.Exit(1)
+				}
+			}
+
+			if consumerLatency > 0 {
+				log.Debug("consumer latency", "id", c.Id, "latency", consumerLatency)
+				time.Sleep(consumerLatency)
 			}
 
 			outcome, err := c.outcome(msg.DeliveryTag)

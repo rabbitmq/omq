@@ -2,6 +2,7 @@ package stomp
 
 import (
 	"context"
+	"os"
 	"strconv"
 	"time"
 
@@ -137,9 +138,21 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 
 			log.Debug("message received", "id", c.Id, "destination", c.Topic, "size", len(msg.Body), "ack required", msg.ShouldAck(), "priority", priority, "latency", latency)
 
-			if c.Config.ConsumerLatency > 0 {
-				log.Debug("consumer latency", "id", c.Id, "latency", c.Config.ConsumerLatency)
-				time.Sleep(c.Config.ConsumerLatency)
+			// Handle consumer latency (always use template)
+			var consumerLatency time.Duration
+			if c.Config.ConsumerLatencyTemplate != nil {
+				latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, "consumer latency")
+				if parsedLatency, err := time.ParseDuration(latencyStr); err == nil {
+					consumerLatency = parsedLatency
+				} else {
+					log.Error("failed to parse template-generated latency", "value", latencyStr, "error", err)
+					os.Exit(1)
+				}
+			}
+
+			if consumerLatency > 0 {
+				log.Debug("consumer latency", "id", c.Id, "latency", consumerLatency)
+				time.Sleep(consumerLatency)
 			}
 
 			err := c.Connection.Ack(msg)

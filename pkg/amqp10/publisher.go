@@ -1,11 +1,11 @@
 package amqp10
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
 	"math/rand/v2"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -350,38 +350,14 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	msg := amqp.NewMessage(p.msg)
 	msg.Properties = &amqp.MessageProperties{}
 
-	if len(p.Config.Amqp.AppProperties) > 0 {
-		msg.ApplicationProperties = make(map[string]any)
-		for key, val := range p.Config.Amqp.AppProperties {
-			stringValue := val[metrics.MessagesPublished.Get()%uint64(len(val))]
-			msg.ApplicationProperties[key] = maybeConvertToInt(stringValue)
-		}
-	}
-
 	// Handle template-based application properties
 	if len(p.Config.Amqp.AppPropertyTemplates) > 0 {
 		if msg.ApplicationProperties == nil {
 			msg.ApplicationProperties = make(map[string]any)
 		}
 		for key, tmpl := range p.Config.Amqp.AppPropertyTemplates {
-			var buf bytes.Buffer
-			err := tmpl.Execute(&buf, nil)
-			if err != nil {
-				log.Debug("template execution failed for application property", "key", key, "error", err)
-				continue
-			}
-			stringValue := buf.String()
+			stringValue := utils.ExecuteTemplate(tmpl, "application property "+key)
 			msg.ApplicationProperties[key] = maybeConvertToInt(stringValue)
-		}
-	}
-
-	if len(p.Config.Amqp.MsgAnnotations) > 0 {
-		if msg.Annotations == nil {
-			msg.Annotations = make(map[any]any)
-		}
-		for key, val := range p.Config.Amqp.MsgAnnotations {
-			stringValue := val[metrics.MessagesPublished.Get()%uint64(len(val))]
-			msg.Annotations[key] = maybeConvertToInt(stringValue)
 		}
 	}
 
@@ -391,13 +367,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 			msg.Annotations = make(map[any]any)
 		}
 		for key, tmpl := range p.Config.Amqp.MsgAnnotationTemplates {
-			var buf bytes.Buffer
-			err := tmpl.Execute(&buf, nil)
-			if err != nil {
-				log.Debug("template execution failed for annotation", "key", key, "error", err)
-				continue
-			}
-			stringValue := buf.String()
+			stringValue := utils.ExecuteTemplate(tmpl, "message annotation "+key)
 			msg.Annotations[key] = maybeConvertToInt(stringValue)
 		}
 	}
@@ -416,10 +386,16 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 
 	msg.Header = &amqp.MessageHeader{}
 	msg.Header.Durable = p.Config.MessageDurability
-	if p.Config.MessagePriority != "" {
-		// already validated in root.go
-		priority, _ := strconv.ParseUint(p.Config.MessagePriority, 10, 8)
-		msg.Header.Priority = uint8(priority)
+
+	// Handle message priority (always use template)
+	if p.Config.MessagePriorityTemplate != nil {
+		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, "message priority")
+		if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
+			msg.Header.Priority = uint8(priority)
+		} else {
+			log.Error("failed to parse template-generated priority", "value", priorityStr, "error", err)
+			os.Exit(1)
+		}
 	}
 	if p.Config.MessageTTL.Microseconds() > 0 {
 		msg.Header.TTL = p.Config.MessageTTL

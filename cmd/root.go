@@ -60,6 +60,8 @@ var (
 	amqpPropertyFilters    []string
 	amqp091Headers         []string
 	streamOffset           string
+	consumerLatencyStr     string
+	messagePriorityStr     string
 )
 
 var (
@@ -366,8 +368,8 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().Int32Var(&cfg.ConsumerPriority, "consumer-priority", 0, "Consumer priority")
 	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerCredits, "consumer-credits", 1,
 		"AMQP-1.0 consumer credits / STOMP prefetch count")
-	rootCmd.PersistentFlags().DurationVarP(&cfg.ConsumerLatency, "consumer-latency", "L", 0,
-		"consumer latency (time to accept message)")
+	rootCmd.PersistentFlags().StringVarP(&consumerLatencyStr, "consumer-latency", "L", "",
+		"consumer latency (time to accept message, supports templates like {{randInt 100 1000}}ms)")
 	rootCmd.PersistentFlags().BoolVar(&cfg.LogOutOfOrder, "log-out-of-order-messages", false,
 		"Print a log line when a message is received that is older than the previously received message")
 	rootCmd.PersistentFlags().DurationVar(&cfg.ConsumerStartupDelay, "consumer-startup-delay", 0,
@@ -389,7 +391,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().Float32VarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited)")
 	rootCmd.PersistentFlags().IntVarP(&cfg.MaxInFlight, "max-in-flight", "c", 1, "Maximum number of in-flight messages per publisher")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable")
-	rootCmd.PersistentFlags().StringVar(&cfg.MessagePriority, "message-priority", "", "Message priority (0-255, default=unset)")
+	rootCmd.PersistentFlags().StringVar(&messagePriorityStr, "message-priority", "", "Message priority (0-255, default=unset, supports templates like {{randInt 0 255}})")
 	rootCmd.PersistentFlags().DurationVar(&cfg.MessageTTL, "message-ttl", 0, "Message TTL (not set by default)")
 
 	rootCmd.PersistentFlags().StringSliceVar(&metricTags, "metric-tags", []string{},
@@ -433,7 +435,7 @@ func RootCmd() *cobra.Command {
 func start(cfg config.Config) {
 	// we can't do this in sanitizeConfig because we need to know
 	// the publisher and consumer protocols and these are set later on
-	if cfg.ConsumerLatency != 0 && cfg.ConsumerProto == config.MQTT {
+	if cfg.ConsumerLatencyTemplate != nil && cfg.ConsumerProto == config.MQTT {
 		fmt.Println("Consumer latency is not supported for MQTT consumers")
 		os.Exit(1)
 	}
@@ -697,11 +699,22 @@ func sanitizeConfig(cfg *config.Config) error {
 		cfg.UseMillis = true
 	}
 
-	if cfg.MessagePriority != "" {
-		_, err := strconv.ParseUint(cfg.MessagePriority, 10, 8)
+	if messagePriorityStr != "" {
+		// Always parse as template (non-template strings will return as-is when executed)
+		tmpl, err := config.ParseTemplateValue(messagePriorityStr)
 		if err != nil {
-			return fmt.Errorf("invalid message priority: %s", cfg.MessagePriority)
+			return fmt.Errorf("invalid template in message priority: %v", err)
 		}
+		cfg.MessagePriorityTemplate = tmpl
+	}
+
+	// Parse consumer latency template if provided as a string
+	if consumerLatencyStr != "" {
+		tmpl, err := config.ParseTemplateValue(consumerLatencyStr)
+		if err != nil {
+			return fmt.Errorf("invalid template in consumer latency: %v", err)
+		}
+		cfg.ConsumerLatencyTemplate = tmpl
 	}
 
 	offset, err := parseStreamOffset(streamOffset)
@@ -711,7 +724,6 @@ func sanitizeConfig(cfg *config.Config) error {
 	cfg.StreamOffset = offset
 
 	// AMQP application properties
-	cfg.Amqp.AppProperties = make(map[string][]string)
 	cfg.Amqp.AppPropertyTemplates = make(map[string]*template.Template)
 	for _, val := range amqpAppProperties {
 		parts := strings.Split(val, "=")
@@ -719,21 +731,14 @@ func sanitizeConfig(cfg *config.Config) error {
 			return fmt.Errorf("invalid AMQP application property: %s, use key=v1,v2 format", val)
 		}
 
-		tmpl, isTemplate, err := config.ParseTemplateValue(parts[1])
+		tmpl, err := config.ParseTemplateValue(parts[1])
 		if err != nil {
 			return fmt.Errorf("invalid template in AMQP application property %s: %v", parts[0], err)
 		}
-
-		if isTemplate {
-			cfg.Amqp.AppPropertyTemplates[parts[0]] = tmpl
-		} else {
-			// Parse as regular comma-separated values
-			cfg.Amqp.AppProperties[parts[0]] = strings.Split(parts[1], ",")
-		}
+		cfg.Amqp.AppPropertyTemplates[parts[0]] = tmpl
 	}
 
 	// AMQP message annotations
-	cfg.Amqp.MsgAnnotations = make(map[string][]string)
 	cfg.Amqp.MsgAnnotationTemplates = make(map[string]*template.Template)
 	for _, val := range amqpMsgAnnotations {
 		parts := strings.Split(val, "=")
@@ -741,17 +746,11 @@ func sanitizeConfig(cfg *config.Config) error {
 			return fmt.Errorf("invalid AMQP message annotation: %s, use key=v1,v2 format", val)
 		}
 
-		tmpl, isTemplate, err := config.ParseTemplateValue(parts[1])
+		tmpl, err := config.ParseTemplateValue(parts[1])
 		if err != nil {
 			return fmt.Errorf("invalid template in AMQP message annotation %s: %v", parts[0], err)
 		}
-
-		if isTemplate {
-			cfg.Amqp.MsgAnnotationTemplates[parts[0]] = tmpl
-		} else {
-			// Parse as regular comma-separated values
-			cfg.Amqp.MsgAnnotations[parts[0]] = strings.Split(parts[1], ",")
-		}
+		cfg.Amqp.MsgAnnotationTemplates[parts[0]] = tmpl
 	}
 
 	// AMQP application property filters
@@ -775,11 +774,10 @@ func sanitizeConfig(cfg *config.Config) error {
 	}
 
 	// Parse AMQP091 headers with template support
-	headers, headerTemplates, err := utils.ParseHeadersWithTemplates(amqp091Headers)
+	_, headerTemplates, err := utils.ParseHeadersWithTemplates(amqp091Headers)
 	if err != nil {
 		return fmt.Errorf("invalid template in AMQP091 header: %v", err)
 	}
-	cfg.Amqp091.Headers = headers
 	cfg.Amqp091.HeaderTemplates = headerTemplates
 
 	// split metric tags into key-value pairs

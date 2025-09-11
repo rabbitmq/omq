@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math/rand/v2"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"github.com/Masterminds/sprig/v3"
 	"github.com/panjf2000/ants/v2"
 	"github.com/rabbitmq/omq/pkg/log"
+	"github.com/rabbitmq/omq/pkg/metrics"
 )
 
 func MessageBody(size int) []byte {
@@ -182,8 +184,8 @@ func ParseHeaders(headerStrings []string) map[string]any {
 	return headers
 }
 
-// ParseHeadersWithTemplates parses header strings and separates templates from regular values
-// Returns both regular headers and template headers
+// ParseHeadersWithTemplates parses header strings as templates.
+// Non-template strings will return as-is when executed.
 func ParseHeadersWithTemplates(headerStrings []string) (map[string]any, map[string]*template.Template, error) {
 	headers := make(map[string]any)
 	templates := make(map[string]*template.Template)
@@ -196,27 +198,42 @@ func ParseHeadersWithTemplates(headerStrings []string) (map[string]any, map[stri
 				key := strings.TrimSpace(parts[0])
 				value := strings.TrimSpace(parts[1])
 
-				// Check if it's a template
-				if strings.Contains(value, "{{") && strings.Contains(value, "}}") {
-					// Parse as template
-					tmpl, err := template.New("header").Funcs(sprig.FuncMap()).Parse(value)
-					if err != nil {
-						return nil, nil, err
-					}
-					templates[key] = tmpl
-				} else {
-					// Parse as regular value
-					if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
-						headers[key] = intVal
-					} else if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
-						headers[key] = floatVal
-					} else {
-						headers[key] = value
-					}
+				// Always parse as template (non-template strings will return as-is when executed)
+				tmpl, err := template.New("header").Funcs(sprig.FuncMap()).Parse(value)
+				if err != nil {
+					return nil, nil, err
 				}
+				templates[key] = tmpl
 			}
 		}
 	}
 
 	return headers, templates, nil
+}
+
+// ExecuteTemplate executes a template and returns the result as a string.
+// If the result contains comma-separated values and no template syntax, it cycles through them.
+// If execution fails, it logs the error and exits the program.
+func ExecuteTemplate(tmpl *template.Template, context string) string {
+	if tmpl == nil {
+		return ""
+	}
+
+	var buf bytes.Buffer
+	err := tmpl.Execute(&buf, nil)
+	if err != nil {
+		log.Error("template execution failed", "context", context, "error", err)
+		os.Exit(1)
+	}
+	result := buf.String()
+
+	// If the result doesn't contain template syntax and has commas, cycle through values
+	if !strings.Contains(result, "{{") && strings.Contains(result, ",") {
+		values := strings.Split(result, ",")
+		// Use message count to cycle through values
+		index := metrics.MessagesPublished.Get() % uint64(len(values))
+		return strings.TrimSpace(values[index])
+	}
+
+	return result
 }

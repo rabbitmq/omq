@@ -1,10 +1,8 @@
 package amqp091
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"maps"
 	"math/rand/v2"
 	"strconv"
 	"strings"
@@ -216,24 +214,13 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 		Body:         p.msg,
 	}
 
-	if len(p.Config.Amqp091.Headers) > 0 {
-		msg.Headers = make(amqp091.Table)
-		maps.Copy(msg.Headers, p.Config.Amqp091.Headers)
-	}
-
 	// Handle template-based headers
 	if len(p.Config.Amqp091.HeaderTemplates) > 0 {
 		if msg.Headers == nil {
 			msg.Headers = make(amqp091.Table)
 		}
 		for key, tmpl := range p.Config.Amqp091.HeaderTemplates {
-			var buf bytes.Buffer
-			err := tmpl.Execute(&buf, nil)
-			if err != nil {
-				log.Debug("template execution failed for header", "key", key, "error", err)
-				continue
-			}
-			stringValue := buf.String()
+			stringValue := utils.ExecuteTemplate(tmpl, "header "+key)
 			// Convert to appropriate type like the original ParseHeaders function
 			if intVal, err := strconv.ParseInt(stringValue, 10, 64); err == nil {
 				msg.Headers[key] = intVal

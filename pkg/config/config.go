@@ -1,7 +1,6 @@
 package config
 
 import (
-	"strings"
 	"text/template"
 	"time"
 
@@ -56,9 +55,7 @@ type AmqpOptions struct {
 	ReleaseRate            int
 	RejectRate             int
 	PropertyFilters        map[string]string
-	AppProperties          map[string][]string
 	AppPropertyTemplates   map[string]*template.Template
-	MsgAnnotations         map[string][]string
 	MsgAnnotationTemplates map[string]*template.Template
 	AppPropertyFilters     map[string]string
 	SQLFilter              string
@@ -73,55 +70,54 @@ type MqttOptions struct {
 
 type Amqp091Options struct {
 	Mandatory       bool
-	Headers         map[string]any
 	HeaderTemplates map[string]*template.Template
 }
 
 type Config struct {
-	ExpectedInstances    int
-	SyncName             string
-	ConsumerProto        Protocol
-	PublisherProto       Protocol
-	PublisherId          string
-	ConsumerId           string
-	Uri                  []string
-	PublisherUri         []string
-	ConsumerUri          []string
-	ManagementUri        []string
-	Publishers           int
-	Consumers            int
-	SpreadConnections    bool
-	PublishCount         int
-	ConsumeCount         int
-	PublishTo            string
-	ConsumeFrom          string
-	Queues               QueueType
-	Exchange             string
-	BindingKey           string
-	CleanupQueues        bool
-	ConsumerCredits      int
-	ConsumerLatency      time.Duration
-	Size                 int
-	Rate                 float32
-	MaxInFlight          int
-	Duration             time.Duration
-	UseMillis            bool
-	QueueDurability      AmqpDurabilityMode
-	MessageDurability    bool
-	MessagePriority      string // to allow for "unset" value and STOMP takes strings anyway
-	MessageTTL           time.Duration
-	StreamOffset         any
-	StreamFilterValues   string
-	StreamFilterValueSet string
-	ConsumerPriority     int32
-	Amqp                 AmqpOptions
-	Amqp091              Amqp091Options
-	MqttPublisher        MqttOptions
-	MqttConsumer         MqttOptions
-	MetricTags           map[string]string
-	LogOutOfOrder        bool
-	PrintAllMetrics      bool
-	ConsumerStartupDelay time.Duration
+	ExpectedInstances       int
+	SyncName                string
+	ConsumerProto           Protocol
+	PublisherProto          Protocol
+	PublisherId             string
+	ConsumerId              string
+	Uri                     []string
+	PublisherUri            []string
+	ConsumerUri             []string
+	ManagementUri           []string
+	Publishers              int
+	Consumers               int
+	SpreadConnections       bool
+	PublishCount            int
+	ConsumeCount            int
+	PublishTo               string
+	ConsumeFrom             string
+	Queues                  QueueType
+	Exchange                string
+	BindingKey              string
+	CleanupQueues           bool
+	ConsumerCredits         int
+	ConsumerLatencyTemplate *template.Template
+	Size                    int
+	Rate                    float32
+	MaxInFlight             int
+	Duration                time.Duration
+	UseMillis               bool
+	QueueDurability         AmqpDurabilityMode
+	MessageDurability       bool
+	MessagePriorityTemplate *template.Template
+	MessageTTL              time.Duration
+	StreamOffset            any
+	StreamFilterValues      string
+	StreamFilterValueSet    string
+	ConsumerPriority        int32
+	Amqp                    AmqpOptions
+	Amqp091                 Amqp091Options
+	MqttPublisher           MqttOptions
+	MqttConsumer            MqttOptions
+	MetricTags              map[string]string
+	LogOutOfOrder           bool
+	PrintAllMetrics         bool
+	ConsumerStartupDelay    time.Duration
 }
 
 func NewConfig() Config {
@@ -130,17 +126,13 @@ func NewConfig() Config {
 	}
 }
 
-// ParseTemplateValue parses a value and determines if it's a template or regular value.
-// Returns the parsed template and a boolean indicating if it's a template.
-func ParseTemplateValue(value string) (*template.Template, bool, error) {
-	// Check if the value contains template syntax ({{ }})
-	if strings.Contains(value, "{{") && strings.Contains(value, "}}") {
-		// Parse as template
-		tmpl, err := template.New("template").Funcs(sprig.FuncMap()).Parse(value)
-		if err != nil {
-			return nil, false, err
-		}
-		return tmpl, true, nil
+// ParseTemplateValue parses a value as a template. If the value doesn't contain
+// template syntax, it will still be parsed as a template but will return the
+// original string when executed.
+func ParseTemplateValue(value string) (*template.Template, error) {
+	tmpl, err := template.New("template").Funcs(sprig.FuncMap()).Parse(value)
+	if err != nil {
+		return nil, err
 	}
-	return nil, false, nil
+	return tmpl, nil
 }

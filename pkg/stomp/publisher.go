@@ -155,8 +155,11 @@ func buildHeaders(cfg config.Config) []func(*frame.Frame) error {
 		msgDurability = "false"
 	}
 	headers = append(headers, stomp.SendOpt.Header("persistent", msgDurability))
-	if cfg.MessagePriority != "" {
-		headers = append(headers, stomp.SendOpt.Header("priority", cfg.MessagePriority))
+
+	// Handle message priority (always use template)
+	if cfg.MessagePriorityTemplate != nil {
+		priorityStr := utils.ExecuteTemplate(cfg.MessagePriorityTemplate, "message priority")
+		headers = append(headers, stomp.SendOpt.Header("priority", priorityStr))
 	}
 	if cfg.MessageTTL.Milliseconds() > 0 {
 		headers = append(headers, stomp.SendOpt.Header("expiration", fmt.Sprint(cfg.MessageTTL.Milliseconds())))
