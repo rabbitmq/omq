@@ -102,6 +102,12 @@ $ omq amqp --queues stream -t /queues/stream -T /queues/stream --rate 100 --amqp
 We publish 100 messages per second with 3 different key values and then consume only messages with one of the values. Therefore, the consumption
 rate is one third of the publishing rate.
 
+### Templated Values
+
+Some flags are parsed as Go text templates and provide addition function from the [Sprig](https://masterminds.github.io/sprig/) library.
+This allows setting random or otherwise generated values. For example `--message-priority '{{ randInt 1 10 }}'` or
+`--consumer-latency '{{ randInt 1 60 }}ms'`.
+
 ### Metrics
 
 `omq` exposes Prometheus metrics on port 8080, or the next available port if 8080 is in use (so 8081, 8082, and so on). This makes it easy to run multiple
