@@ -234,7 +234,7 @@ func labelsToString(labels map[string]string) string {
 	if len(labels) > 0 {
 		result = "{"
 		for label, value := range labels {
-			result += label + `="` + value + `",`
+			result += label + "=" + strconv.Quote(value) + ","
 		}
 		result = strings.TrimSuffix(result, ",") + "}"
 	}
