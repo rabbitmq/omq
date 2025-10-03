@@ -90,7 +90,9 @@ type Config struct {
 	PublishCount            int
 	ConsumeCount            int
 	PublishTo               string
+	PublishToTemplate       *template.Template
 	ConsumeFrom             string
+	ConsumeFromTemplate     *template.Template
 	Queues                  QueueType
 	Exchange                string
 	BindingKey              string

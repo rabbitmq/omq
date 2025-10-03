@@ -30,7 +30,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *StompPublishe
 	publisher := &StompPublisher{
 		Id:         id,
 		Connection: nil,
-		Topic:      utils.InjectId(cfg.PublishTo, id),
+		Topic:      utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, id, cfg),
 		Config:     cfg,
 		ctx:        ctx,
 	}
@@ -126,7 +126,7 @@ func (p *StompPublisher) Send() error {
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 
 	startTime := time.Now()
-	err := p.Connection.Send(p.Topic, "", p.msg, buildHeaders(p.Config)...)
+	err := p.Connection.Send(p.Topic, "", p.msg, buildHeaders(p.Config, p.Id)...)
 	latency := time.Since(startTime)
 	if err != nil {
 		log.Error("message sending failure", "id", p.Id, "error", err)
@@ -143,7 +143,7 @@ func (p *StompPublisher) Stop(reason string) {
 	_ = p.Connection.Disconnect()
 }
 
-func buildHeaders(cfg config.Config) []func(*frame.Frame) error {
+func buildHeaders(cfg config.Config, publisherId int) []func(*frame.Frame) error {
 	var headers []func(*frame.Frame) error
 
 	headers = append(headers, stomp.SendOpt.Receipt)
@@ -158,7 +158,7 @@ func buildHeaders(cfg config.Config) []func(*frame.Frame) error {
 
 	// Handle message priority (always use template)
 	if cfg.MessagePriorityTemplate != nil {
-		priorityStr := utils.ExecuteTemplate(cfg.MessagePriorityTemplate, "message priority")
+		priorityStr := utils.ExecuteTemplate(cfg.MessagePriorityTemplate, cfg, publisherId)
 		headers = append(headers, stomp.SendOpt.Header("priority", priorityStr))
 	}
 	if cfg.MessageTTL.Milliseconds() > 0 {

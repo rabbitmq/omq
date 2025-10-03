@@ -34,13 +34,15 @@ type Amqp091Publisher struct {
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp091Publisher {
-	exchange, routingKey := parseExchangeAndRoutingKey(cfg.PublishTo)
+	// Resolve the full destination first, then parse it
+	resolvedTerminus := utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, id, cfg)
+	exchange, routingKey := parseExchangeAndRoutingKey(resolvedTerminus)
 	publisher := &Amqp091Publisher{
 		Id:           id,
 		Connection:   nil,
 		Config:       cfg,
 		exchange:     exchange,
-		routingKey:   utils.InjectId(routingKey, id),
+		routingKey:   routingKey,
 		publishTimes: make(map[uint64]time.Time),
 		whichUri:     0,
 		ctx:          ctx,
@@ -220,7 +222,7 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 			msg.Headers = make(amqp091.Table)
 		}
 		for key, tmpl := range p.Config.Amqp091.HeaderTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, "header "+key)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Config, p.Id)
 			// Convert to appropriate type like the original ParseHeaders function
 			if intVal, err := strconv.ParseInt(stringValue, 10, 64); err == nil {
 				msg.Headers[key] = intVal

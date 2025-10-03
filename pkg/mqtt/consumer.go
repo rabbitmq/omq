@@ -21,7 +21,7 @@ type MqttConsumer struct {
 }
 
 func NewMqttConsumer(ctx context.Context, cfg config.Config, id int) MqttConsumer {
-	topic := publisherTopic(cfg.ConsumeFrom, id)
+	topic := publisherTopic(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, id, cfg)
 	return MqttConsumer{
 		Id:         id,
 		Connection: nil,

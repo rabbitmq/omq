@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"text/template"
 
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/utils"
@@ -45,8 +46,9 @@ func stringsToUrls(connectionStrings []string) []*url.URL {
 	return serverUrls
 }
 
-func publisherTopic(topic string, id int) string {
-	topic = utils.InjectId(topic, id)
+func publisherTopic(topic string, topicTemplate *template.Template, id int, cfg config.Config) string {
+	// Resolve the destination using the generic helper
+	topic = utils.ResolveTerminus(topic, topicTemplate, id, cfg)
 	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix
 	// since MQTT has no concept of exchanges, we need to remove it
 	// this should get more flexible in the future

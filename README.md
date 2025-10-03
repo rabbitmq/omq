@@ -104,9 +104,12 @@ rate is one third of the publishing rate.
 
 ### Templated Values
 
-Some flags are parsed as Go text templates and provide addition function from the [Sprig](https://masterminds.github.io/sprig/) library.
-This allows setting random or otherwise generated values. For example `--message-priority '{{ randInt 1 10 }}'` or
-`--consumer-latency '{{ randInt 1 60 }}ms'`.
+Some flags are parsed as Go text templates and provide additional functions from the [Sprig](https://masterminds.github.io/sprig/) library.
+This allows setting random or otherwise generated values. For example:
+
+* `--message-priority '{{ randInt 1 10 }}'` set a random message priority from the given range
+* `--consumer-latency '{{ randInt 1 60 }}ms'` wait a random (between 1 and 60) number of milliseconds before acking a message
+* `--publishers 10 --publish-to '/queues/cq-{{ mod .id 2 }}'` declare 2 queues and start 5 publishers per queue
 
 ### Metrics
 

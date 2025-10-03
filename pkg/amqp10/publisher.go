@@ -41,7 +41,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publish
 		Connection: nil,
 		Sender:     nil,
 		Config:     cfg,
-		Terminus:   utils.InjectId(cfg.PublishTo, id),
+		Terminus:   utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, id, cfg),
 		whichUri:   0,
 		ctx:        ctx,
 	}
@@ -356,7 +356,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 			msg.ApplicationProperties = make(map[string]any)
 		}
 		for key, tmpl := range p.Config.Amqp.AppPropertyTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, "application property "+key)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Config, p.Id)
 			msg.ApplicationProperties[key] = maybeConvertToInt(stringValue)
 		}
 	}
@@ -367,7 +367,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 			msg.Annotations = make(map[any]any)
 		}
 		for key, tmpl := range p.Config.Amqp.MsgAnnotationTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, "message annotation "+key)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Config, p.Id)
 			msg.Annotations[key] = maybeConvertToInt(stringValue)
 		}
 	}
@@ -389,7 +389,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 
 	// Handle message priority (always use template)
 	if p.Config.MessagePriorityTemplate != nil {
-		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, "message priority")
+		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Config, p.Id)
 		if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
 			msg.Header.Priority = uint8(priority)
 		} else {

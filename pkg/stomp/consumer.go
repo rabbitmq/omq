@@ -30,7 +30,7 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *StompConsumer 
 		Id:           id,
 		Connection:   nil,
 		Subscription: nil,
-		Topic:        utils.InjectId(cfg.ConsumeFrom, id),
+		Topic:        utils.ResolveTerminus(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, id, cfg),
 		Config:       cfg,
 		ctx:          ctx,
 		whichUri:     0,
@@ -141,7 +141,7 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 			// Handle consumer latency (always use template)
 			var consumerLatency time.Duration
 			if c.Config.ConsumerLatencyTemplate != nil {
-				latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, "consumer latency")
+				latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, c.Config, c.Id)
 				if parsedLatency, err := time.ParseDuration(latencyStr); err == nil {
 					consumerLatency = parsedLatency
 				} else {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/Azure/go-amqp"
@@ -75,17 +76,19 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	log.Info("Declaring queues...")
 	// declare queues for AMQP 1.0 and 0.9.1 publishers
 	if (cfg.PublisherProto == config.AMQP || cfg.PublisherProto == config.AMQP091) && strings.HasPrefix(cfg.PublishTo, "/queues/") {
-		queueName := strings.TrimPrefix(cfg.PublishTo, "/queues/")
 		for i := 1; i <= cfg.Publishers; i++ {
-			m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+			q := utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, i, cfg)
+			queueName := strings.TrimPrefix(q, "/queues/")
+			m.DeclareAndBind(cfg, queueName, i)
 		}
 	}
 	// declare queues for AMQP 1.0 and 0.9.1 consumers
 	if cfg.ConsumerProto == config.AMQP || cfg.ConsumerProto == config.AMQP091 {
-		if after, ok := strings.CutPrefix(cfg.ConsumeFrom, "/queues/"); ok {
+		if _, ok := strings.CutPrefix(cfg.ConsumeFrom, "/queues/"); ok {
 			for i := 1; i <= cfg.Consumers; i++ {
-				queueName := after
-				m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+				q := utils.ResolveTerminus(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, i, cfg)
+				queueName := strings.TrimPrefix(q, "/queues/")
+				m.DeclareAndBind(cfg, queueName, i)
 			}
 		} else {
 			log.Info("Not declaring queues for AMQP consumers since the address doesn't start with /queues/")
@@ -93,16 +96,18 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	}
 	// declare queues for STOMP publishers
 	if cfg.PublisherProto == config.STOMP && strings.HasPrefix(cfg.PublishTo, "/amq/queue/") {
-		queueName := strings.TrimPrefix(cfg.PublishTo, "/amq/queue/")
 		for i := 1; i <= cfg.Publishers; i++ {
-			m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+			queueName := utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, i, cfg)
+			queueName = strings.TrimPrefix(queueName, "/amq/queue/")
+			m.DeclareAndBind(cfg, queueName, i)
 		}
 	}
 	// declare queues for STOMP consumers
 	if cfg.ConsumerProto == config.STOMP && strings.HasPrefix(cfg.ConsumeFrom, "/amq/queue/") {
-		queueName := strings.TrimPrefix(cfg.ConsumeFrom, "/amq/queue/")
 		for i := 1; i <= cfg.Consumers; i++ {
-			m.DeclareAndBind(cfg, utils.InjectId(queueName, i), i)
+			q := utils.ResolveTerminus(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, i, cfg)
+			queueName := strings.TrimPrefix(q, "/amq/queue/")
+			m.DeclareAndBind(cfg, queueName, i)
 		}
 	}
 }
@@ -138,7 +143,7 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 		m.declaredQueues[queueName] = true
 	}
 
-	exchangeName, routingKey := parsePublishTo(cfg.PublisherProto, cfg.PublishTo, id)
+	exchangeName, routingKey := parsePublishTo(cfg.PublisherProto, cfg.PublishTo, cfg.PublishToTemplate, id, cfg)
 
 	// explicitly set routing key overrides everything else
 	if cfg.BindingKey != "" {
@@ -166,11 +171,13 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 	return qi
 }
 
-func parsePublishTo(proto config.Protocol, publishTo string, id int) (string, string) {
-	parts := strings.Split(publishTo, "/")
+func parsePublishTo(proto config.Protocol, publishTo string, publishToTemplate *template.Template, id int, cfg config.Config) (string, string) {
+	resolvedPublishTo := utils.ResolveTerminus(publishTo, publishToTemplate, id, cfg)
+
+	parts := strings.Split(resolvedPublishTo, "/")
 
 	if len(parts) < 2 && proto != config.MQTT {
-		return "amq.direct", utils.InjectId(parts[0], id)
+		return "amq.direct", parts[0]
 	}
 
 	exchange := ""
@@ -215,7 +222,7 @@ func parsePublishTo(proto config.Protocol, publishTo string, id int) (string, st
 
 	if proto == config.MQTT {
 		exchange = "amq.topic"
-		routingKey = strings.TrimPrefix(publishTo, "/topic/")
+		routingKey = strings.TrimPrefix(resolvedPublishTo, "/topic/")
 	}
 
 	if proto == config.STOMP {
@@ -244,7 +251,7 @@ func parsePublishTo(proto config.Protocol, publishTo string, id int) (string, st
 		}
 	}
 
-	return exchange, utils.InjectId(routingKey, id)
+	return exchange, routingKey
 }
 
 func (m *Mgmt) DeleteDeclaredQueues() {

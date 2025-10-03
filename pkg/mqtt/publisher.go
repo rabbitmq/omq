@@ -24,7 +24,7 @@ type MqttPublisher struct {
 }
 
 func NewMqttPublisher(ctx context.Context, cfg config.Config, id int) MqttPublisher {
-	topic := publisherTopic(cfg.PublishTo, id)
+	topic := publisherTopic(cfg.PublishTo, cfg.PublishToTemplate, id, cfg)
 	return MqttPublisher{
 		Id:         id,
 		Connection: nil,

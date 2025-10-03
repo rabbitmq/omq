@@ -32,7 +32,7 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *Amqp091Consume
 		Id:         id,
 		Connection: nil,
 		Channel:    nil,
-		Terminus:   utils.InjectId(cfg.ConsumeFrom, id),
+		Terminus:   utils.ResolveTerminus(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, id, cfg),
 		Config:     cfg,
 		whichUri:   0,
 		ctx:        ctx,
@@ -170,7 +170,7 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 			// Handle consumer latency (always use template)
 			var consumerLatency time.Duration
 			if c.Config.ConsumerLatencyTemplate != nil {
-				latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, "consumer latency")
+				latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, c.Config, c.Id)
 				if parsedLatency, err := time.ParseDuration(latencyStr); err == nil {
 					consumerLatency = parsedLatency
 				} else {
@@ -222,8 +222,10 @@ func pastTense(outcome string) string {
 		return "released"
 	case "reject":
 		return "rejected"
+	case "acknowledge":
+		return "acknowledged"
 	}
-	return "huh?"
+	return outcome
 }
 
 func (c *Amqp091Consumer) Stop(reason string) {

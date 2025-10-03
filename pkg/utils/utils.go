@@ -3,7 +3,6 @@ package utils
 import (
 	"bytes"
 	"encoding/binary"
-	"math/rand/v2"
 	"net/url"
 	"os"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/panjf2000/ants/v2"
+	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
 )
@@ -127,8 +127,7 @@ func WrappedSequence(len int, start int) []int {
 }
 
 func InjectId(s string, id int) string {
-	s = strings.ReplaceAll(s, "%d", strconv.Itoa(id))
-	return strings.ReplaceAll(s, "%r", strconv.Itoa(rand.Int()))
+	return strings.ReplaceAll(s, "%d", strconv.Itoa(id))
 }
 
 func Rate(rate float32) string {
@@ -211,29 +210,40 @@ func ParseHeadersWithTemplates(headerStrings []string) (map[string]any, map[stri
 	return headers, templates, nil
 }
 
-// ExecuteTemplate executes a template and returns the result as a string.
-// If the result contains comma-separated values and no template syntax, it cycles through them.
-// If execution fails, it logs the error and exits the program.
-func ExecuteTemplate(tmpl *template.Template, context string) string {
+func ExecuteTemplate(tmpl *template.Template, cfg config.Config, id int) string {
 	if tmpl == nil {
 		return ""
 	}
 
+	data := map[string]any{
+		"id": id,
+	}
+
 	var buf bytes.Buffer
-	err := tmpl.Execute(&buf, nil)
+	err := tmpl.Execute(&buf, data)
 	if err != nil {
-		log.Error("template execution failed", "context", context, "error", err)
+		log.Error("template execution failed", "error", err)
 		os.Exit(1)
 	}
 	result := buf.String()
 
-	// If the result doesn't contain template syntax and has commas, cycle through values
-	if !strings.Contains(result, "{{") && strings.Contains(result, ",") {
-		values := strings.Split(result, ",")
-		// Use message count to cycle through values
-		index := metrics.MessagesPublished.Get() % uint64(len(values))
-		return strings.TrimSpace(values[index])
+	// If the result doesn't contain template syntax...
+	if !strings.Contains(result, "{{") {
+		// Apply InjectId to handle %d
+		result = InjectId(result, id)
+
+		// If the result has commas, cycle through values
+		if strings.Contains(result, ",") {
+			values := strings.Split(result, ",")
+			// Use message count to cycle through values
+			index := metrics.MessagesPublished.Get() % uint64(len(values))
+			return strings.TrimSpace(values[index])
+		}
 	}
 
 	return result
+}
+
+func ResolveTerminus(destination string, template *template.Template, id int, cfg config.Config) string {
+	return ExecuteTemplate(template, cfg, id)
 }

@@ -62,6 +62,8 @@ var (
 	streamOffset           string
 	consumerLatencyStr     string
 	messagePriorityStr     string
+	publishToStr           string
+	consumeFromStr         string
 )
 
 var (
@@ -350,19 +352,19 @@ func RootCmd() *cobra.Command {
 		"The number of publishers to start")
 	rootCmd.PersistentFlags().IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt,
 		"The number of messages to send per publisher")
-	rootCmd.PersistentFlags().StringVarP(&cfg.PublishTo, "publish-to", "t", "/queues/omq-%d",
-		"The topic/terminus to publish to (%d will be replaced with the publisher's id)")
+	rootCmd.PersistentFlags().StringVarP(&publishToStr, "publish-to", "t", "/queues/omq-%d",
+		"The topic/terminus to publish to (%d will be replaced with the publisher's id; supports Go templates)")
 	rootCmd.PersistentFlags().StringVar(&cfg.PublisherId, "publisher-id", "omq-publisher-%d",
-		"Client ID for AMQP and MQTT publishers (%d => consumer's id, %r => random)")
+		"Client ID for AMQP and MQTT publishers (%d => consumer's id)")
 
 	rootCmd.PersistentFlags().IntVarP(&cfg.Consumers, "consumers", "y", 1,
 		"The number of consumers to start")
 	rootCmd.PersistentFlags().IntVarP(&cfg.ConsumeCount, "cmessages", "D", math.MaxInt,
 		"The number of messages to consume per consumer (default=MaxInt)")
-	rootCmd.PersistentFlags().StringVarP(&cfg.ConsumeFrom, "consume-from", "T", "/queues/omq-%d",
-		"The queue/topic/terminus to consume from (%d will be replaced with the consumer's id)")
+	rootCmd.PersistentFlags().StringVarP(&consumeFromStr, "consume-from", "T", "/queues/omq-%d",
+		"The queue/topic/terminus to consume from (%d will be replaced with the consumer's id; supports Go templates")
 	rootCmd.PersistentFlags().StringVar(&cfg.ConsumerId, "consumer-id", "omq-consumer-%d",
-		"Client ID for AMQP and MQTT consumers (%d => consumer's id, %r => random)")
+		"Client ID for AMQP and MQTT consumers (%d => consumer's id)")
 	rootCmd.PersistentFlags().StringVar(&streamOffset, "stream-offset", "",
 		"Stream consumer offset specification (default=next)")
 	rootCmd.PersistentFlags().Int32Var(&cfg.ConsumerPriority, "consumer-priority", 0, "Consumer priority")
@@ -788,6 +790,26 @@ func sanitizeConfig(cfg *config.Config) error {
 			return fmt.Errorf("invalid metric tags: %s, use label=value format", tag)
 		}
 		cfg.MetricTags[parts[0]] = parts[1]
+	}
+
+	// Parse publish-to template
+	cfg.PublishTo = publishToStr
+	if publishToStr != "" {
+		tmpl, err := config.ParseTemplateValue(publishToStr)
+		if err != nil {
+			return fmt.Errorf("invalid template in publish-to: %v", err)
+		}
+		cfg.PublishToTemplate = tmpl
+	}
+
+	// Parse consume-from template
+	cfg.ConsumeFrom = consumeFromStr
+	if consumeFromStr != "" {
+		tmpl, err := config.ParseTemplateValue(consumeFromStr)
+		if err != nil {
+			return fmt.Errorf("invalid template in consume-from: %v", err)
+		}
+		cfg.ConsumeFromTemplate = tmpl
 	}
 
 	return nil
