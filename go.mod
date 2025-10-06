@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/Azure/go-amqp v1.5.0
 	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/VictoriaMetrics/metrics v1.39.1
+	github.com/VictoriaMetrics/metrics v1.40.2
 	github.com/charmbracelet/log v0.4.2
 	github.com/eclipse/paho.golang v0.23.0
 	github.com/eclipse/paho.mqtt.golang v1.5.0
