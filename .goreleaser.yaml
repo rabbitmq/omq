@@ -30,7 +30,7 @@ builds:
 
 
 archives:
-  - format: binary
+  - formats: [ 'binary' ]
 
 changelog:
   sort: asc
@@ -40,7 +40,7 @@ changelog:
       - "^test:"
 
 kos:
-  - repository: pivotalrabbitmq/omq
+  - repositories: [ 'pivotalrabbitmq/omq' ]
     tags:
     - '{{.Version}}'
     - latest
