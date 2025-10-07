@@ -83,7 +83,7 @@ func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 func (p Mqtt5Publisher) Start(publisherReady chan bool, startPublishing chan bool) {
 	p.Connect()
 
-	p.msg = utils.MessageBody(p.Config.Size)
+	p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 
 	close(publisherReady)
 
@@ -133,6 +133,9 @@ func (p Mqtt5Publisher) StartPublishing() string {
 }
 
 func (p Mqtt5Publisher) Send() {
+	if p.Config.SizeTemplate != nil {
+		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
+	}
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	startTime := time.Now()
 	_, err := p.Connection.Publish(p.ctx, &paho.Publish{

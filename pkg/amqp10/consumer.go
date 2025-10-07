@@ -234,7 +234,7 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 			// Handle consumer latency (always use template)
 			var consumerLatency time.Duration
 			if c.Config.ConsumerLatencyTemplate != nil {
-				latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, c.Config, c.Id)
+				latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, c.Id)
 				if parsedLatency, err := time.ParseDuration(latencyStr); err == nil {
 					consumerLatency = parsedLatency
 				} else {

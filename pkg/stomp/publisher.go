@@ -74,7 +74,7 @@ func (p *StompPublisher) Connect() {
 }
 
 func (p *StompPublisher) Start(publisherReady chan bool, startPublishing chan bool) {
-	p.msg = utils.MessageBody(p.Config.Size)
+	p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 
 	close(publisherReady)
 
@@ -123,6 +123,9 @@ func (p *StompPublisher) StartPublishing() string {
 }
 
 func (p *StompPublisher) Send() error {
+	if p.Config.SizeTemplate != nil {
+		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
+	}
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 
 	startTime := time.Now()
@@ -158,7 +161,7 @@ func buildHeaders(cfg config.Config, publisherId int) []func(*frame.Frame) error
 
 	// Handle message priority (always use template)
 	if cfg.MessagePriorityTemplate != nil {
-		priorityStr := utils.ExecuteTemplate(cfg.MessagePriorityTemplate, cfg, publisherId)
+		priorityStr := utils.ExecuteTemplate(cfg.MessagePriorityTemplate, publisherId)
 		headers = append(headers, stomp.SendOpt.Header("priority", priorityStr))
 	}
 	if cfg.MessageTTL.Milliseconds() > 0 {

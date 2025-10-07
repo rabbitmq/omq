@@ -19,7 +19,18 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 )
 
-func MessageBody(size int) []byte {
+func MessageBody(staticSize int, sizeTemplate *template.Template, id int) []byte {
+	size := 12
+
+	if staticSize > 0 {
+		size = staticSize
+	} else if sizeTemplate != nil {
+		sizeStr := ExecuteTemplate(sizeTemplate, id)
+		if parsedSize, err := strconv.Atoi(sizeStr); err == nil {
+			size = parsedSize
+		}
+	}
+
 	b := make([]byte, size)
 	binary.BigEndian.PutUint32(b[0:], uint32(1234)) // currently unused, for compatibility with perf-test
 	return b
@@ -210,7 +221,7 @@ func ParseHeadersWithTemplates(headerStrings []string) (map[string]any, map[stri
 	return headers, templates, nil
 }
 
-func ExecuteTemplate(tmpl *template.Template, cfg config.Config, id int) string {
+func ExecuteTemplate(tmpl *template.Template, id int) string {
 	if tmpl == nil {
 		return ""
 	}
@@ -236,7 +247,10 @@ func ExecuteTemplate(tmpl *template.Template, cfg config.Config, id int) string 
 		if strings.Contains(result, ",") {
 			values := strings.Split(result, ",")
 			// Use message count to cycle through values
-			index := metrics.MessagesPublished.Get() % uint64(len(values))
+			var index uint64
+			if metrics.MessagesPublished != nil {
+				index = metrics.MessagesPublished.Get() % uint64(len(values))
+			}
 			return strings.TrimSpace(values[index])
 		}
 	}
@@ -245,5 +259,5 @@ func ExecuteTemplate(tmpl *template.Template, cfg config.Config, id int) string 
 }
 
 func ResolveTerminus(destination string, template *template.Template, id int, cfg config.Config) string {
-	return ExecuteTemplate(template, cfg, id)
+	return ExecuteTemplate(template, id)
 }

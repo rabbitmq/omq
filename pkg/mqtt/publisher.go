@@ -88,7 +88,7 @@ func (p MqttPublisher) Start(publisherReady chan bool, startPublishing chan bool
 
 	p.Connect()
 
-	p.msg = utils.MessageBody(p.Config.Size)
+	p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 
 	close(publisherReady)
 
@@ -137,6 +137,9 @@ func (p MqttPublisher) Send() {
 	if !p.Connection.IsConnected() {
 		time.Sleep(1 * time.Second)
 		return
+	}
+	if p.Config.SizeTemplate != nil {
+		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	}
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	startTime := time.Now()

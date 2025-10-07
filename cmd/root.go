@@ -64,6 +64,7 @@ var (
 	messagePriorityStr     string
 	publishToStr           string
 	consumeFromStr         string
+	sizeStr                string
 )
 
 var (
@@ -389,7 +390,7 @@ func RootCmd() *cobra.Command {
 		"Exchange for binding declarations")
 
 	// messages
-	rootCmd.PersistentFlags().IntVarP(&cfg.Size, "size", "s", 12, "Message payload size in bytes")
+	rootCmd.PersistentFlags().StringVarP(&sizeStr, "size", "s", "12", "Message payload size in bytes (supports templates like {{randInt 12 1024}} and comma-separated values like 100,1000)")
 	rootCmd.PersistentFlags().Float32VarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited)")
 	rootCmd.PersistentFlags().IntVarP(&cfg.MaxInFlight, "max-in-flight", "c", 1, "Maximum number of in-flight messages per publisher")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable")
@@ -671,8 +672,35 @@ func defaultUri(proto string) string {
 }
 
 func sanitizeConfig(cfg *config.Config) error {
-	if cfg.Size < 12 {
-		return fmt.Errorf("size can't be less than 12 bytes")
+	if sizeStr != "" {
+		if strings.Contains(sizeStr, "{{") || strings.Contains(sizeStr, ",") {
+			// Use template for dynamic values
+			tmpl, err := config.ParseTemplateValue(sizeStr)
+			if err != nil {
+				return fmt.Errorf("invalid template in size: %v", err)
+			}
+			cfg.SizeTemplate = tmpl
+
+			// validate by executing template once with id=0
+			sizeValue := utils.ExecuteTemplate(tmpl, 0)
+			size, err := strconv.Atoi(sizeValue)
+			if err != nil {
+				return fmt.Errorf("size must be a valid integer, got: %s", sizeValue)
+			}
+			if size < 12 {
+				return fmt.Errorf("size can't be less than 12 bytes")
+			}
+		} else {
+			// static value
+			size, err := strconv.Atoi(sizeStr)
+			if err != nil {
+				return fmt.Errorf("size must be a valid integer, got: %s", sizeStr)
+			}
+			if size < 12 {
+				return fmt.Errorf("size can't be less than 12 bytes")
+			}
+			cfg.Size = size
+		}
 	}
 
 	if cfg.Amqp.ReleaseRate > 100 {

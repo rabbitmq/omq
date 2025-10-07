@@ -102,7 +102,7 @@ func (p *Amqp091Publisher) Connect() {
 }
 
 func (p *Amqp091Publisher) Start(publisherReady chan bool, startPublishing chan bool) {
-	p.msg = utils.MessageBody(p.Config.Size)
+	p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 
 	close(publisherReady)
 
@@ -209,6 +209,10 @@ func (p *Amqp091Publisher) Stop(reason string) {
 }
 
 func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
+	// Regenerate message body on each publish if size template is used
+	if p.Config.SizeTemplate != nil {
+		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
+	}
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 
 	msg := amqp091.Publishing{
@@ -222,7 +226,7 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 			msg.Headers = make(amqp091.Table)
 		}
 		for key, tmpl := range p.Config.Amqp091.HeaderTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Config, p.Id)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Id)
 			// Convert to appropriate type like the original ParseHeaders function
 			if intVal, err := strconv.ParseInt(stringValue, 10, 64); err == nil {
 				msg.Headers[key] = intVal

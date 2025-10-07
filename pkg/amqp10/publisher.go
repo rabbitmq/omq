@@ -151,7 +151,7 @@ func (p *Amqp10Publisher) CreateSender() {
 }
 
 func (p *Amqp10Publisher) Start(publisherReady chan bool, startPublishing chan bool) {
-	p.msg = utils.MessageBody(p.Config.Size)
+	p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 
 	var err error
 	p.pool, err = utils.AntsPool(p.Config.MaxInFlight)
@@ -346,6 +346,9 @@ func maybeConvertToInt(value string) any {
 }
 
 func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
+	if p.Config.SizeTemplate != nil {
+		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
+	}
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 	msg := amqp.NewMessage(p.msg)
 	msg.Properties = &amqp.MessageProperties{}
@@ -356,7 +359,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 			msg.ApplicationProperties = make(map[string]any)
 		}
 		for key, tmpl := range p.Config.Amqp.AppPropertyTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Config, p.Id)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Id)
 			msg.ApplicationProperties[key] = maybeConvertToInt(stringValue)
 		}
 	}
@@ -367,7 +370,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 			msg.Annotations = make(map[any]any)
 		}
 		for key, tmpl := range p.Config.Amqp.MsgAnnotationTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Config, p.Id)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Id)
 			msg.Annotations[key] = maybeConvertToInt(stringValue)
 		}
 	}
@@ -389,7 +392,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 
 	// Handle message priority (always use template)
 	if p.Config.MessagePriorityTemplate != nil {
-		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Config, p.Id)
+		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id)
 		if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
 			msg.Header.Priority = uint8(priority)
 		} else {

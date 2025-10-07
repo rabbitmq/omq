@@ -100,6 +100,7 @@ type Config struct {
 	ConsumerCredits         int
 	ConsumerLatencyTemplate *template.Template
 	Size                    int
+	SizeTemplate            *template.Template
 	Rate                    float32
 	MaxInFlight             int
 	Duration                time.Duration

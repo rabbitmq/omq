@@ -6,13 +6,14 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/utils"
 )
 
 var _ = Context("Utils", func() {
 	DescribeTable("Latency calculation",
 		func(units string, useMillis bool) {
-			testMsg := utils.MessageBody(100)
+			testMsg := utils.MessageBody(100, nil, 1)
 			utils.UpdatePayload(useMillis, &testMsg)
 			time.Sleep(10 * time.Millisecond)
 			_, latency := utils.CalculateEndToEndLatency(&testMsg)
@@ -26,7 +27,7 @@ var _ = Context("Utils", func() {
 
 	Describe("Delay accuracy calculation", func() {
 		It("should calculate delay accuracy correctly for delayed messages", func() {
-			testMsg := utils.MessageBody(100)
+			testMsg := utils.MessageBody(100, nil, 1)
 			utils.UpdatePayload(false, &testMsg)
 
 			// Simulate a 100ms delay
@@ -44,7 +45,7 @@ var _ = Context("Utils", func() {
 		})
 
 		It("should return false for messages without delay", func() {
-			testMsg := utils.MessageBody(100)
+			testMsg := utils.MessageBody(100, nil, 1)
 			utils.UpdatePayload(false, &testMsg)
 
 			delayAccuracy, isDelayed := utils.CalculateDelayAccuracy(&testMsg, 0)
@@ -54,7 +55,8 @@ var _ = Context("Utils", func() {
 		})
 
 		It("should return false for messages without latency tracking", func() {
-			testMsg := utils.MessageBody(8) // Too small for latency tracking
+			// Create a message that's too small for latency tracking (< 12 bytes)
+			testMsg := make([]byte, 8)
 
 			delayAccuracy, isDelayed := utils.CalculateDelayAccuracy(&testMsg, 100)
 
@@ -63,7 +65,7 @@ var _ = Context("Utils", func() {
 		})
 
 		It("should calculate positive delay accuracy for late messages", func() {
-			testMsg := utils.MessageBody(100)
+			testMsg := utils.MessageBody(100, nil, 1)
 			utils.UpdatePayload(false, &testMsg)
 
 			// Simulate a 50ms delay but sleep for 100ms
@@ -129,5 +131,39 @@ var _ = Context("Utils", func() {
 				Expect(utils.WrappedSequence(tc.length, tc.start)).To(Equal(tc.expectedSequence))
 			})
 		}
+	})
+
+	Describe("MessageBody with size", func() {
+		It("should use default size when neither Size nor SizeTemplate is set", func() {
+			msg := utils.MessageBody(0, nil, 1)
+			Expect(len(msg)).To(Equal(12))
+		})
+
+		It("should use Size field for static values", func() {
+			msg := utils.MessageBody(200, nil, 1)
+			Expect(len(msg)).To(Equal(200))
+		})
+
+		It("should use SizeTemplate for dynamic values", func() {
+			tmpl, err := config.ParseTemplateValue("300")
+			Expect(err).To(BeNil())
+			msg := utils.MessageBody(0, tmpl, 1)
+			Expect(len(msg)).To(Equal(300))
+		})
+
+		It("should prefer Size field over SizeTemplate when both are set", func() {
+			tmpl, err := config.ParseTemplateValue("300")
+			Expect(err).To(BeNil())
+			msg := utils.MessageBody(150, tmpl, 1)
+			Expect(len(msg)).To(Equal(150))
+		})
+
+		It("should handle comma-separated values in template", func() {
+			tmpl, err := config.ParseTemplateValue("100,200,300")
+			Expect(err).To(BeNil())
+
+			msg1 := utils.MessageBody(0, tmpl, 1)
+			Expect(len(msg1)).To(Equal(100))
+		})
 	})
 })
