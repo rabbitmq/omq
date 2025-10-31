@@ -390,7 +390,7 @@ func RootCmd() *cobra.Command {
 		"Exchange for binding declarations")
 
 	// messages
-	rootCmd.PersistentFlags().StringVarP(&sizeStr, "size", "s", "12", "Message payload size in bytes (supports templates like {{randInt 12 1024}} and comma-separated values like 100,1000)")
+	rootCmd.PersistentFlags().StringVarP(&sizeStr, "size", "s", "12", "Message payload size (supports units like 10mb,templates and comma-separated values like 100,1000)")
 	rootCmd.PersistentFlags().Float32VarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited)")
 	rootCmd.PersistentFlags().IntVarP(&cfg.MaxInFlight, "max-in-flight", "c", 1, "Maximum number of in-flight messages per publisher")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable")
@@ -683,18 +683,18 @@ func sanitizeConfig(cfg *config.Config) error {
 
 			// validate by executing template once with id=0
 			sizeValue := utils.ExecuteTemplate(tmpl, 0)
-			size, err := strconv.Atoi(sizeValue)
+			size, err := utils.ParseSize(sizeValue)
 			if err != nil {
-				return fmt.Errorf("size must be a valid integer, got: %s", sizeValue)
+				return fmt.Errorf("invalid size value: %v", err)
 			}
 			if size < 12 {
 				return fmt.Errorf("size can't be less than 12 bytes")
 			}
 		} else {
 			// static value
-			size, err := strconv.Atoi(sizeStr)
+			size, err := utils.ParseSize(sizeStr)
 			if err != nil {
-				return fmt.Errorf("size must be a valid integer, got: %s", sizeStr)
+				return fmt.Errorf("invalid size value: %v", err)
 			}
 			if size < 12 {
 				return fmt.Errorf("size can't be less than 12 bytes")

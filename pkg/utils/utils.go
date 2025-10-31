@@ -3,8 +3,10 @@ package utils
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -19,6 +21,50 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 )
 
+// ParseSize parses a size string that may include units (e.g., "10mb", "1kb", "100")
+// Supported units: b, kb, mb (case-insensitive)
+// If no unit is specified, assumes bytes
+func ParseSize(sizeStr string) (int, error) {
+	sizeStr = strings.TrimSpace(sizeStr)
+
+	// Try to parse as plain integer first (for backward compatibility)
+	if size, err := strconv.Atoi(sizeStr); err == nil {
+		return size, nil
+	}
+
+	// Regular expression to match number and optional unit (no whitespace allowed)
+	re := regexp.MustCompile(`^(\d+(?:\.\d+)?)([a-zA-Z]*)$`)
+	matches := re.FindStringSubmatch(sizeStr)
+
+	if len(matches) != 3 {
+		return 0, fmt.Errorf("invalid size format: %s", sizeStr)
+	}
+
+	// Parse the numeric part
+	value, err := strconv.ParseFloat(matches[1], 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid numeric value in size: %s", sizeStr)
+	}
+
+	// Parse the unit (if present)
+	unit := strings.ToLower(matches[2])
+	var multiplier float64
+
+	switch unit {
+	case "", "b":
+		multiplier = 1
+	case "kb":
+		multiplier = 1024
+	case "mb":
+		multiplier = 1024 * 1024
+	default:
+		return 0, fmt.Errorf("unknown size unit: %s", unit)
+	}
+
+	result := int(value * multiplier)
+	return result, nil
+}
+
 func MessageBody(staticSize int, sizeTemplate *template.Template, id int) []byte {
 	size := 12
 
@@ -26,7 +72,7 @@ func MessageBody(staticSize int, sizeTemplate *template.Template, id int) []byte
 		size = staticSize
 	} else if sizeTemplate != nil {
 		sizeStr := ExecuteTemplate(sizeTemplate, id)
-		if parsedSize, err := strconv.Atoi(sizeStr); err == nil {
+		if parsedSize, err := ParseSize(sizeStr); err == nil {
 			size = parsedSize
 		}
 	}

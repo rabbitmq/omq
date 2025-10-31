@@ -165,5 +165,109 @@ var _ = Context("Utils", func() {
 			msg1 := utils.MessageBody(0, tmpl, 1)
 			Expect(len(msg1)).To(Equal(100))
 		})
+
+		It("should handle size units in template", func() {
+			tmpl, err := config.ParseTemplateValue("1kb")
+			Expect(err).To(BeNil())
+			msg := utils.MessageBody(0, tmpl, 1)
+			Expect(len(msg)).To(Equal(1024))
+
+			tmpl, err = config.ParseTemplateValue("10mb")
+			Expect(err).To(BeNil())
+			msg = utils.MessageBody(0, tmpl, 1)
+			Expect(len(msg)).To(Equal(10 * 1024 * 1024))
+		})
+	})
+
+	Describe("ParseSize", func() {
+		It("should parse plain integer values (backward compatibility)", func() {
+			size, err := utils.ParseSize("100")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(100))
+		})
+
+		It("should parse values with 'b' unit", func() {
+			size, err := utils.ParseSize("100b")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(100))
+
+			size, err = utils.ParseSize("100B")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(100))
+		})
+
+		It("should parse values with 'kb' unit", func() {
+			size, err := utils.ParseSize("1kb")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(1024))
+
+			size, err = utils.ParseSize("2KB")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(2048))
+		})
+
+		It("should parse values with 'mb' unit", func() {
+			size, err := utils.ParseSize("1mb")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(1024 * 1024))
+
+			size, err = utils.ParseSize("10MB")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(10 * 1024 * 1024))
+		})
+
+		It("should handle decimal values", func() {
+			size, err := utils.ParseSize("1.5kb")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(int(1.5 * 1024)))
+
+			size, err = utils.ParseSize("0.5mb")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(int(0.5 * 1024 * 1024)))
+		})
+
+		It("should handle leading/trailing whitespace only", func() {
+			size, err := utils.ParseSize("  100  ")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(100))
+
+			size, err = utils.ParseSize("  10mb  ")
+			Expect(err).To(BeNil())
+			Expect(size).To(Equal(10 * 1024 * 1024))
+		})
+
+		It("should reject whitespace between number and unit", func() {
+			_, err := utils.ParseSize("10 mb")
+			Expect(err).NotTo(BeNil())
+
+			_, err = utils.ParseSize("100 kb")
+			Expect(err).NotTo(BeNil())
+		})
+
+		It("should return error for invalid format", func() {
+			_, err := utils.ParseSize("invalid")
+			Expect(err).NotTo(BeNil())
+
+			_, err = utils.ParseSize("10 20")
+			Expect(err).NotTo(BeNil())
+		})
+
+		It("should return error for unknown unit", func() {
+			_, err := utils.ParseSize("10tb")
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("unknown size unit"))
+
+			_, err = utils.ParseSize("10xyz")
+			Expect(err).NotTo(BeNil())
+
+			// Full word units should not be supported
+			_, err = utils.ParseSize("10kilobytes")
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("unknown size unit"))
+
+			_, err = utils.ParseSize("10megabytes")
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("unknown size unit"))
+		})
 	})
 })
