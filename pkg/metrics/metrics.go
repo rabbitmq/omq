@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,9 @@ import (
 	"github.com/rabbitmq/omq/pkg/log"
 	"golang.org/x/exp/slices"
 )
+
+//go:embed console.html
+var consoleHTML string
 
 type MetricsServer struct {
 	httpServer     *http.Server
@@ -50,6 +54,15 @@ func startServer() {
 	once.Do(func() {
 		http.HandleFunc("/metrics", func(w http.ResponseWriter, req *http.Request) {
 			vmetrics.WritePrometheus(w, true)
+		})
+
+		http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+			if req.URL.Path == "/" {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				_, _ = w.Write([]byte(consoleHTML))
+			} else {
+				http.NotFound(w, req)
+			}
 		})
 
 		metricsServer = &MetricsServer{
