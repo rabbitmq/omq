@@ -82,7 +82,7 @@ require (
 )
 
 require (
-	github.com/go-stomp/stomp/v3 v3.1.3
+	github.com/go-stomp/stomp/v3 v3.1.4
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/rabbitmq/rabbitmq-amqp-go-client v0.2.0
 	github.com/spf13/pflag v1.0.10
