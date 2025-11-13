@@ -157,7 +157,7 @@ var _ = Describe("OMQ CLI", func() {
 
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=1`))
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=1`))
-			Eventually(session).Should(gbytes.Say(`omq_messages_consumed_total{priority="high"} 1`))
+			Eventually(session).Should(gbytes.Say(`omq_messages_consumed_total{priority="13"} 1`))
 		},
 		Entry("amqp -> amqp", "amqp", "/queues/", "amqp", "/queues/"),
 		Entry("stomp -> amqp", "stomp", "/topic/", "amqp", "/queues/"),
@@ -351,7 +351,7 @@ var _ = Describe("OMQ CLI", func() {
 			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
 			output, _ := io.ReadAll(session.Out)
 			buf := bytes.NewReader(output)
-			Expect(metricValue(buf, `omq_messages_consumed_total{priority="normal"}`)).Should(Equal(1.0))
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(1.0))
 			buf.Reset(output)
 			Expect(metricValue(buf, `omq_end_to_end_latency_seconds{quantile="0.99"}`)).Should(BeNumerically(">", 2))
 		})
@@ -428,7 +428,7 @@ var _ = Describe("OMQ CLI", func() {
 
 			output, _ := io.ReadAll(session.Out)
 			buf := bytes.NewReader(output)
-			Expect(metricValue(buf, `omq_messages_consumed_total{priority="normal"}`)).Should((BeNumerically(">", 0.0)))
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should((BeNumerically(">", 0.0)))
 			buf.Reset(output)
 			Expect(metricValue(buf, `omq_messages_published_total`)).Should((BeNumerically(">", 0.0)))
 		},
@@ -613,7 +613,7 @@ var _ = Describe("OMQ CLI", func() {
 			buf := bytes.NewReader(output)
 			Expect(metricValue(buf, `omq_messages_published_total`)).Should(Equal(1.0))
 			buf.Reset(output)
-			Expect(metricValue(buf, `omq_messages_consumed_total{priority="normal"}`)).Should(Equal(1.0))
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(1.0))
 			buf.Reset(output)
 			Expect(metricValue(buf, `omq_messages_returned_total`)).Should(Equal(0.0))
 		})

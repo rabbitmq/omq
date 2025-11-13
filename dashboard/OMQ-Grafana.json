@@ -464,33 +464,15 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum by (instance, priority) (irate(omq_messages_consumed_total{priority=\"normal\"}[$__rate_interval]))",
+          "expr": "sum by (instance, priority) (irate(omq_messages_consumed_total[$__rate_interval]))",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
           "instant": false,
           "interval": "1s",
-          "legendFormat": "Consumed normal priority ({{instance}})",
+          "legendFormat": "Consumed priority {{priority}} ({{instance}})",
           "range": true,
           "refId": "B",
-          "useBackend": false
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "disableTextWrap": false,
-          "editorMode": "code",
-          "expr": "sum by (instance, priority) (irate(omq_messages_consumed_total{priority=\"high\"}[$__rate_interval]))",
-          "fullMetaSearch": false,
-          "hide": false,
-          "includeNullMetadata": true,
-          "instant": false,
-          "interval": "1s",
-          "legendFormat": "Consumed high priority ({{instance}})",
-          "range": true,
-          "refId": "A",
           "useBackend": false
         }
       ],

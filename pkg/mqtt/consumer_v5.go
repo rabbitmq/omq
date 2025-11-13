@@ -37,13 +37,13 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 	previousMessageTimeSent := time.Unix(0, 0)
 
 	handler := func(rcv paho.PublishReceived) (bool, error) {
-		metrics.MessagesConsumedNormalPriority.Inc()
+		metrics.MessagesConsumedMetric(0).Inc()
 		payload := rcv.Packet.Payload
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 		metrics.EndToEndLatency.UpdateDuration(timeSent)
 
 		if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
-			metrics.MessagesConsumedOutOfOrderNormalPriority.Inc()
+			metrics.MessagesConsumedOutOfOrderMetric(0).Inc()
 			log.Info("out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
 		}
 		previousMessageTimeSent = timeSent

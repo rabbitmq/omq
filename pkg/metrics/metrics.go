@@ -36,18 +36,16 @@ var once sync.Once
 var metricsServer *MetricsServer
 
 var (
-	CommandLineArgs                          *vmetrics.Gauge
-	MessagesPublished                        *vmetrics.Counter
-	MessagesConfirmed                        *vmetrics.Counter
-	MessagesReturned                         *vmetrics.Counter
-	MessagesConsumedNormalPriority           *vmetrics.Counter
-	MessagesConsumedHighPriority             *vmetrics.Counter
-	MessagesConsumedOutOfOrderNormalPriority *vmetrics.Counter
-	MessagesConsumedOutOfOrderHighPriority   *vmetrics.Counter
-	MessagesDeliveredTooEarly                *vmetrics.Counter
-	PublishingLatency                        *vmetrics.Summary
-	EndToEndLatency                          *vmetrics.Summary
-	DelayAccuracy                            *vmetrics.Summary
+	CommandLineArgs           *vmetrics.Gauge
+	MessagesPublished         *vmetrics.Counter
+	MessagesConfirmed         *vmetrics.Counter
+	MessagesReturned          *vmetrics.Counter
+	messagesConsumedCounters  sync.Map
+	MessagesDeliveredTooEarly *vmetrics.Counter
+	PublishingLatency         *vmetrics.Summary
+	EndToEndLatency           *vmetrics.Summary
+	DelayAccuracy             *vmetrics.Summary
+	globalLabels              map[string]string
 )
 
 func startServer() {
@@ -96,21 +94,12 @@ func Start(ctx context.Context, cfg config.Config) *MetricsServer {
 	return metricsServer
 }
 
-func registerMetrics(globalLabels map[string]string) {
-	normal := map[string]string{"priority": "normal"}
-	maps.Copy(normal, globalLabels)
-	normalPriorityLabels := labelsToString(normal)
-	high := map[string]string{"priority": "high"}
-	maps.Copy(high, globalLabels)
-	highPriorityLabels := labelsToString(high)
+func registerMetrics(labels map[string]string) {
+	globalLabels = labels
 
 	MessagesPublished = vmetrics.GetOrCreateCounter("omq_messages_published_total" + labelsToString(globalLabels))
 	MessagesConfirmed = vmetrics.GetOrCreateCounter("omq_messages_confirmed_total" + labelsToString(globalLabels))
 	MessagesReturned = vmetrics.GetOrCreateCounter("omq_messages_returned_total" + labelsToString(globalLabels))
-	MessagesConsumedNormalPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_total` + normalPriorityLabels)
-	MessagesConsumedHighPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_total` + highPriorityLabels)
-	MessagesConsumedOutOfOrderNormalPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + normalPriorityLabels)
-	MessagesConsumedOutOfOrderHighPriority = vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + highPriorityLabels)
 	MessagesDeliveredTooEarly = vmetrics.GetOrCreateCounter("omq_early_messages_total" + labelsToString(globalLabels))
 	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`+labelsToString(globalLabels), 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
 	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labelsToString(globalLabels), 1*time.Second, []float64{0.5, 0.9, 0.95, 0.99})
@@ -146,19 +135,22 @@ func registerCommandLineMetric(cfg config.Config, globalLabels map[string]string
 }
 
 func MessagesConsumedMetric(priority int) *vmetrics.Counter {
-	// we assume AMQP-1.0 priority definition
-	if priority > 4 {
-		return MessagesConsumedHighPriority
+	if counter, ok := messagesConsumedCounters.Load(priority); ok {
+		return counter.(*vmetrics.Counter)
 	}
-	return MessagesConsumedNormalPriority
+
+	labels := map[string]string{"priority": strconv.Itoa(priority)}
+	maps.Copy(labels, globalLabels)
+	counter := vmetrics.GetOrCreateCounter(`omq_messages_consumed_total` + labelsToString(labels))
+
+	actual, _ := messagesConsumedCounters.LoadOrStore(priority, counter)
+	return actual.(*vmetrics.Counter)
 }
 
 func MessagesConsumedOutOfOrderMetric(priority int) *vmetrics.Counter {
-	// we assume AMQP-1.0 priority definition
-	if priority > 4 {
-		return MessagesConsumedOutOfOrderHighPriority
-	}
-	return MessagesConsumedOutOfOrderNormalPriority
+	labels := map[string]string{"priority": strconv.Itoa(priority)}
+	maps.Copy(labels, globalLabels)
+	return vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + labelsToString(labels))
 }
 
 var (
@@ -174,7 +166,7 @@ func (m *MetricsServer) printMessageRates(ctx context.Context) {
 				return
 			case <-time.After(1 * time.Second):
 				published := MessagesPublished.Get()
-				consumed := MessagesConsumedNormalPriority.Get() + MessagesConsumedHighPriority.Get()
+				consumed := getTotalConsumed()
 
 				if published > 0 || consumed > 0 {
 					log.Print("",
@@ -206,9 +198,22 @@ func (m *MetricsServer) PrintSummary() {
 		"confirmed", MessagesConfirmed.Get(),
 		"returned", MessagesReturned.Get(),
 		"rate", fmt.Sprintf("%.2f/s", float64(MessagesPublished.Get())/time.Since(m.started).Seconds()))
+	consumed := getTotalConsumed()
 	log.Print("TOTAL CONSUMED",
-		"messages", MessagesConsumedNormalPriority.Get()+MessagesConsumedHighPriority.Get(),
-		"rate", fmt.Sprintf("%.2f/s", float64(MessagesConsumedNormalPriority.Get()+MessagesConsumedHighPriority.Get())/time.Since(m.started).Seconds()))
+		"messages", consumed,
+		"rate", fmt.Sprintf("%.2f/s", float64(consumed)/time.Since(m.started).Seconds()))
+}
+
+func getTotalConsumed() uint64 {
+	var total uint64
+
+	messagesConsumedCounters.Range(func(key, value interface{}) bool {
+		counter := value.(*vmetrics.Counter)
+		total += counter.Get()
+		return true
+	})
+
+	return total
 }
 
 func (m MetricsServer) PrintAll() {
