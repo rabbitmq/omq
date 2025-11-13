@@ -97,7 +97,7 @@ var _ = Describe("OMQ CLI", func() {
 				"--time=3s",
 				"--print-all-metrics",
 			}
-			if consumeProto == "amqp" {
+			if consumeProto == "amqp" || consumeProto == "amqp091" {
 				args = append(args, "--queues", "classic", "--cleanup-queues=true")
 			}
 
@@ -106,22 +106,29 @@ var _ = Describe("OMQ CLI", func() {
 
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=1`))
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=1`))
-			Eventually(session).Should(gbytes.Say(`omq_messages_consumed_total{priority="normal"} 1`))
+
+			// AMQP 1.0 consumer receives messages from non-AMQP publishers with priority=4 (AMQP 1.0 default)
+			// All other combinations use priority=0
+			if consumeProto == "amqp" && publishProto != "amqp" {
+				Eventually(session).Should(gbytes.Say(`omq_messages_consumed_total{priority="4"} 1`))
+			} else {
+				Eventually(session).Should(gbytes.Say(`omq_messages_consumed_total{priority="0"} 1`))
+			}
 		},
 		Entry("amqp -> amqp", "amqp", "/queues/", "amqp", "/queues/"),
 		Entry("amqp -> amqp091", "amqp", "/queues/", "amqp", "/queues/"),
 		Entry("amqp -> stomp", "amqp", "/exchanges/amq.topic/", "stomp", "/topic/"),
 		Entry("amqp -> mqtt", "amqp", "/exchanges/amq.topic/", "mqtt", "/topic/"),
 		Entry("amqp091 -> amqp", "amqp091", "/queues/", "amqp", "/queues/"),
-		Entry("amqp091 -> amqp091", "amqp091", "/queues/", "amqp", "/queues/"),
+		Entry("amqp091 -> amqp091", "amqp091", "/queues/", "amqp091", "/queues/"),
 		Entry("amqp091 -> mqtt", "amqp091", "/exchanges/amq.topic/", "mqtt", "/topic/"),
 		Entry("amqp091 -> stomp", "amqp091", "/exchanges/amq.topic/", "stomp", "/topic/"),
 		Entry("mqtt -> amqp", "mqtt", "/topic/", "amqp", "/queues/"),
-		Entry("mqtt -> amqp091", "mqtt", "/topic/", "amqp", "/queues/"),
+		Entry("mqtt -> amqp091", "mqtt", "/topic/", "amqp091", "/queues/"),
 		Entry("mqtt -> mqtt", "mqtt", "/topic/", "mqtt", "/topic/"),
 		Entry("mqtt -> stomp", "mqtt", "/topic/", "stomp", "/topic/"),
 		Entry("stomp -> amqp", "stomp", "/topic/", "amqp", "/queues/"),
-		Entry("stomp -> amqp091", "stomp", "/topic/", "amqp", "/queues/"),
+		Entry("stomp -> amqp091", "stomp", "/topic/", "amqp091", "/queues/"),
 		Entry("stomp -> stomp", "stomp", "/topic/", "stomp", "/topic/"),
 		Entry("stomp -> mqtt", "stomp", "/topic/", "mqtt", "/topic/"),
 	)
