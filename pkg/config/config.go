@@ -33,6 +33,7 @@ const (
 	Classic
 	Quorum
 	Stream
+	Exclusive
 )
 
 var AmqpDurabilityModes = map[AmqpDurabilityMode][]string{
@@ -46,6 +47,7 @@ var QueueTypes = map[QueueType][]string{
 	Classic:     {"classic"},
 	Quorum:      {"quorum"},
 	Stream:      {"stream"},
+	Exclusive:   {"exclusive"},
 }
 
 type AmqpOptions struct {

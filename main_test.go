@@ -649,6 +649,28 @@ var _ = Describe("OMQ CLI", func() {
 			Expect(outputStr).To(ContainSubstring("enabled:true"))
 		})
 	})
+
+	Describe("supports exclusive queues", func() {
+		It("declares exclusive queues for AMQP 0.9.1 consumers", func() {
+			args := []string{
+				"amqp091",
+				"-y", "1",
+				"-C", "0", // run indefinitely
+				"-T", "/queues/exclusive-amqp091",
+				"--queues", "exclusive",
+			}
+
+			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			Expect(err).ShouldNot(HaveOccurred())
+			session := omq(args)
+			defer session.Kill()
+
+			Eventually(func() bool {
+				q, err := rmqc.GetQueue("/", "exclusive-amqp091")
+				return err == nil && q.Name == "exclusive-amqp091" && q.OwnerPidDetails.Name != ""
+			}).WithTimeout(5 * time.Second).Should(BeTrue())
+		})
+	})
 })
 
 func omq(args []string) *gexec.Session {

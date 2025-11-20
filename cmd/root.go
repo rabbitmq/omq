@@ -493,6 +493,11 @@ func start(cfg config.Config) {
 		log.Debug("will stop all consumers and publishers at " + time.Now().Add(cfg.Duration).String())
 	}
 
+	if cfg.Queues == config.Exclusive && cfg.ConsumerProto != config.AMQP091 {
+		log.Error("exclusive queues are only supported for AMQP 0.9.1 consumers")
+		os.Exit(1)
+	}
+
 	// every  second, print the current values of the metrics
 	wg.Wait()
 }

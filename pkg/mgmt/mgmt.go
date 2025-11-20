@@ -113,7 +113,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 }
 
 func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.AmqpQueueInfo {
-	if cfg.Queues == config.Predeclared || m.declaredQueues[queueName] {
+	if cfg.Queues == config.Predeclared || cfg.Queues == config.Exclusive || m.declaredQueues[queueName] {
 		return nil
 	}
 

@@ -101,6 +101,23 @@ func (c *Amqp091Consumer) Connect() {
 func (c *Amqp091Consumer) Subscribe() {
 	if c.Connection != nil {
 		_ = c.Channel.Qos(c.Config.ConsumerCredits, 0, false)
+
+		if c.Config.Queues == config.Exclusive {
+			queueName := strings.TrimPrefix(c.Terminus, "/queues/")
+			_, err := c.Channel.QueueDeclare(
+				queueName, // name
+				false,     // durable
+				false,     // autoDelete
+				true,      // exclusive
+				false,     // noWait
+				nil,       // args
+			)
+			if err != nil {
+				log.Error("failed to declare exclusive queue", "id", c.Id, "queue", queueName, "error", err.Error())
+				return
+			}
+		}
+
 		// TODO add auto-ack and exclusive options
 		consumeArgs := amqp091.Table{}
 		if c.Config.StreamOffset != "" {
