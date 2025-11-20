@@ -118,7 +118,7 @@ func (c *Amqp091Consumer) Subscribe() {
 			}
 		}
 
-		// TODO add auto-ack and exclusive options
+		// TODO add auto-ack
 		consumeArgs := amqp091.Table{}
 		if c.Config.StreamOffset != "" {
 			consumeArgs["x-stream-offset"] = c.Config.StreamOffset
