@@ -59,7 +59,10 @@ var _ = Describe("OMQ CLI", func() {
 				"-t", "/queues/no-such-queue",
 			}
 			session := omq(args)
-			Eventually(session.Err).WithTimeout(5 * time.Second).Should(gbytes.Say(`publisher link failure`))
+			Eventually(session.Err).WithTimeout(5 * time.Second).Should(
+				Or(
+					gbytes.Say(`publisher link failure`),
+					gbytes.Say(`failed to create a sender`)))
 			session.Signal(os.Signal(os.Interrupt))
 			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(0))
 		})
