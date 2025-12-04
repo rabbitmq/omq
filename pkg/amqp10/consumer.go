@@ -180,7 +180,7 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 
 			// Check for delayed message accuracy
 			if msg.Annotations != nil {
-				if xDelayValue, exists := msg.Annotations["x-delay"]; exists {
+				if xDelayValue, exists := msg.Annotations["x-delay-processed"]; exists {
 					var delayMs int64
 					var parsed bool
 
