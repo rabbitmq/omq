@@ -52,10 +52,12 @@ func (p *Mqtt5Publisher) Connect() {
 
 func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 	urls := stringsToUrls(p.Config.PublisherUri)
+	reorderedUrls := utils.ReorderUrls(urls, p.Config.SpreadConnections, p.Id)
+
 	pass, _ := urls[0].User.Password()
 	opts := autopaho.ClientConfig{
-		ServerUrls:                    urls,
-		ConnectUsername:               urls[0].User.Username(),
+		ServerUrls:                    reorderedUrls,
+		ConnectUsername:               reorderedUrls[0].User.Username(),
 		ConnectPassword:               []byte(pass),
 		CleanStartOnInitialConnection: p.Config.MqttPublisher.CleanSession,
 		SessionExpiryInterval:         uint32(p.Config.MqttPublisher.SessionExpiryInterval.Seconds()),

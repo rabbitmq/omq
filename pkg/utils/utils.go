@@ -307,3 +307,18 @@ func ExecuteTemplate(tmpl *template.Template, id int) string {
 func ResolveTerminus(destination string, template *template.Template, id int, cfg config.Config) string {
 	return ExecuteTemplate(template, id)
 }
+
+// ReorderUrls reorders URLs based on SpreadConnections setting and client ID.
+func ReorderUrls(urls []*url.URL, spreadConnections bool, clientId int) []*url.URL {
+	reorderedUrls := make([]*url.URL, len(urls))
+	var j int
+	for i, n := range WrappedSequence(len(urls), clientId-1) {
+		if spreadConnections {
+			j = n
+		} else {
+			j = i
+		}
+		reorderedUrls[i] = urls[j]
+	}
+	return reorderedUrls
+}
