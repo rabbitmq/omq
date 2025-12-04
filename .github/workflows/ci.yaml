@@ -29,7 +29,7 @@ jobs:
 
     services:
       rabbitmq:
-        image: pivotalrabbitmq/rabbitmq:main-otp27
+        image: rabbitmq:management
         ports:
           - 15672:15672
           - 5672:5672
