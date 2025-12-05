@@ -116,6 +116,22 @@ func (c *Amqp091Consumer) Subscribe() {
 				log.Error("failed to declare exclusive queue", "id", c.Id, "queue", queueName, "error", err.Error())
 				return
 			}
+
+			// Bind the exclusive queue to the configured exchange
+			if c.Config.Exchange != "" {
+				err = c.Channel.QueueBind(
+					queueName,           // queue name
+					c.Config.BindingKey, // routing key
+					c.Config.Exchange,   // exchange
+					false,               // noWait
+					nil,                 // args
+				)
+				if err != nil {
+					log.Error("failed to bind exclusive queue to exchange", "id", c.Id, "queue", queueName, "exchange", c.Config.Exchange, "binding_key", c.Config.BindingKey, "error", err.Error())
+					return
+				}
+				log.Debug("exclusive queue bound to exchange", "id", c.Id, "queue", queueName, "exchange", c.Config.Exchange, "binding_key", c.Config.BindingKey)
+			}
 		}
 
 		// TODO add auto-ack
