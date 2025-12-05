@@ -169,7 +169,14 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 		case <-c.ctx.Done():
 			c.Stop("context cancelled")
 			return
-		case msg := <-c.Messages:
+		case msg, ok := <-c.Messages:
+			if !ok {
+				log.Info("channel closed, reconnecting", "id", c.Id)
+				c.Connect()
+				c.Messages = nil
+				continue
+			}
+
 			payload := msg.Body
 			priority := int(msg.Priority)
 			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
@@ -223,7 +230,15 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 					c.Stop("context canceled")
 					return
 				}
+				if err == amqp091.ErrClosed {
+					log.Info("channel closed during acknowledgment, reconnecting", "id", c.Id)
+					c.Connect()
+					c.Messages = nil
+					continue
+				}
 				log.Error("failed to "+outcome+" message", "id", c.Id, "terminus", c.Terminus, "error", err)
+				// Don't increment counter on error, but continue to avoid infinite loop
+				continue
 			} else {
 				metrics.MessagesConsumedMetric(priority).Inc()
 				i++
