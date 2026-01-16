@@ -268,6 +268,9 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 }
 
 func (c *Amqp10Consumer) outcome(ctx context.Context, msg *amqp.Message) (string, error) {
+	if msg.Header.Priority == 0 {
+		return "release", c.Receiver.ReleaseMessage(ctx, msg)
+	}
 	// don't generate random numbers if not necessary
 	if c.Config.Amqp.ReleaseRate == 0 && c.Config.Amqp.RejectRate == 0 {
 		return "accept", c.Receiver.AcceptMessage(ctx, msg)
