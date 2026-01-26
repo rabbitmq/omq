@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"slices"
 	"strconv"
 	"time"
 
@@ -248,7 +249,7 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 				time.Sleep(consumerLatency)
 			}
 
-			outcome, err := c.outcome(c.ctx, msg)
+			outcome, err := c.outcome(c.ctx, msg, priority)
 			if err != nil {
 				if err == context.Canceled {
 					c.Stop("context canceled")
@@ -267,16 +268,26 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 	log.Debug("consumer finished", "id", c.Id)
 }
 
-func (c *Amqp10Consumer) outcome(ctx context.Context, msg *amqp.Message) (string, error) {
+func (c *Amqp10Consumer) outcome(ctx context.Context, msg *amqp.Message, priority int) (string, error) {
+	requeuePriorityMatch := len(c.Config.RequeueWhenPriority) == 0 || slices.Contains(c.Config.RequeueWhenPriority, priority)
+	discardPriorityMatch := len(c.Config.DiscardWhenPriority) == 0 || slices.Contains(c.Config.DiscardWhenPriority, priority)
+
 	// don't generate random numbers if not necessary
-	if c.Config.Amqp.ReleaseRate == 0 && c.Config.Amqp.RejectRate == 0 {
+	if c.Config.RequeueRate == 0 && c.Config.DiscardRate == 0 {
+		// No rate-based logic, just check priority filters for 100% requeue/discard
+		if len(c.Config.RequeueWhenPriority) > 0 && slices.Contains(c.Config.RequeueWhenPriority, priority) {
+			return "release", c.Receiver.ReleaseMessage(ctx, msg)
+		}
+		if len(c.Config.DiscardWhenPriority) > 0 && slices.Contains(c.Config.DiscardWhenPriority, priority) {
+			return "reject", c.Receiver.RejectMessage(ctx, msg, nil)
+		}
 		return "accept", c.Receiver.AcceptMessage(ctx, msg)
 	}
 
 	n := rand.IntN(100)
-	if n < c.Config.Amqp.ReleaseRate {
+	if requeuePriorityMatch && n < c.Config.RequeueRate {
 		return "release", c.Receiver.ReleaseMessage(ctx, msg)
-	} else if n < c.Config.Amqp.ReleaseRate+c.Config.Amqp.RejectRate {
+	} else if discardPriorityMatch && n < c.Config.RequeueRate+c.Config.DiscardRate {
 		return "reject", c.Receiver.RejectMessage(ctx, msg, nil)
 	}
 	return "accept", c.Receiver.AcceptMessage(ctx, msg)

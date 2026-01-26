@@ -3,7 +3,9 @@ package amqp091
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -224,7 +226,7 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 				time.Sleep(consumerLatency)
 			}
 
-			outcome, err := c.outcome(msg.DeliveryTag)
+			outcome, err := c.outcome(msg.DeliveryTag, priority)
 			if err != nil {
 				if err == context.Canceled {
 					c.Stop("context canceled")
@@ -251,15 +253,29 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 	log.Debug("consumer finished", "id", c.Id)
 }
 
-func (c *Amqp091Consumer) outcome(tag uint64) (string, error) {
+func (c *Amqp091Consumer) outcome(tag uint64, priority int) (string, error) {
+	requeuePriorityMatch := len(c.Config.RequeueWhenPriority) == 0 || slices.Contains(c.Config.RequeueWhenPriority, priority)
+	discardPriorityMatch := len(c.Config.DiscardWhenPriority) == 0 || slices.Contains(c.Config.DiscardWhenPriority, priority)
+
 	// don't generate random numbers if not necessary
-	if c.Config.Amqp.ReleaseRate == 0 && c.Config.Amqp.RejectRate == 0 {
+	if c.Config.RequeueRate == 0 && c.Config.DiscardRate == 0 {
+		// No rate-based logic, just check priority filters for 100% requeue/discard
+		if len(c.Config.RequeueWhenPriority) > 0 && slices.Contains(c.Config.RequeueWhenPriority, priority) {
+			return "nack-requeue", c.Channel.Nack(tag, false, true)
+		}
+		if len(c.Config.DiscardWhenPriority) > 0 && slices.Contains(c.Config.DiscardWhenPriority, priority) {
+			return "nack-discard", c.Channel.Nack(tag, false, false)
+		}
 		return "acknowledge", c.Channel.Ack(tag, false)
 	}
-	// TODO implement NACKing
-	log.Error("AMQP 0.9.1 doesn't support release/reject rates yet")
-	os.Exit(1)
-	return "", nil
+
+	n := rand.IntN(100)
+	if requeuePriorityMatch && n < c.Config.RequeueRate {
+		return "nack-requeue", c.Channel.Nack(tag, false, true)
+	} else if discardPriorityMatch && n < c.Config.RequeueRate+c.Config.DiscardRate {
+		return "nack-discard", c.Channel.Nack(tag, false, false)
+	}
+	return "acknowledge", c.Channel.Ack(tag, false)
 }
 
 func pastTense(outcome string) string {
@@ -272,6 +288,10 @@ func pastTense(outcome string) string {
 		return "rejected"
 	case "acknowledge":
 		return "acknowledged"
+	case "nack-requeue":
+		return "nacked (requeued)"
+	case "nack-discard":
+		return "nacked (discarded)"
 	}
 	return outcome
 }

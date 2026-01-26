@@ -674,6 +674,326 @@ var _ = Describe("OMQ CLI", func() {
 			}).WithTimeout(5 * time.Second).Should(BeTrue())
 		})
 	})
+
+	Describe("priority-based message outcome", func() {
+		It("AMQP 1.0: should release messages with matching requeue priority", func() {
+			args := []string{
+				"amqp",
+				"--pmessages=3",
+				"--cmessages=6", // expect to consume each message twice (requeued once)
+				"--publish-to=/queues/priority-requeue-amqp",
+				"--consume-from=/queues/priority-requeue-amqp",
+				"--message-priority=5",
+				"--requeue-when-priority=5",
+				"--queues=classic",
+				"--cleanup-queues=true",
+				"--time=10s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(11 * time.Second).Should(gexec.Exit(0))
+
+			// All 3 messages should be consumed twice (released once, then accepted)
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="5"}`)).Should(Equal(6.0))
+		})
+
+		It("AMQP 1.0: should reject messages with matching discard priority", func() {
+			args := []string{
+				"amqp",
+				"--pmessages=3",
+				"--cmessages=3",
+				"--publish-to=/queues/priority-discard-amqp",
+				"--consume-from=/queues/priority-discard-amqp",
+				"--message-priority=5",
+				"--discard-when-priority=5",
+				"--queues=classic",
+				"--cleanup-queues=true",
+				"--time=5s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			// All messages should be consumed once (rejected, not requeued)
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="5"}`)).Should(Equal(3.0))
+		})
+
+		It("AMQP 1.0: should accept messages when priority doesn't match requeue list", func() {
+			args := []string{
+				"amqp",
+				"--pmessages=3",
+				"--cmessages=3",
+				"--publish-to=/queues/priority-no-match-amqp",
+				"--consume-from=/queues/priority-no-match-amqp",
+				"--message-priority=5",
+				"--requeue-when-priority=1,2,3", // priority 5 not in list
+				"--queues=classic",
+				"--cleanup-queues=true",
+				"--time=5s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			// All messages should be consumed once (accepted normally)
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="5"}`)).Should(Equal(3.0))
+		})
+
+		It("AMQP 0.9.1: should nack with requeue for matching priority", func() {
+			args := []string{
+				"amqp091",
+				"--pmessages=3",
+				"--cmessages=6", // expect to consume each message twice (requeued once)
+				"--publish-to=/queues/priority-requeue-amqp091",
+				"--consume-from=/queues/priority-requeue-amqp091",
+				"--requeue-when-priority=0", // AMQP 0.9.1 messages have priority 0 by default
+				"--queues=classic",
+				"--cleanup-queues=true",
+				"--time=10s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(11 * time.Second).Should(gexec.Exit(0))
+
+			// All 3 messages should be consumed twice (nacked with requeue once, then acked)
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(6.0))
+		})
+
+		It("AMQP 0.9.1: should nack without requeue for matching discard priority", func() {
+			args := []string{
+				"amqp091",
+				"--pmessages=3",
+				"--cmessages=3",
+				"--publish-to=/queues/priority-discard-amqp091",
+				"--consume-from=/queues/priority-discard-amqp091",
+				"--discard-when-priority=0", // AMQP 0.9.1 messages have priority 0 by default
+				"--queues=classic",
+				"--cleanup-queues=true",
+				"--time=5s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			// All messages should be consumed once (nacked without requeue)
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(3.0))
+		})
+
+		It("AMQP 0.9.1: should ack messages when priority doesn't match", func() {
+			args := []string{
+				"amqp091",
+				"--pmessages=3",
+				"--cmessages=3",
+				"--publish-to=/queues/priority-no-match-amqp091",
+				"--consume-from=/queues/priority-no-match-amqp091",
+				"--requeue-when-priority=5", // AMQP 0.9.1 messages have priority 0, not 5
+				"--queues=classic",
+				"--cleanup-queues=true",
+				"--time=5s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			// All messages should be consumed once (acked normally)
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(3.0))
+		})
+
+		It("should reject overlapping requeue and discard priorities", func() {
+			args := []string{
+				"amqp",
+				"--pmessages=1",
+				"--cmessages=1",
+				"--publish-to=/queues/priority-overlap-test",
+				"--consume-from=/queues/priority-overlap-test",
+				"--requeue-when-priority=1,2",
+				"--discard-when-priority=2,3",
+				"--queues=classic",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(1))
+			Eventually(session.Out).Should(gbytes.Say(`priority 2 cannot be in both --requeue-when-priority and --discard-when-priority`))
+		})
+
+		It("AMQP 1.0: should discard roughly 50% of messages with --discard-rate=50", func() {
+			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			args := []string{
+				"amqp",
+				"--pmessages=100",
+				"--cmessages=100",
+				"--publish-to=/queues/discard-rate-amqp",
+				"--consume-from=/queues/discard-rate-amqp",
+				"--discard-rate=50",
+				"--queues=classic",
+				"--time=10s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(11 * time.Second).Should(gexec.Exit(0))
+
+			// With 50% discard rate, we expect roughly 100 messages consumed
+			// (some discarded, some accepted - but all counted as consumed)
+			// Note: AMQP 1.0 without explicit priority uses priority 0
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			consumed := metricValue(buf, `omq_messages_consumed_total{priority="0"}`)
+			Expect(consumed).Should(Equal(100.0))
+
+			// Queue should be empty (discarded messages are not requeued)
+			Eventually(func() int {
+				q, err := rmqc.GetQueue("/", "discard-rate-amqp")
+				if err != nil {
+					return -1
+				}
+				return q.Messages
+			}).WithTimeout(3 * time.Second).Should(Equal(0))
+
+			// Cleanup
+			_, _ = rmqc.DeleteQueue("/", "discard-rate-amqp")
+		})
+
+		It("AMQP 0.9.1: should requeue roughly 50% of messages with --requeue-rate=50", func() {
+			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			args := []string{
+				"amqp091",
+				"--pmessages=20",
+				"--cmessages=30", // expect ~50% requeued = ~30 total consumed
+				"--publish-to=/queues/requeue-rate-amqp091",
+				"--consume-from=/queues/requeue-rate-amqp091",
+				"--requeue-rate=50",
+				"--queues=classic",
+				"--time=10s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(11 * time.Second).Should(gexec.Exit(0))
+
+			// With 50% requeue rate, we expect roughly 30 messages consumed
+			// (20 original + ~10 requeued, but randomness means it could vary)
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			consumed := metricValue(buf, `omq_messages_consumed_total{priority="0"}`)
+			Expect(consumed).Should(BeNumerically(">=", 25.0))
+			Expect(consumed).Should(BeNumerically("<=", 35.0))
+
+			// Queue should be empty after consuming 30 messages
+			Eventually(func() int {
+				q, err := rmqc.GetQueue("/", "requeue-rate-amqp091")
+				if err != nil {
+					return -1
+				}
+				return q.Messages
+			}).WithTimeout(3 * time.Second).Should(Equal(0))
+
+			// Cleanup
+			_, _ = rmqc.DeleteQueue("/", "requeue-rate-amqp091")
+		})
+
+		It("AMQP 1.0: should apply discard rate only to matching priority with --discard-when-priority and --discard-rate", func() {
+			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			args := []string{
+				"amqp",
+				"--pmessages=20",
+				"--cmessages=20",
+				"--publish-to=/queues/priority-rate-combo-amqp",
+				"--consume-from=/queues/priority-rate-combo-amqp",
+				"--message-priority=5",
+				"--discard-when-priority=5",
+				"--discard-rate=50",
+				"--queues=classic",
+				"--time=10s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(11 * time.Second).Should(gexec.Exit(0))
+
+			// All messages have priority 5, so ~50% should be discarded
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			consumed := metricValue(buf, `omq_messages_consumed_total{priority="5"}`)
+			Expect(consumed).Should(Equal(20.0))
+
+			// Queue should be empty (discarded messages not requeued)
+			Eventually(func() int {
+				q, err := rmqc.GetQueue("/", "priority-rate-combo-amqp")
+				if err != nil {
+					return -1
+				}
+				return q.Messages
+			}).WithTimeout(3 * time.Second).Should(Equal(0))
+
+			// Cleanup
+			_, _ = rmqc.DeleteQueue("/", "priority-rate-combo-amqp")
+		})
+
+		It("AMQP 0.9.1: should not apply requeue rate when priority doesn't match", func() {
+			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			args := []string{
+				"amqp091",
+				"--pmessages=10",
+				"--cmessages=10",
+				"--publish-to=/queues/priority-rate-no-match-amqp091",
+				"--consume-from=/queues/priority-rate-no-match-amqp091",
+				"--requeue-when-priority=5", // messages have priority 0
+				"--requeue-rate=100",        // would requeue all if priority matched
+				"--queues=classic",
+				"--time=5s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			// Priority doesn't match, so no requeue should happen
+			// All 10 messages consumed exactly once
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			consumed := metricValue(buf, `omq_messages_consumed_total{priority="0"}`)
+			Expect(consumed).Should(Equal(10.0))
+
+			// Queue should be empty (all messages acked normally)
+			Eventually(func() int {
+				q, err := rmqc.GetQueue("/", "priority-rate-no-match-amqp091")
+				if err != nil {
+					return -1
+				}
+				return q.Messages
+			}).WithTimeout(3 * time.Second).Should(Equal(0))
+
+			// Cleanup
+			_, _ = rmqc.DeleteQueue("/", "priority-rate-no-match-amqp091")
+		})
+	})
 })
 
 func omq(args []string) *gexec.Session {

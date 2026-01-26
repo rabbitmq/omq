@@ -65,6 +65,8 @@ var (
 	publishToStr           string
 	consumeFromStr         string
 	sizeStr                string
+	requeueWhenPriority    []int
+	discardWhenPriority    []int
 )
 
 var (
@@ -119,10 +121,6 @@ func RootCmd() *cobra.Command {
 
 	amqpConsumerFlags := pflag.NewFlagSet("amqp-consumer", pflag.ContinueOnError)
 
-	amqpConsumerFlags.IntVar(&cfg.Amqp.RejectRate, "amqp-reject-rate", 0,
-		"Rate of messages to reject (0-100%)")
-	amqpConsumerFlags.IntVar(&cfg.Amqp.ReleaseRate, "amqp-release-rate", 0,
-		"Rate of messages to release without accepting (0-100%)")
 	amqpConsumerFlags.StringArrayVar(&amqpAppPropertyFilters, "amqp-app-property-filter", []string{},
 		"AMQP application property filters, eg. key1=&p:prefix")
 	amqpConsumerFlags.StringArrayVar(&amqpPropertyFilters, "amqp-property-filter", []string{},
@@ -377,6 +375,14 @@ func RootCmd() *cobra.Command {
 		"Print a log line when a message is received that is older than the previously received message")
 	rootCmd.PersistentFlags().DurationVar(&cfg.ConsumerStartupDelay, "consumer-startup-delay", 0,
 		"Delay consumer startup to allow a backlog of messages to build up (eg. 10s)")
+	rootCmd.PersistentFlags().IntSliceVar(&requeueWhenPriority, "requeue-when-priority", []int{},
+		"Requeue messages with matching priorities (comma-separated, e.g. 1,2,3)")
+	rootCmd.PersistentFlags().IntSliceVar(&discardWhenPriority, "discard-when-priority", []int{},
+		"Discard messages with matching priorities (comma-separated, e.g. 4,5)")
+	rootCmd.PersistentFlags().IntVar(&cfg.RequeueRate, "requeue-rate", 0,
+		"Rate of messages to requeue (0-100%). When used with --requeue-when-priority, applies only to matching messages")
+	rootCmd.PersistentFlags().IntVar(&cfg.DiscardRate, "discard-rate", 0,
+		"Rate of messages to discard (0-100%). When used with --discard-when-priority, applies only to matching messages")
 
 	rootCmd.PersistentFlags().VarP(enumflag.New(&cfg.Queues, "queues", config.QueueTypes, enumflag.EnumCaseInsensitive), "queues", "",
 		"Type of queues to declare (or `predeclared` to use existing queues)")
@@ -708,16 +714,16 @@ func sanitizeConfig(cfg *config.Config) error {
 		}
 	}
 
-	if cfg.Amqp.ReleaseRate > 100 {
-		return fmt.Errorf("release rate can't be more than 100%%")
+	if cfg.RequeueRate > 100 {
+		return fmt.Errorf("requeue rate can't be more than 100%%")
 	}
 
-	if cfg.Amqp.RejectRate > 100 {
-		return fmt.Errorf("reject rate can't be more than 100%%")
+	if cfg.DiscardRate > 100 {
+		return fmt.Errorf("discard rate can't be more than 100%%")
 	}
 
-	if cfg.Amqp.ReleaseRate+cfg.Amqp.RejectRate > 100 {
-		return fmt.Errorf("combined release and reject rate can't be more than 100%%")
+	if cfg.RequeueRate+cfg.DiscardRate > 100 {
+		return fmt.Errorf("combined requeue and discard rate can't be more than 100%%")
 	}
 
 	if cfg.MaxInFlight < 1 {
@@ -843,6 +849,19 @@ func sanitizeConfig(cfg *config.Config) error {
 			return fmt.Errorf("invalid template in consume-from: %v", err)
 		}
 		cfg.ConsumeFromTemplate = tmpl
+	}
+
+	// Validate and set priority-based outcome flags
+	cfg.RequeueWhenPriority = requeueWhenPriority
+	cfg.DiscardWhenPriority = discardWhenPriority
+
+	// Check for overlapping priorities
+	for _, rp := range requeueWhenPriority {
+		for _, dp := range discardWhenPriority {
+			if rp == dp {
+				return fmt.Errorf("priority %d cannot be in both --requeue-when-priority and --discard-when-priority", rp)
+			}
+		}
 	}
 
 	return nil

@@ -54,8 +54,6 @@ type AmqpOptions struct {
 	Subjects               []string
 	To                     []string
 	SendSettled            bool
-	ReleaseRate            int
-	RejectRate             int
 	PropertyFilters        map[string]string
 	AppPropertyTemplates   map[string]*template.Template
 	MsgAnnotationTemplates map[string]*template.Template
@@ -123,6 +121,10 @@ type Config struct {
 	LogOutOfOrder           bool
 	PrintAllMetrics         bool
 	ConsumerStartupDelay    time.Duration
+	RequeueWhenPriority     []int
+	DiscardWhenPriority     []int
+	RequeueRate             int
+	DiscardRate             int
 }
 
 func NewConfig() Config {
