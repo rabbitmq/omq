@@ -160,6 +160,10 @@ var (
 
 func (m *MetricsServer) printMessageRates(ctx context.Context) {
 	go func() {
+		zeroRateSeconds := 0
+		paused := false
+		everPrinted := false
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -168,13 +172,39 @@ func (m *MetricsServer) printMessageRates(ctx context.Context) {
 				published := MessagesPublished.Get()
 				consumed := getTotalConsumed()
 
-				if published > 0 || consumed > 0 {
-					log.Print("",
-						"published", fmt.Sprintf("%v/s", published-previouslyPublished),
-						"consumed", fmt.Sprintf("%v/s", consumed-previouslyConsumed))
+				// Only start printing once we have some activity
+				if !everPrinted && published == 0 && consumed == 0 {
+					continue
+				}
 
-					previouslyPublished = published
-					previouslyConsumed = consumed
+				publishedRate := published - previouslyPublished
+				consumedRate := consumed - previouslyConsumed
+
+				previouslyPublished = published
+				previouslyConsumed = consumed
+
+				if publishedRate == 0 && consumedRate == 0 {
+					if !paused {
+						zeroRateSeconds++
+						if zeroRateSeconds >= 5 {
+							log.Info("metric printing paused (no activity), will resume when there's something new to print")
+							paused = true
+						} else {
+							log.Print("",
+								"published", fmt.Sprintf("%v/s", publishedRate),
+								"consumed", fmt.Sprintf("%v/s", consumedRate))
+						}
+					}
+				} else {
+					everPrinted = true
+					if paused {
+						log.Info("metric printing resumed")
+						paused = false
+					}
+					zeroRateSeconds = 0
+					log.Print("",
+						"published", fmt.Sprintf("%v/s", publishedRate),
+						"consumed", fmt.Sprintf("%v/s", consumedRate))
 				}
 			}
 		}
