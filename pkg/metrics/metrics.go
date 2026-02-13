@@ -237,7 +237,7 @@ func (m *MetricsServer) PrintSummary() {
 func getTotalConsumed() uint64 {
 	var total uint64
 
-	messagesConsumedCounters.Range(func(key, value interface{}) bool {
+	messagesConsumedCounters.Range(func(key, value any) bool {
 		counter := value.(*vmetrics.Counter)
 		total += counter.Get()
 		return true

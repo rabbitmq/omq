@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"os/signal"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -857,10 +858,8 @@ func sanitizeConfig(cfg *config.Config) error {
 
 	// Check for overlapping priorities
 	for _, rp := range requeueWhenPriority {
-		for _, dp := range discardWhenPriority {
-			if rp == dp {
-				return fmt.Errorf("priority %d cannot be in both --requeue-when-priority and --discard-when-priority", rp)
-			}
+		if slices.Contains(discardWhenPriority, rp) {
+			return fmt.Errorf("priority %d cannot be in both --requeue-when-priority and --discard-when-priority", rp)
 		}
 	}
 
