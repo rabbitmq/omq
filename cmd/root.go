@@ -415,6 +415,11 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().DurationVarP(&cfg.Duration, "time", "z", 0,
 		"Run duration (eg. 10s, 5m, 2h)")
 
+	rootCmd.PersistentFlags().BoolVar(&cfg.ParallelPublishers, "parallel-publisher-start", false,
+		"Start all publishers in parallel (default: sequential)")
+	rootCmd.PersistentFlags().BoolVar(&cfg.ParallelConsumers, "parallel-consumer-start", false,
+		"Start all consumers in parallel (default: sequential)")
+
 	// instance synchronization
 	rootCmd.PersistentFlags().IntVar(&cfg.ExpectedInstances, "expected-instances", 1,
 		"The number of instances to synchronize")
@@ -580,12 +585,14 @@ func joinCluster(expectedInstances int, serviceName string) {
 }
 
 func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
+	readyChannels := make([]chan bool, 0, cfg.Consumers)
 	for i := 1; i <= cfg.Consumers; i++ {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 			consumerReady := make(chan bool)
+			readyChannels = append(readyChannels, consumerReady)
 			n := i
 			wg.Add(1)
 			go func() {
@@ -597,19 +604,27 @@ func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 				}
 				c.Start(consumerReady)
 			}()
-			// consumers are started one by one and synchronously
-			<-consumerReady
+			if !cfg.ParallelConsumers {
+				<-consumerReady
+			}
+		}
+	}
+	if cfg.ParallelConsumers {
+		for _, ch := range readyChannels {
+			<-ch
 		}
 	}
 }
 
 func startPublishers(ctx context.Context, wg *sync.WaitGroup, startPublishing chan bool) {
+	readyChannels := make([]chan bool, 0, cfg.Publishers)
 	for i := 1; i <= cfg.Publishers; i++ {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 			publisherReady := make(chan bool)
+			readyChannels = append(readyChannels, publisherReady)
 			n := i
 			wg.Add(1)
 			go func() {
@@ -619,13 +634,16 @@ func startPublishers(ctx context.Context, wg *sync.WaitGroup, startPublishing ch
 					log.Error("Error creating publisher: ", "error", err)
 					os.Exit(1)
 				}
-				// publisher are started one by one and synchronously
-				// then we close the channel to allow all of them to start publishing "at once"
-				// but each publisher sleeps for a random sub-second time, to avoid burts of
-				// messages being published
 				p.Start(publisherReady, startPublishing)
 			}()
-			<-publisherReady
+			if !cfg.ParallelPublishers {
+				<-publisherReady
+			}
+		}
+	}
+	if cfg.ParallelPublishers {
+		for _, ch := range readyChannels {
+			<-ch
 		}
 	}
 }
