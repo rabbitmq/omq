@@ -67,13 +67,25 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 		ConnectRetryDelay:             1 * time.Second,
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
 			log.Info("consumer connected", "id", c.Id, "topic", c.Topic)
+			subsPerConsumer := c.Config.MqttConsumer.SubscriptionsPerConsumer
+			if subsPerConsumer == 0 {
+				log.Info("consumer connected (no subscriptions)", "id", c.Id)
+				return
+			}
+			subscriptions := make([]paho.SubscribeOptions, 0, subsPerConsumer)
+			for i := 1; i <= subsPerConsumer; i++ {
+				topic := c.Topic
+				if subsPerConsumer > 1 {
+					topic = fmt.Sprintf("%s/%d", c.Topic, i)
+				}
+				subscriptions = append(subscriptions, paho.SubscribeOptions{
+					Topic: topic,
+					QoS:   byte(c.Config.MqttConsumer.QoS),
+				})
+				log.Info("consumer subscribing", "id", c.Id, "topic", topic)
+			}
 			if _, err := cm.Subscribe(context.Background(), &paho.Subscribe{
-				Subscriptions: []paho.SubscribeOptions{
-					{
-						Topic: c.Topic,
-						QoS:   byte(c.Config.MqttConsumer.QoS),
-					},
-				},
+				Subscriptions: subscriptions,
 			}); err != nil {
 				fmt.Printf("failed to subscribe (%s). This is likely to mean no messages will be received.", err)
 			}

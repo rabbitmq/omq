@@ -96,6 +96,8 @@ func RootCmd() *cobra.Command {
 		"MQTT consumer clean session")
 	mqttConsumerFlags.DurationVar(&cfg.MqttConsumer.SessionExpiryInterval, "mqtt-consumer-session-expiry-interval", 0,
 		"MQTT consumer session expiry interval")
+	mqttConsumerFlags.IntVar(&cfg.MqttConsumer.SubscriptionsPerConsumer, "mqtt-subscriptions-per-consumer", 1,
+		"Number of subscriptions per MQTT consumer (appends /N to the topic; 0 = connect but don't subscribe)")
 
 	mqttPublisherFlags := pflag.NewFlagSet("mqtt-publisher", pflag.ContinueOnError)
 	mqttPublisherFlags.IntVar(&cfg.MqttPublisher.Version, "mqtt-publisher-version", 5,

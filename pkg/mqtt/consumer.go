@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -62,12 +63,23 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 		SetProtocolVersion(uint(c.Config.MqttConsumer.Version))
 
 	opts.OnConnect = func(client mqtt.Client) {
-		token := client.Subscribe(c.Topic, byte(c.Config.MqttConsumer.QoS), handler)
-		token.Wait()
-		if token.Error() != nil {
-			log.Error("failed to subscribe", "id", c.Id, "error", token.Error())
+		subsPerConsumer := c.Config.MqttConsumer.SubscriptionsPerConsumer
+		if subsPerConsumer == 0 {
+			log.Info("consumer connected (no subscriptions)", "id", c.Id)
+			return
 		}
-		log.Info("consumer subscribed", "id", c.Id, "topic", c.Topic)
+		for i := 1; i <= subsPerConsumer; i++ {
+			topic := c.Topic
+			if subsPerConsumer > 1 {
+				topic = fmt.Sprintf("%s/%d", c.Topic, i)
+			}
+			token := client.Subscribe(topic, byte(c.Config.MqttConsumer.QoS), handler)
+			token.Wait()
+			if token.Error() != nil {
+				log.Error("failed to subscribe", "id", c.Id, "error", token.Error())
+			}
+			log.Info("consumer subscribed", "id", c.Id, "topic", topic)
+		}
 	}
 
 	var j int
