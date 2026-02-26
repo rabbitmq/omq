@@ -346,11 +346,15 @@ func maybeConvertToInt(value string) any {
 }
 
 func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
+	var body []byte
 	if p.Config.SizeTemplate != nil {
-		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
+		body = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
+	} else {
+		body = make([]byte, len(p.msg))
+		copy(body, p.msg)
 	}
-	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
-	msg := amqp.NewMessage(p.msg)
+	utils.UpdatePayload(p.Config.UseMillis, &body)
+	msg := amqp.NewMessage(body)
 	msg.Properties = &amqp.MessageProperties{}
 
 	// Handle template-based application properties
