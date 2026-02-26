@@ -329,7 +329,7 @@ func RootCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			if cmd.Use != "version" {
+			if strings.Contains(cmd.Use, "-") {
 				err := setUris(&cfg, cmd.Use)
 				if err != nil {
 					fmt.Printf("ERROR: %s\n", err)
