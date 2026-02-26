@@ -125,6 +125,8 @@ type Config struct {
 	DiscardWhenPriority     []int
 	RequeueRate             int
 	DiscardRate             int
+	ParallelPublishers      bool
+	ParallelConsumers       bool
 }
 
 func NewConfig() Config {
