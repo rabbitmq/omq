@@ -15,7 +15,6 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/Masterminds/sprig/v3"
-	"github.com/panjf2000/ants/v2"
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
@@ -209,10 +208,6 @@ func RateLimiter(publishRate float32) *rate.Limiter {
 	return rate.NewLimiter(limit, 1)
 }
 
-func AntsPool(maxInFlight int) (*ants.Pool, error) {
-	return ants.NewPool(maxInFlight, ants.WithExpiryDuration(time.Duration(10*time.Second)), ants.WithNonblocking(false))
-}
-
 // ParseHeaders parses header strings in the format "key1=value1,key2=value2"
 // and converts numeric values to appropriate types (int64 or float64)
 func ParseHeaders(headerStrings []string) map[string]any {
@@ -267,7 +262,11 @@ func ParseHeadersWithTemplates(headerStrings []string) (map[string]any, map[stri
 	return headers, templates, nil
 }
 
-func ExecuteTemplate(tmpl *template.Template, id int) string {
+// ExecuteTemplate executes a Go template with the given publisher id.
+// An optional seq argument provides the message sequence number for
+// cycling through comma-separated values; when omitted, the global
+// MessagesPublished counter is used instead.
+func ExecuteTemplate(tmpl *template.Template, id int, seq ...uint64) string {
 	if tmpl == nil {
 		return ""
 	}
@@ -292,9 +291,10 @@ func ExecuteTemplate(tmpl *template.Template, id int) string {
 		// If the result has commas, cycle through values
 		if strings.Contains(result, ",") {
 			values := strings.Split(result, ",")
-			// Use message count to cycle through values
 			var index uint64
-			if metrics.MessagesPublished != nil {
+			if len(seq) > 0 {
+				index = seq[0] % uint64(len(values))
+			} else if metrics.MessagesPublished != nil {
 				index = metrics.MessagesPublished.Get() % uint64(len(values))
 			}
 			return strings.TrimSpace(values[index])

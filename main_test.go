@@ -19,6 +19,10 @@ import (
 )
 
 var _ = Describe("OMQ CLI", func() {
+	AfterEach(func() {
+		gexec.KillAndWait(5 * time.Second)
+	})
+
 	Describe("basic start/stop functionality", func() {
 		It("executed without any commands/flags, displays its usage", func() {
 			session := omq([]string{})
