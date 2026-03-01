@@ -25,6 +25,7 @@ type Amqp091Publisher struct {
 	returns          chan amqp091.Return
 	publishTimes     map[uint64]time.Time
 	publishTimesLock sync.Mutex
+	sem              chan struct{}
 	exchange         string
 	routingKey       string
 	Config           config.Config
@@ -128,6 +129,7 @@ func (p *Amqp091Publisher) Start(publisherReady chan bool, startPublishing chan 
 
 func (p *Amqp091Publisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
+	p.sem = make(chan struct{}, p.Config.MaxInFlight)
 
 	go p.handleConfirms()
 	go p.handleReturns()
@@ -145,8 +147,14 @@ func (p *Amqp091Publisher) StartPublishing() string {
 			if p.Config.Rate > 0 {
 				_ = limiter.Wait(p.ctx)
 			}
+			select {
+			case p.sem <- struct{}{}:
+			case <-p.ctx.Done():
+				return "context cancelled"
+			}
 			err := p.SendAsync(n)
 			if err != nil {
+				<-p.sem
 				p.Connect()
 			} else {
 				metrics.MessagesPublished.Inc()
@@ -180,6 +188,7 @@ func (p *Amqp091Publisher) handleConfirms() {
 			_ = p.getPublishTime(confirm.DeliveryTag)
 			log.Debug("message not confirmed by the broker", "id", p.Id, "delivery_tag", confirm.DeliveryTag)
 		}
+		<-p.sem
 	}
 }
 
