@@ -2,6 +2,8 @@ module github.com/rabbitmq/omq
 
 go 1.25.0
 
+replace github.com/Azure/go-amqp => github.com/mkuratczyk/go-amqp v0.0.0-20260302111407-2d4e4fe73741
+
 require (
 	github.com/Azure/go-amqp v1.5.1
 	github.com/Masterminds/sprig/v3 v3.3.0
@@ -14,7 +16,6 @@ require (
 	github.com/michaelklishin/rabbit-hole v1.5.0
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
-	github.com/panjf2000/ants/v2 v2.11.5
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/spf13/cobra v1.10.2
 	github.com/thediveo/enumflag/v2 v2.1.0

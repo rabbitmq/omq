@@ -18,8 +18,12 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 
 	"github.com/Azure/go-amqp"
-	"github.com/panjf2000/ants/v2"
 )
+
+type pendingReceipt struct {
+	receipt amqp.SendReceipt
+	sentAt  time.Time
+}
 
 type Amqp10Publisher struct {
 	Id         int
@@ -30,8 +34,8 @@ type Amqp10Publisher struct {
 	Config     config.Config
 	msg        []byte
 	whichUri   int
-	pool       *ants.Pool
-	poolWg     sync.WaitGroup
+	msgSent    atomic.Uint64
+	wg         sync.WaitGroup
 	ctx        context.Context
 }
 
@@ -153,14 +157,6 @@ func (p *Amqp10Publisher) CreateSender() {
 func (p *Amqp10Publisher) Start(publisherReady chan bool, startPublishing chan bool) {
 	p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 
-	var err error
-	p.pool, err = utils.AntsPool(p.Config.MaxInFlight)
-	if err != nil {
-		log.Error("Can't initialize a pool for handling send receipts", "error", err)
-		return
-	}
-	defer p.pool.Release()
-
 	close(publisherReady)
 
 	select {
@@ -184,6 +180,13 @@ func (p *Amqp10Publisher) Start(publisherReady chan bool, startPublishing chan b
 }
 
 func (p *Amqp10Publisher) StartPublishing() string {
+	if p.Config.Amqp.SendSettled {
+		return p.publishSettled()
+	}
+	return p.publishUnsettled()
+}
+
+func (p *Amqp10Publisher) publishSettled() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent atomic.Int64
@@ -198,67 +201,74 @@ func (p *Amqp10Publisher) StartPublishing() string {
 			if p.Config.Rate > 0 {
 				_ = limiter.Wait(p.ctx)
 			}
-			p.poolWg.Add(1)
-			_ = p.pool.Submit(func() {
-				defer func() {
-					p.poolWg.Done()
-				}()
-				var err error
-				if p.Config.Amqp.SendSettled {
-					err = p.SendSync()
-				} else {
-					err = p.SendAsync()
-				}
-				if err != nil {
-					p.Connect()
-				}
-			})
+			msg := p.prepareMessage()
+			startTime := time.Now()
+			if p.Sender == nil {
+				p.Connect()
+				continue
+			}
+			err := p.Sender.Send(context.TODO(), msg, nil)
+			latency := time.Since(startTime)
+			log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
+			if err = p.handleSendErrors(p.ctx, err); err != nil {
+				p.Connect()
+				continue
+			}
+			metrics.MessagesPublished.Inc()
+			metrics.MessagesConfirmed.Inc()
+			metrics.PublishingLatency.Update(latency.Seconds())
 		}
 	}
 }
 
-func (p *Amqp10Publisher) SendAsync() error {
-	msg := p.prepareMessage()
+func (p *Amqp10Publisher) publishUnsettled() string {
+	limiter := utils.RateLimiter(p.Config.Rate)
+	receipts := make(chan pendingReceipt, p.Config.MaxInFlight)
 
-	startTime := time.Now()
-	if p.Sender == nil {
-		return errors.New("sender is nil")
-	}
-	receipt, err := p.Sender.SendWithReceipt(p.ctx, msg, nil)
-	if err != nil {
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		for r := range receipts {
+			p.handleSent(&r.receipt, r.sentAt)
+		}
+	}()
+
+	var msgSent atomic.Int64
+	for {
 		select {
 		case <-p.ctx.Done():
-			return nil
+			close(receipts)
+			return "context cancelled"
 		default:
-			err = p.handleSendErrors(p.ctx, err)
-			if err != nil {
-				return err
+			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+				close(receipts)
+				return "--pmessages value reached"
 			}
+			if p.Config.Rate > 0 {
+				_ = limiter.Wait(p.ctx)
+			}
+			msg := p.prepareMessage()
+			startTime := time.Now()
+			if p.Sender == nil {
+				p.Connect()
+				continue
+			}
+			receipt, err := p.Sender.SendWithReceipt(p.ctx, msg, nil)
+			if err != nil {
+				select {
+				case <-p.ctx.Done():
+					close(receipts)
+					return "context cancelled"
+				default:
+					if err = p.handleSendErrors(p.ctx, err); err != nil {
+						p.Connect()
+					}
+					continue
+				}
+			}
+			receipts <- pendingReceipt{receipt: receipt, sentAt: startTime}
 		}
-	} else {
-		p.handleSent(&receipt, startTime)
 	}
-	return nil
-}
-
-func (p *Amqp10Publisher) SendSync() error {
-	msg := p.prepareMessage()
-	startTime := time.Now()
-	if p.Sender == nil {
-		return errors.New("sender is nil")
-	}
-	err := p.Sender.Send(context.TODO(), msg, nil)
-	latency := time.Since(startTime)
-	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
-	err = p.handleSendErrors(p.ctx, err)
-	if err != nil {
-		return err
-	}
-	// rejected messages are not counted as published, maybe they should be?
-	metrics.MessagesPublished.Inc()
-	metrics.MessagesConfirmed.Inc()
-	metrics.PublishingLatency.Update(latency.Seconds())
-	return nil
 }
 
 // handleSendErrors returns an error if the error suggests we should reconnect
@@ -322,7 +332,7 @@ func (p *Amqp10Publisher) handleSent(receipt *amqp.SendReceipt, published time.T
 }
 
 func (p *Amqp10Publisher) Stop(reason string) {
-	p.poolWg.Wait()
+	p.wg.Wait()
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Sender != nil {
 		_ = p.Sender.Close(context.Background())
@@ -346,6 +356,8 @@ func maybeConvertToInt(value string) any {
 }
 
 func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
+	seq := p.msgSent.Add(1) - 1
+
 	var body []byte
 	if p.Config.SizeTemplate != nil {
 		body = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
@@ -363,7 +375,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 			msg.ApplicationProperties = make(map[string]any)
 		}
 		for key, tmpl := range p.Config.Amqp.AppPropertyTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Id)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
 			msg.ApplicationProperties[key] = maybeConvertToInt(stringValue)
 		}
 	}
@@ -374,17 +386,17 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 			msg.Annotations = make(map[any]any)
 		}
 		for key, tmpl := range p.Config.Amqp.MsgAnnotationTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Id)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
 			msg.Annotations[key] = maybeConvertToInt(stringValue)
 		}
 	}
 
 	if len(p.Config.Amqp.Subjects) > 0 {
-		msg.Properties.Subject = &p.Config.Amqp.Subjects[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.Subjects))]
+		msg.Properties.Subject = &p.Config.Amqp.Subjects[seq%uint64(len(p.Config.Amqp.Subjects))]
 	}
 
 	if len(p.Config.Amqp.To) > 0 {
-		msg.Properties.To = &p.Config.Amqp.To[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.To))]
+		msg.Properties.To = &p.Config.Amqp.To[seq%uint64(len(p.Config.Amqp.To))]
 	}
 
 	if p.Config.StreamFilterValueSet != "" {
@@ -396,7 +408,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 
 	// Handle message priority (always use template)
 	if p.Config.MessagePriorityTemplate != nil {
-		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id)
+		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id, seq)
 		if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
 			msg.Header.Priority = uint8(priority)
 		} else {
