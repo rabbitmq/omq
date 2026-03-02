@@ -36,6 +36,9 @@ type Amqp10Publisher struct {
 	done        chan struct{}
 	wg          sync.WaitGroup
 	ctx         context.Context
+	amqpMsg     amqp.Message
+	amqpProps   amqp.MessageProperties
+	amqpHeader  amqp.MessageHeader
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publisher {
@@ -420,13 +423,28 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 		copy(body, p.msg)
 	}
 	utils.UpdatePayload(p.Config.UseMillis, &body)
-	msg := amqp.NewMessage(body)
-	msg.Properties = &amqp.MessageProperties{}
+
+	msg := &p.amqpMsg
+	props := &p.amqpProps
+	header := &p.amqpHeader
+
+	// reset reusable structs
+	*props = amqp.MessageProperties{}
+	*header = amqp.MessageHeader{}
+
+	if len(msg.Data) == 0 {
+		msg.Data = [][]byte{body}
+	} else {
+		msg.Data[0] = body
+	}
+	msg.Properties = props
+	msg.Header = header
+	msg.DeliveryTag = nil
 
 	// Handle template-based application properties
 	if len(p.Config.Amqp.AppPropertyTemplates) > 0 {
 		if msg.ApplicationProperties == nil {
-			msg.ApplicationProperties = make(map[string]any)
+			msg.ApplicationProperties = make(map[string]any, len(p.Config.Amqp.AppPropertyTemplates))
 		}
 		for key, tmpl := range p.Config.Amqp.AppPropertyTemplates {
 			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
@@ -437,7 +455,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	// Handle template-based message annotations
 	if len(p.Config.Amqp.MsgAnnotationTemplates) > 0 {
 		if msg.Annotations == nil {
-			msg.Annotations = make(map[any]any)
+			msg.Annotations = make(map[any]any, len(p.Config.Amqp.MsgAnnotationTemplates))
 		}
 		for key, tmpl := range p.Config.Amqp.MsgAnnotationTemplates {
 			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
@@ -446,32 +464,30 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	}
 
 	if len(p.Config.Amqp.Subjects) > 0 {
-		msg.Properties.Subject = &p.Config.Amqp.Subjects[seq%uint64(len(p.Config.Amqp.Subjects))]
+		props.Subject = &p.Config.Amqp.Subjects[seq%uint64(len(p.Config.Amqp.Subjects))]
 	}
 
 	if len(p.Config.Amqp.To) > 0 {
-		msg.Properties.To = &p.Config.Amqp.To[seq%uint64(len(p.Config.Amqp.To))]
+		props.To = &p.Config.Amqp.To[seq%uint64(len(p.Config.Amqp.To))]
 	}
 
 	if p.Config.StreamFilterValueSet != "" {
 		msg.Annotations = amqp.Annotations{"x-stream-filter-value": p.Config.StreamFilterValueSet}
 	}
 
-	msg.Header = &amqp.MessageHeader{}
-	msg.Header.Durable = p.Config.MessageDurability
+	header.Durable = p.Config.MessageDurability
 
-	// Handle message priority (always use template)
 	if p.Config.MessagePriorityTemplate != nil {
 		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id, seq)
 		if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
-			msg.Header.Priority = uint8(priority)
+			header.Priority = uint8(priority)
 		} else {
 			log.Error("failed to parse template-generated priority", "value", priorityStr, "error", err)
 			os.Exit(1)
 		}
 	}
 	if p.Config.MessageTTL.Microseconds() > 0 {
-		msg.Header.TTL = p.Config.MessageTTL
+		header.TTL = p.Config.MessageTTL
 	}
 	return msg
 }
