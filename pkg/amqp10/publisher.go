@@ -214,7 +214,9 @@ func (p *Amqp10Publisher) publishSettled() string {
 			}
 			err := p.Sender.Send(context.TODO(), msg, nil)
 			latency := time.Since(startTime)
-			log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
+			if log.IsDebug() {
+				log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
+			}
 			if err = p.handleSendErrors(p.ctx, err); err != nil {
 				p.Connect()
 				continue
@@ -362,7 +364,9 @@ func (p *Amqp10Publisher) handleSettlement(s amqp.Settlement, ptMu *sync.Mutex, 
 		latency = time.Since(published)
 	}
 	ptMu.Unlock()
-	log.Debug("message settled", "id", p.Id, "destination", p.Terminus, "latency", latency)
+	if log.IsDebug() {
+		log.Debug("message settled", "id", p.Id, "destination", p.Terminus, "latency", latency)
+	}
 	switch stateType := s.DeliveryState.(type) {
 	case *amqp.StateAccepted:
 		metrics.MessagesPublished.Inc()
