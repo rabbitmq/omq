@@ -84,10 +84,10 @@ func (p *Amqp10Publisher) Connect() {
 		p.whichUri++
 		hostname, vhost := hostAndVHost(uri)
 		conn, err = amqp.Dial(context.TODO(), uri, &amqp.ConnOptions{
-			WriteQueueDepth: 10,
-			ContainerID:     utils.InjectId(p.Config.PublisherId, p.Id),
-			SASLType:        amqp.SASLTypeAnonymous(),
-			HostName:        vhost,
+			PipelineDepth: 10,
+			ContainerID:   utils.InjectId(p.Config.PublisherId, p.Id),
+			SASLType:      amqp.SASLTypeAnonymous(),
+			HostName:      vhost,
 			TLSConfig: &tls.Config{
 				ServerName: hostname,
 			},
@@ -108,9 +108,7 @@ func (p *Amqp10Publisher) Connect() {
 	}
 
 	for p.Session == nil {
-		session, err := p.Connection.NewSession(context.TODO(), &amqp.SessionOptions{
-			TransferQueueDepth: 10,
-		})
+		session, err := p.Connection.NewSession(context.TODO(), nil)
 		if err != nil {
 			log.Error("publisher failed to create a session", "id", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
