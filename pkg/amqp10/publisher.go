@@ -20,23 +20,20 @@ import (
 	"github.com/Azure/go-amqp"
 )
 
-type pendingReceipt struct {
-	receipt amqp.SendReceipt
-	sentAt  time.Time
-}
-
 type Amqp10Publisher struct {
-	Id         int
-	Connection *amqp.Conn
-	Session    *amqp.Session
-	Sender     *amqp.Sender
-	Terminus   string
-	Config     config.Config
-	msg        []byte
-	whichUri   int
-	msgSent    atomic.Uint64
-	wg         sync.WaitGroup
-	ctx        context.Context
+	Id          int
+	Connection  *amqp.Conn
+	Session     *amqp.Session
+	Sender      *amqp.Sender
+	Terminus    string
+	Config      config.Config
+	msg         []byte
+	whichUri    int
+	msgSent     atomic.Uint64
+	settlements chan amqp.Settlement
+	sem         chan struct{}
+	wg          sync.WaitGroup
+	ctx         context.Context
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publisher {
@@ -48,6 +45,10 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publish
 		Terminus:   utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, id, cfg),
 		whichUri:   0,
 		ctx:        ctx,
+	}
+
+	if !cfg.Amqp.SendSettled {
+		publisher.settlements = make(chan amqp.Settlement, cfg.MaxInFlight)
 	}
 
 	if cfg.SpreadConnections {
@@ -82,9 +83,10 @@ func (p *Amqp10Publisher) Connect() {
 		p.whichUri++
 		hostname, vhost := hostAndVHost(uri)
 		conn, err = amqp.Dial(context.TODO(), uri, &amqp.ConnOptions{
-			ContainerID: utils.InjectId(p.Config.PublisherId, p.Id),
-			SASLType:    amqp.SASLTypeAnonymous(),
-			HostName:    vhost,
+			WriteQueueDepth: 10,
+			ContainerID:     utils.InjectId(p.Config.PublisherId, p.Id),
+			SASLType:        amqp.SASLTypeAnonymous(),
+			HostName:        vhost,
 			TLSConfig: &tls.Config{
 				ServerName: hostname,
 			},
@@ -105,7 +107,9 @@ func (p *Amqp10Publisher) Connect() {
 	}
 
 	for p.Session == nil {
-		session, err := p.Connection.NewSession(context.TODO(), nil)
+		session, err := p.Connection.NewSession(context.TODO(), &amqp.SessionOptions{
+			TransferQueueDepth: 10,
+		})
 		if err != nil {
 			log.Error("publisher failed to create a session", "id", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
@@ -139,6 +143,7 @@ func (p *Amqp10Publisher) CreateSender() {
 		sender, err := p.Session.NewSender(context.TODO(), p.Terminus, &amqp.SenderOptions{
 			SettlementMode:   settleMode,
 			TargetDurability: durability,
+			Settlements:      p.settlements,
 		})
 		if err != nil {
 			log.Error("publisher failed to create a sender", "id", p.Id, "error", err.Error())
@@ -223,41 +228,53 @@ func (p *Amqp10Publisher) publishSettled() string {
 
 func (p *Amqp10Publisher) publishUnsettled() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
-	receipts := make(chan pendingReceipt, p.Config.MaxInFlight)
+	p.sem = make(chan struct{}, p.Config.MaxInFlight)
+	publishTimes := sync.Map{}
 
-	p.wg.Add(1)
-	go func() {
-		defer p.wg.Done()
-		for r := range receipts {
-			p.handleSent(&r.receipt, r.sentAt)
+	p.wg.Go(func() {
+		for {
+			select {
+			case s, ok := <-p.settlements:
+				if !ok {
+					return
+				}
+				p.handleSettlement(s, &publishTimes)
+				<-p.sem
+			case <-p.ctx.Done():
+				return
+			}
 		}
-	}()
+	})
 
 	var msgSent atomic.Int64
 	for {
 		select {
 		case <-p.ctx.Done():
-			close(receipts)
 			return "context cancelled"
 		default:
 			if msgSent.Add(1) > int64(p.Config.PublishCount) {
-				close(receipts)
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
 				_ = limiter.Wait(p.ctx)
 			}
+			select {
+			case p.sem <- struct{}{}:
+			case <-p.ctx.Done():
+				return "context cancelled"
+			}
 			msg := p.prepareMessage()
-			startTime := time.Now()
 			if p.Sender == nil {
+				<-p.sem
 				p.Connect()
 				continue
 			}
+			startTime := time.Now()
 			receipt, err := p.Sender.SendWithReceipt(p.ctx, msg, nil)
 			if err != nil {
+				<-p.sem
 				select {
 				case <-p.ctx.Done():
-					close(receipts)
 					return "context cancelled"
 				default:
 					if err = p.handleSendErrors(p.ctx, err); err != nil {
@@ -266,7 +283,7 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 					continue
 				}
 			}
-			receipts <- pendingReceipt{receipt: receipt, sentAt: startTime}
+			publishTimes.Store(string(receipt.DeliveryTag()), startTime)
 		}
 	}
 }
@@ -299,36 +316,28 @@ func (p *Amqp10Publisher) handleSendErrors(ctx context.Context, err error) error
 	}
 }
 
-func (p *Amqp10Publisher) handleSent(receipt *amqp.SendReceipt, published time.Time) {
-	state, err := receipt.Wait(context.TODO())
-	if err != nil {
-		log.Error("error waiting for a message receipt", "id", p.Id, "error", err)
-		return
+func (p *Amqp10Publisher) handleSettlement(s amqp.Settlement, publishTimes *sync.Map) {
+	var latency time.Duration
+	if published, ok := publishTimes.LoadAndDelete(string(s.DeliveryTag)); ok {
+		latency = time.Since(published.(time.Time))
 	}
-	latency := time.Since(published)
-	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency)
-	switch stateType := state.(type) {
+	log.Debug("message settled", "id", p.Id, "destination", p.Terminus, "latency", latency)
+	switch stateType := s.DeliveryState.(type) {
 	case *amqp.StateAccepted:
-		// only accepted messages are counted as published; perhaps we should count other outcomes?
 		metrics.MessagesPublished.Inc()
 		metrics.MessagesConfirmed.Inc()
 		metrics.PublishingLatency.Update(latency.Seconds())
 	case *amqp.StateModified:
-		// message must be modified and resent before it can be processed.
-		// the values in stateType provide further context.
 		log.Debug("server requires modifications to accept this message", "state", stateType)
 	case *amqp.StateReceived:
-		// see the fields in [StateReceived] for information on
-		// how to handle this delivery state.
 		log.Debug("message received but not processed by the broker", "state", stateType)
 	case *amqp.StateRejected:
 		if stateType.Error != nil {
 			log.Info("message rejected by the broker", "state", stateType.Error)
 		}
 	case *amqp.StateReleased:
-		log.Debug("message released the broker", "state", stateType)
+		log.Debug("message released by the broker", "state", stateType)
 	}
-	log.Debug("message receipt received", "outcome", state)
 }
 
 func (p *Amqp10Publisher) Stop(reason string) {
