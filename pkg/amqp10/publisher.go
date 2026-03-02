@@ -32,6 +32,7 @@ type Amqp10Publisher struct {
 	msgSent     atomic.Uint64
 	settlements chan amqp.Settlement
 	sem         chan struct{}
+	done        chan struct{}
 	wg          sync.WaitGroup
 	ctx         context.Context
 }
@@ -229,17 +230,18 @@ func (p *Amqp10Publisher) publishSettled() string {
 func (p *Amqp10Publisher) publishUnsettled() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 	p.sem = make(chan struct{}, p.Config.MaxInFlight)
+	p.done = make(chan struct{})
 	publishTimes := sync.Map{}
 
 	p.wg.Go(func() {
 		for {
 			select {
-			case s, ok := <-p.settlements:
-				if !ok {
-					return
-				}
+			case s := <-p.settlements:
 				p.handleSettlement(s, &publishTimes)
 				<-p.sem
+			case <-p.done:
+				p.drainSettlements(&publishTimes)
+				return
 			case <-p.ctx.Done():
 				return
 			}
@@ -250,9 +252,11 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 	for {
 		select {
 		case <-p.ctx.Done():
+			close(p.done)
 			return "context cancelled"
 		default:
 			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+				close(p.done)
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
@@ -261,6 +265,7 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 			select {
 			case p.sem <- struct{}{}:
 			case <-p.ctx.Done():
+				close(p.done)
 				return "context cancelled"
 			}
 			msg := p.prepareMessage()
@@ -275,6 +280,7 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 				<-p.sem
 				select {
 				case <-p.ctx.Done():
+					close(p.done)
 					return "context cancelled"
 				default:
 					if err = p.handleSendErrors(p.ctx, err); err != nil {
@@ -284,6 +290,34 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 				}
 			}
 			publishTimes.Store(string(receipt.DeliveryTag()), startTime)
+		}
+	}
+}
+
+// drainSettlements waits for remaining in-flight settlements after the send
+// loop has finished. It returns immediately once all in-flight messages are
+// settled, or after 5 seconds of no new settlements arriving.
+func (p *Amqp10Publisher) drainSettlements(publishTimes *sync.Map) {
+	if len(p.sem) == 0 {
+		return
+	}
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+	for {
+		select {
+		case s := <-p.settlements:
+			p.handleSettlement(s, publishTimes)
+			<-p.sem
+			if len(p.sem) == 0 {
+				return
+			}
+			if !timeout.Stop() {
+				<-timeout.C
+			}
+			timeout.Reset(5 * time.Second)
+		case <-timeout.C:
+			log.Info("timed out waiting for remaining settlements", "id", p.Id, "inFlight", len(p.sem))
+			return
 		}
 	}
 }
