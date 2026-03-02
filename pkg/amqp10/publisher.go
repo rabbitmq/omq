@@ -3,6 +3,7 @@ package amqp10
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"math/rand/v2"
 	"os"
@@ -229,16 +230,17 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 	p.sem = make(chan struct{}, p.Config.MaxInFlight)
 	p.done = make(chan struct{})
-	publishTimes := sync.Map{}
+	var ptMu sync.Mutex
+	publishTimes := make(map[uint64]time.Time, p.Config.MaxInFlight)
 
 	p.wg.Go(func() {
 		for {
 			select {
 			case s := <-p.settlements:
-				p.handleSettlement(s, &publishTimes)
+				p.handleSettlement(s, &ptMu, publishTimes)
 				<-p.sem
 			case <-p.done:
-				p.drainSettlements(&publishTimes)
+				p.drainSettlements(&ptMu, publishTimes)
 				return
 			case <-p.ctx.Done():
 				return
@@ -287,7 +289,10 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 					continue
 				}
 			}
-			publishTimes.Store(string(receipt.DeliveryTag()), startTime)
+			tag := binary.BigEndian.Uint64(receipt.DeliveryTag())
+			ptMu.Lock()
+			publishTimes[tag] = startTime
+			ptMu.Unlock()
 		}
 	}
 }
@@ -295,7 +300,7 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 // drainSettlements waits for remaining in-flight settlements after the send
 // loop has finished. It returns immediately once all in-flight messages are
 // settled, or after 5 seconds of no new settlements arriving.
-func (p *Amqp10Publisher) drainSettlements(publishTimes *sync.Map) {
+func (p *Amqp10Publisher) drainSettlements(ptMu *sync.Mutex, publishTimes map[uint64]time.Time) {
 	if len(p.sem) == 0 {
 		return
 	}
@@ -304,7 +309,7 @@ func (p *Amqp10Publisher) drainSettlements(publishTimes *sync.Map) {
 	for {
 		select {
 		case s := <-p.settlements:
-			p.handleSettlement(s, publishTimes)
+			p.handleSettlement(s, ptMu, publishTimes)
 			<-p.sem
 			if len(p.sem) == 0 {
 				return
@@ -348,11 +353,15 @@ func (p *Amqp10Publisher) handleSendErrors(ctx context.Context, err error) error
 	}
 }
 
-func (p *Amqp10Publisher) handleSettlement(s amqp.Settlement, publishTimes *sync.Map) {
+func (p *Amqp10Publisher) handleSettlement(s amqp.Settlement, ptMu *sync.Mutex, publishTimes map[uint64]time.Time) {
 	var latency time.Duration
-	if published, ok := publishTimes.LoadAndDelete(string(s.DeliveryTag)); ok {
-		latency = time.Since(published.(time.Time))
+	tag := binary.BigEndian.Uint64(s.DeliveryTag)
+	ptMu.Lock()
+	if published, ok := publishTimes[tag]; ok {
+		delete(publishTimes, tag)
+		latency = time.Since(published)
 	}
+	ptMu.Unlock()
 	log.Debug("message settled", "id", p.Id, "destination", p.Terminus, "latency", latency)
 	switch stateType := s.DeliveryState.(type) {
 	case *amqp.StateAccepted:
