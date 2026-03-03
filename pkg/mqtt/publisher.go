@@ -61,6 +61,8 @@ func (p MqttPublisher) connectionOptions() *mqtt.ClientOptions {
 		SetClientID(utils.InjectId(p.Config.PublisherId, p.Id)).
 		SetAutoReconnect(true).
 		SetCleanSession(p.Config.MqttPublisher.CleanSession).
+		SetConnectTimeout(30 * time.Second).
+		SetWriteTimeout(30 * time.Second).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
 			log.Info("publisher connection lost", "id", p.Id)
 		}).

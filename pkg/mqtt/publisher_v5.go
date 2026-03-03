@@ -63,6 +63,7 @@ func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 		SessionExpiryInterval:         uint32(p.Config.MqttPublisher.SessionExpiryInterval.Seconds()),
 		KeepAlive:                     20,
 		ConnectRetryDelay:             1 * time.Second,
+		ConnectTimeout:                30 * time.Second,
 		OnConnectionUp: func(*autopaho.ConnectionManager, *paho.Connack) {
 			log.Info("publisher connected", "id", p.Id)
 		},

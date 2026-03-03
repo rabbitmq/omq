@@ -65,6 +65,7 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 		SessionExpiryInterval:         uint32(c.Config.MqttConsumer.SessionExpiryInterval.Seconds()),
 		KeepAlive:                     20,
 		ConnectRetryDelay:             1 * time.Second,
+		ConnectTimeout:                30 * time.Second,
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
 			log.Info("consumer connected", "id", c.Id, "topic", c.Topic)
 			subsPerConsumer := c.Config.MqttConsumer.SubscriptionsPerConsumer
