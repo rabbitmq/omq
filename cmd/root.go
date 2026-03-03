@@ -421,6 +421,14 @@ func RootCmd() *cobra.Command {
 		"Start all publishers in parallel (default: sequential)")
 	rootCmd.PersistentFlags().BoolVar(&cfg.ParallelConsumers, "parallel-consumer-start", false,
 		"Start all consumers in parallel (default: sequential)")
+	rootCmd.PersistentFlags().IntVar(&cfg.PublisherBatchSize, "publisher-batch-size", 0,
+		"Start publishers in batches of this size")
+	rootCmd.PersistentFlags().DurationVar(&cfg.PublisherBatchWait, "publisher-batch-wait", 0,
+		"Time to wait between starting batches of publishers")
+	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerBatchSize, "consumer-batch-size", 0,
+		"Start consumers in batches of this size")
+	rootCmd.PersistentFlags().DurationVar(&cfg.ConsumerBatchWait, "consumer-batch-wait", 0,
+		"Time to wait between starting batches of consumers")
 
 	// instance synchronization
 	rootCmd.PersistentFlags().IntVar(&cfg.ExpectedInstances, "expected-instances", 1,
@@ -588,6 +596,7 @@ func joinCluster(expectedInstances int, serviceName string) {
 
 func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 	readyChannels := make([]chan bool, 0, cfg.Consumers)
+
 	for i := 1; i <= cfg.Consumers; i++ {
 		select {
 		case <-ctx.Done():
@@ -606,12 +615,21 @@ func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 				}
 				c.Start(consumerReady)
 			}()
-			if !cfg.ParallelConsumers {
+
+			if cfg.ConsumerBatchSize > 0 {
+				if i%cfg.ConsumerBatchSize == 0 && i < cfg.Consumers {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(cfg.ConsumerBatchWait):
+					}
+				}
+			} else if !cfg.ParallelConsumers {
 				<-consumerReady
 			}
 		}
 	}
-	if cfg.ParallelConsumers {
+	if cfg.ParallelConsumers || cfg.ConsumerBatchSize > 0 {
 		for _, ch := range readyChannels {
 			<-ch
 		}
@@ -620,6 +638,7 @@ func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 
 func startPublishers(ctx context.Context, wg *sync.WaitGroup, startPublishing chan bool) {
 	readyChannels := make([]chan bool, 0, cfg.Publishers)
+
 	for i := 1; i <= cfg.Publishers; i++ {
 		select {
 		case <-ctx.Done():
@@ -638,12 +657,21 @@ func startPublishers(ctx context.Context, wg *sync.WaitGroup, startPublishing ch
 				}
 				p.Start(publisherReady, startPublishing)
 			}()
-			if !cfg.ParallelPublishers {
+
+			if cfg.PublisherBatchSize > 0 {
+				if i%cfg.PublisherBatchSize == 0 && i < cfg.Publishers {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(cfg.PublisherBatchWait):
+					}
+				}
+			} else if !cfg.ParallelPublishers {
 				<-publisherReady
 			}
 		}
 	}
-	if cfg.ParallelPublishers {
+	if cfg.ParallelPublishers || cfg.PublisherBatchSize > 0 {
 		for _, ch := range readyChannels {
 			<-ch
 		}

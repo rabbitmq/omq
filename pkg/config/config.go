@@ -128,6 +128,10 @@ type Config struct {
 	DiscardRate             int
 	ParallelPublishers      bool
 	ParallelConsumers       bool
+	PublisherBatchSize      int
+	ConsumerBatchSize       int
+	PublisherBatchWait      time.Duration
+	ConsumerBatchWait       time.Duration
 }
 
 func NewConfig() Config {
