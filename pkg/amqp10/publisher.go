@@ -302,6 +302,9 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 			ptMu.Lock()
 			publishTimes[tag] = startTime
 			ptMu.Unlock()
+			if log.IsDebug() {
+				log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "deliveryTag", tag)
+			}
 		}
 	}
 }
