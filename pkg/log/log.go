@@ -23,6 +23,10 @@ func Setup() {
 	logger.SetLevel(Level)
 }
 
+func IsDebug() bool {
+	return logger.GetLevel() <= log.DebugLevel
+}
+
 func Debug(msg any, keyvals ...any) {
 	logger.Debug(msg, keyvals...)
 }

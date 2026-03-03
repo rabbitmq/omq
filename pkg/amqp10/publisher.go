@@ -3,6 +3,7 @@ package amqp10
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"math/rand/v2"
 	"os"
@@ -18,21 +19,26 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 
 	"github.com/Azure/go-amqp"
-	"github.com/panjf2000/ants/v2"
 )
 
 type Amqp10Publisher struct {
-	Id         int
-	Connection *amqp.Conn
-	Session    *amqp.Session
-	Sender     *amqp.Sender
-	Terminus   string
-	Config     config.Config
-	msg        []byte
-	whichUri   int
-	pool       *ants.Pool
-	poolWg     sync.WaitGroup
-	ctx        context.Context
+	Id          int
+	Connection  *amqp.Conn
+	Session     *amqp.Session
+	Sender      *amqp.Sender
+	Terminus    string
+	Config      config.Config
+	msg         []byte
+	whichUri    int
+	msgSent     atomic.Uint64
+	settlements chan amqp.Settlement
+	sem         chan struct{}
+	done        chan struct{}
+	wg          sync.WaitGroup
+	ctx         context.Context
+	amqpMsg     amqp.Message
+	amqpProps   amqp.MessageProperties
+	amqpHeader  amqp.MessageHeader
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publisher {
@@ -44,6 +50,10 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publish
 		Terminus:   utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, id, cfg),
 		whichUri:   0,
 		ctx:        ctx,
+	}
+
+	if !cfg.Amqp.SendSettled {
+		publisher.settlements = make(chan amqp.Settlement, cfg.MaxInFlight)
 	}
 
 	if cfg.SpreadConnections {
@@ -78,9 +88,10 @@ func (p *Amqp10Publisher) Connect() {
 		p.whichUri++
 		hostname, vhost := hostAndVHost(uri)
 		conn, err = amqp.Dial(context.TODO(), uri, &amqp.ConnOptions{
-			ContainerID: utils.InjectId(p.Config.PublisherId, p.Id),
-			SASLType:    amqp.SASLTypeAnonymous(),
-			HostName:    vhost,
+			WriteQueueDepth: 10,
+			ContainerID:     utils.InjectId(p.Config.PublisherId, p.Id),
+			SASLType:        amqp.SASLTypeAnonymous(),
+			HostName:        vhost,
 			TLSConfig: &tls.Config{
 				ServerName: hostname,
 			},
@@ -101,7 +112,9 @@ func (p *Amqp10Publisher) Connect() {
 	}
 
 	for p.Session == nil {
-		session, err := p.Connection.NewSession(context.TODO(), nil)
+		session, err := p.Connection.NewSession(context.TODO(), &amqp.SessionOptions{
+			TransferQueueDepth: 10,
+		})
 		if err != nil {
 			log.Error("publisher failed to create a session", "id", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)
@@ -133,8 +146,11 @@ func (p *Amqp10Publisher) CreateSender() {
 
 	for p.Sender == nil {
 		sender, err := p.Session.NewSender(context.TODO(), p.Terminus, &amqp.SenderOptions{
+			SettlementQueueDepth: 10,
+
 			SettlementMode:   settleMode,
 			TargetDurability: durability,
+			Settlements:      p.settlements,
 		})
 		if err != nil {
 			log.Error("publisher failed to create a sender", "id", p.Id, "error", err.Error())
@@ -152,14 +168,6 @@ func (p *Amqp10Publisher) CreateSender() {
 
 func (p *Amqp10Publisher) Start(publisherReady chan bool, startPublishing chan bool) {
 	p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
-
-	var err error
-	p.pool, err = utils.AntsPool(p.Config.MaxInFlight)
-	if err != nil {
-		log.Error("Can't initialize a pool for handling send receipts", "error", err)
-		return
-	}
-	defer p.pool.Release()
 
 	close(publisherReady)
 
@@ -184,6 +192,13 @@ func (p *Amqp10Publisher) Start(publisherReady chan bool, startPublishing chan b
 }
 
 func (p *Amqp10Publisher) StartPublishing() string {
+	if p.Config.Amqp.SendSettled {
+		return p.publishSettled()
+	}
+	return p.publishUnsettled()
+}
+
+func (p *Amqp10Publisher) publishSettled() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent atomic.Int64
@@ -198,67 +213,125 @@ func (p *Amqp10Publisher) StartPublishing() string {
 			if p.Config.Rate > 0 {
 				_ = limiter.Wait(p.ctx)
 			}
-			p.poolWg.Add(1)
-			_ = p.pool.Submit(func() {
-				defer func() {
-					p.poolWg.Done()
-				}()
-				var err error
-				if p.Config.Amqp.SendSettled {
-					err = p.SendSync()
-				} else {
-					err = p.SendAsync()
-				}
-				if err != nil {
-					p.Connect()
-				}
-			})
+			msg := p.prepareMessage()
+			startTime := time.Now()
+			if p.Sender == nil {
+				p.Connect()
+				continue
+			}
+			err := p.Sender.Send(context.TODO(), msg, nil)
+			latency := time.Since(startTime)
+			if log.IsDebug() {
+				log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
+			}
+			if err = p.handleSendErrors(p.ctx, err); err != nil {
+				p.Connect()
+				continue
+			}
+			metrics.MessagesPublished.Inc()
+			metrics.MessagesConfirmed.Inc()
+			metrics.PublishingLatency.Update(latency.Seconds())
 		}
 	}
 }
 
-func (p *Amqp10Publisher) SendAsync() error {
-	msg := p.prepareMessage()
+func (p *Amqp10Publisher) publishUnsettled() string {
+	limiter := utils.RateLimiter(p.Config.Rate)
+	p.sem = make(chan struct{}, p.Config.MaxInFlight)
+	p.done = make(chan struct{})
+	var ptMu sync.Mutex
+	publishTimes := make(map[uint64]time.Time, p.Config.MaxInFlight)
 
-	startTime := time.Now()
-	if p.Sender == nil {
-		return errors.New("sender is nil")
-	}
-	receipt, err := p.Sender.SendWithReceipt(p.ctx, msg, nil)
-	if err != nil {
-		select {
-		case <-p.ctx.Done():
-			return nil
-		default:
-			err = p.handleSendErrors(p.ctx, err)
-			if err != nil {
-				return err
+	p.wg.Go(func() {
+		for {
+			select {
+			case s := <-p.settlements:
+				p.handleSettlement(s, &ptMu, publishTimes)
+				<-p.sem
+			case <-p.done:
+				p.drainSettlements(&ptMu, publishTimes)
+				return
+			case <-p.ctx.Done():
+				return
 			}
 		}
-	} else {
-		p.handleSent(&receipt, startTime)
+	})
+
+	var msgSent atomic.Int64
+	for {
+		select {
+		case <-p.ctx.Done():
+			close(p.done)
+			return "context cancelled"
+		default:
+			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+				close(p.done)
+				return "--pmessages value reached"
+			}
+			if p.Config.Rate > 0 {
+				_ = limiter.Wait(p.ctx)
+			}
+			select {
+			case p.sem <- struct{}{}:
+			case <-p.ctx.Done():
+				close(p.done)
+				return "context cancelled"
+			}
+			msg := p.prepareMessage()
+			if p.Sender == nil {
+				<-p.sem
+				p.Connect()
+				continue
+			}
+			startTime := time.Now()
+			receipt, err := p.Sender.SendWithReceipt(p.ctx, msg, nil)
+			if err != nil {
+				<-p.sem
+				select {
+				case <-p.ctx.Done():
+					close(p.done)
+					return "context cancelled"
+				default:
+					if err = p.handleSendErrors(p.ctx, err); err != nil {
+						p.Connect()
+					}
+					continue
+				}
+			}
+			tag := binary.BigEndian.Uint64(receipt.DeliveryTag())
+			ptMu.Lock()
+			publishTimes[tag] = startTime
+			ptMu.Unlock()
+		}
 	}
-	return nil
 }
 
-func (p *Amqp10Publisher) SendSync() error {
-	msg := p.prepareMessage()
-	startTime := time.Now()
-	if p.Sender == nil {
-		return errors.New("sender is nil")
+// drainSettlements waits for remaining in-flight settlements after the send
+// loop has finished. It returns immediately once all in-flight messages are
+// settled, or after 5 seconds of no new settlements arriving.
+func (p *Amqp10Publisher) drainSettlements(ptMu *sync.Mutex, publishTimes map[uint64]time.Time) {
+	if len(p.sem) == 0 {
+		return
 	}
-	err := p.Sender.Send(context.TODO(), msg, nil)
-	latency := time.Since(startTime)
-	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)
-	err = p.handleSendErrors(p.ctx, err)
-	if err != nil {
-		return err
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+	for {
+		select {
+		case s := <-p.settlements:
+			p.handleSettlement(s, ptMu, publishTimes)
+			<-p.sem
+			if len(p.sem) == 0 {
+				return
+			}
+			if !timeout.Stop() {
+				<-timeout.C
+			}
+			timeout.Reset(5 * time.Second)
+		case <-timeout.C:
+			log.Info("timed out waiting for remaining settlements", "id", p.Id, "inFlight", len(p.sem))
+			return
+		}
 	}
-	// rejected messages are not counted as published, maybe they should be?
-	metrics.MessagesPublished.Inc()
-	metrics.MessagesConfirmed.Inc()
-	metrics.PublishingLatency.Update(latency.Seconds())
-	return nil
 }
 
 // handleSendErrors returns an error if the error suggests we should reconnect
@@ -289,40 +362,38 @@ func (p *Amqp10Publisher) handleSendErrors(ctx context.Context, err error) error
 	}
 }
 
-func (p *Amqp10Publisher) handleSent(receipt *amqp.SendReceipt, published time.Time) {
-	state, err := receipt.Wait(context.TODO())
-	if err != nil {
-		log.Error("error waiting for a message receipt", "id", p.Id, "error", err)
-		return
+func (p *Amqp10Publisher) handleSettlement(s amqp.Settlement, ptMu *sync.Mutex, publishTimes map[uint64]time.Time) {
+	var latency time.Duration
+	tag := binary.BigEndian.Uint64(s.DeliveryTag)
+	ptMu.Lock()
+	if published, ok := publishTimes[tag]; ok {
+		delete(publishTimes, tag)
+		latency = time.Since(published)
 	}
-	latency := time.Since(published)
-	log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency)
-	switch stateType := state.(type) {
+	ptMu.Unlock()
+	if log.IsDebug() {
+		log.Debug("message settled", "id", p.Id, "destination", p.Terminus, "latency", latency)
+	}
+	switch stateType := s.DeliveryState.(type) {
 	case *amqp.StateAccepted:
-		// only accepted messages are counted as published; perhaps we should count other outcomes?
 		metrics.MessagesPublished.Inc()
 		metrics.MessagesConfirmed.Inc()
 		metrics.PublishingLatency.Update(latency.Seconds())
 	case *amqp.StateModified:
-		// message must be modified and resent before it can be processed.
-		// the values in stateType provide further context.
 		log.Debug("server requires modifications to accept this message", "state", stateType)
 	case *amqp.StateReceived:
-		// see the fields in [StateReceived] for information on
-		// how to handle this delivery state.
 		log.Debug("message received but not processed by the broker", "state", stateType)
 	case *amqp.StateRejected:
 		if stateType.Error != nil {
 			log.Info("message rejected by the broker", "state", stateType.Error)
 		}
 	case *amqp.StateReleased:
-		log.Debug("message released the broker", "state", stateType)
+		log.Debug("message released by the broker", "state", stateType)
 	}
-	log.Debug("message receipt received", "outcome", state)
 }
 
 func (p *Amqp10Publisher) Stop(reason string) {
-	p.poolWg.Wait()
+	p.wg.Wait()
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Sender != nil {
 		_ = p.Sender.Close(context.Background())
@@ -346,6 +417,8 @@ func maybeConvertToInt(value string) any {
 }
 
 func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
+	seq := p.msgSent.Add(1) - 1
+
 	var body []byte
 	if p.Config.SizeTemplate != nil {
 		body = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
@@ -354,16 +427,31 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 		copy(body, p.msg)
 	}
 	utils.UpdatePayload(p.Config.UseMillis, &body)
-	msg := amqp.NewMessage(body)
-	msg.Properties = &amqp.MessageProperties{}
+
+	msg := &p.amqpMsg
+	props := &p.amqpProps
+	header := &p.amqpHeader
+
+	// reset reusable structs
+	*props = amqp.MessageProperties{}
+	*header = amqp.MessageHeader{}
+
+	if len(msg.Data) == 0 {
+		msg.Data = [][]byte{body}
+	} else {
+		msg.Data[0] = body
+	}
+	msg.Properties = props
+	msg.Header = header
+	msg.DeliveryTag = nil
 
 	// Handle template-based application properties
 	if len(p.Config.Amqp.AppPropertyTemplates) > 0 {
 		if msg.ApplicationProperties == nil {
-			msg.ApplicationProperties = make(map[string]any)
+			msg.ApplicationProperties = make(map[string]any, len(p.Config.Amqp.AppPropertyTemplates))
 		}
 		for key, tmpl := range p.Config.Amqp.AppPropertyTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Id)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
 			msg.ApplicationProperties[key] = maybeConvertToInt(stringValue)
 		}
 	}
@@ -371,41 +459,39 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	// Handle template-based message annotations
 	if len(p.Config.Amqp.MsgAnnotationTemplates) > 0 {
 		if msg.Annotations == nil {
-			msg.Annotations = make(map[any]any)
+			msg.Annotations = make(map[any]any, len(p.Config.Amqp.MsgAnnotationTemplates))
 		}
 		for key, tmpl := range p.Config.Amqp.MsgAnnotationTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Id)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
 			msg.Annotations[key] = maybeConvertToInt(stringValue)
 		}
 	}
 
 	if len(p.Config.Amqp.Subjects) > 0 {
-		msg.Properties.Subject = &p.Config.Amqp.Subjects[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.Subjects))]
+		props.Subject = &p.Config.Amqp.Subjects[seq%uint64(len(p.Config.Amqp.Subjects))]
 	}
 
 	if len(p.Config.Amqp.To) > 0 {
-		msg.Properties.To = &p.Config.Amqp.To[metrics.MessagesPublished.Get()%uint64(len(p.Config.Amqp.To))]
+		props.To = &p.Config.Amqp.To[seq%uint64(len(p.Config.Amqp.To))]
 	}
 
 	if p.Config.StreamFilterValueSet != "" {
 		msg.Annotations = amqp.Annotations{"x-stream-filter-value": p.Config.StreamFilterValueSet}
 	}
 
-	msg.Header = &amqp.MessageHeader{}
-	msg.Header.Durable = p.Config.MessageDurability
+	header.Durable = p.Config.MessageDurability
 
-	// Handle message priority (always use template)
 	if p.Config.MessagePriorityTemplate != nil {
-		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id)
+		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id, seq)
 		if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
-			msg.Header.Priority = uint8(priority)
+			header.Priority = uint8(priority)
 		} else {
 			log.Error("failed to parse template-generated priority", "value", priorityStr, "error", err)
 			os.Exit(1)
 		}
 	}
 	if p.Config.MessageTTL.Microseconds() > 0 {
-		msg.Header.TTL = p.Config.MessageTTL
+		header.TTL = p.Config.MessageTTL
 	}
 	return msg
 }
