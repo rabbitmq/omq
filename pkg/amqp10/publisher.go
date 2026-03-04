@@ -271,8 +271,13 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 			if p.Config.Rate > 0 {
 				_ = limiter.Wait(p.ctx)
 			}
+			connDone := p.Connection.Done()
 			select {
 			case p.sem <- struct{}{}:
+			case <-connDone:
+				p.Connect()
+				p.sem = make(chan struct{}, p.Config.MaxInFlight)
+				continue
 			case <-p.ctx.Done():
 				close(p.done)
 				return "context cancelled"
@@ -281,6 +286,7 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 			if p.Sender == nil {
 				<-p.sem
 				p.Connect()
+				p.sem = make(chan struct{}, p.Config.MaxInFlight)
 				continue
 			}
 			startTime := time.Now()
@@ -294,6 +300,7 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 				default:
 					if err = p.handleSendErrors(p.ctx, err); err != nil {
 						p.Connect()
+						p.sem = make(chan struct{}, p.Config.MaxInFlight)
 					}
 					continue
 				}
