@@ -73,9 +73,10 @@ func (c *Amqp10Consumer) Connect() {
 		c.whichUri++
 		hostname, vhost := hostAndVHost(uri)
 		conn, err := amqp.Dial(c.ctx, uri, &amqp.ConnOptions{
-			ContainerID: utils.InjectId(c.Config.ConsumerId, c.Id),
-			SASLType:    amqp.SASLTypeAnonymous(),
-			HostName:    vhost,
+			ContainerID:     utils.InjectId(c.Config.ConsumerId, c.Id),
+			SASLType:        amqp.SASLTypeAnonymous(),
+			HostName:        vhost,
+			WriteQueueDepth: 10,
 			TLSConfig: &tls.Config{
 				ServerName: hostname,
 			},
