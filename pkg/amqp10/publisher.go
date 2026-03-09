@@ -69,16 +69,18 @@ func (p *Amqp10Publisher) Connect() {
 	var conn *amqp.Conn
 	var err error
 
-	// clean up when reconnecting
+	if p.Sender != nil {
+		_ = p.Sender.Close(context.Background())
+		p.Sender = nil
+	}
 	if p.Session != nil {
 		_ = p.Session.Close(context.Background())
+		p.Session = nil
 	}
 	if p.Connection != nil {
 		_ = p.Connection.Close()
+		p.Connection = nil
 	}
-	p.Sender = nil
-	p.Session = nil
-	p.Connection = nil
 
 	for p.Connection == nil {
 		if p.whichUri >= len(p.Config.PublisherUri) {

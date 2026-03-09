@@ -61,6 +61,10 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp091Publis
 func (p *Amqp091Publisher) Connect() {
 	var err error
 
+	if p.Channel != nil {
+		_ = p.Channel.Close()
+		p.Channel = nil
+	}
 	if p.Connection != nil {
 		_ = p.Connection.Close()
 	}
