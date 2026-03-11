@@ -182,7 +182,7 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 			payload := msg.Body
 			priority := int(msg.Priority)
 			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
-			metrics.EndToEndLatency.UpdateDuration(timeSent)
+			metrics.RecordEndToEndLatency(latency)
 
 			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
 				metrics.MessagesConsumedOutOfOrderMetric(priority).Inc()

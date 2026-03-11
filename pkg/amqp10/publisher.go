@@ -232,7 +232,7 @@ func (p *Amqp10Publisher) publishSettled() string {
 			}
 			metrics.MessagesPublished.Inc()
 			metrics.MessagesConfirmed.Inc()
-			metrics.PublishingLatency.Update(latency.Seconds())
+			metrics.RecordPublishingLatency(latency)
 		}
 	}
 }
@@ -390,7 +390,7 @@ func (p *Amqp10Publisher) handleSettlement(s amqp.Settlement, ptMu *sync.Mutex, 
 	case *amqp.StateAccepted:
 		metrics.MessagesPublished.Inc()
 		metrics.MessagesConfirmed.Inc()
-		metrics.PublishingLatency.Update(latency.Seconds())
+		metrics.RecordPublishingLatency(latency)
 	case *amqp.StateModified:
 		log.Debug("server requires modifications to accept this message", "state", stateType)
 	case *amqp.StateReceived:

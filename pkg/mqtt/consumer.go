@@ -41,7 +41,7 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 		handleMessage(payload)
 		metrics.MessagesConsumedMetric(0).Inc()
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
-		metrics.EndToEndLatency.UpdateDuration(timeSent)
+		metrics.RecordEndToEndLatency(latency)
 
 		if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
 			metrics.MessagesConsumedOutOfOrderMetric(0).Inc()

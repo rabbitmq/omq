@@ -178,7 +178,7 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 			payload := msg.GetData()
 			priority := int(msg.Header.Priority)
 			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
-			metrics.EndToEndLatency.UpdateDuration(timeSent)
+			metrics.RecordEndToEndLatency(latency)
 
 			// Check for delayed message accuracy
 			if msg.Annotations != nil {

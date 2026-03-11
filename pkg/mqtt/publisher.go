@@ -152,7 +152,7 @@ func (p MqttPublisher) Send() {
 		log.Error("message sending failure", "id", p.Id, "error", token.Error())
 	} else {
 		metrics.MessagesPublished.Inc()
-		metrics.PublishingLatency.Update(latency.Seconds())
+		metrics.RecordPublishingLatency(latency)
 		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 	}
 }

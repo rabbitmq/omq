@@ -136,7 +136,7 @@ func (p *StompPublisher) Send() error {
 		return err
 	}
 	metrics.MessagesPublished.Inc()
-	metrics.PublishingLatency.Update(latency.Seconds())
+	metrics.RecordPublishingLatency(latency)
 	log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 	return nil
 }

@@ -126,7 +126,7 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 			}
 
 			timeSent, latency := utils.CalculateEndToEndLatency(&msg.Body)
-			metrics.EndToEndLatency.UpdateDuration(timeSent)
+			metrics.RecordEndToEndLatency(latency)
 
 			priority, _ := strconv.Atoi(msg.Header.Get("priority"))
 

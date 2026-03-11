@@ -181,7 +181,7 @@ func (p *Amqp091Publisher) handleConfirms() {
 		if confirm.Ack {
 			pubTime := p.getPublishTime(confirm.DeliveryTag)
 			latency := time.Since(pubTime)
-			metrics.PublishingLatency.Update(latency.Seconds())
+			metrics.RecordPublishingLatency(latency)
 			metrics.MessagesConfirmed.Inc()
 			log.Debug("message confirmed", "id", p.Id, "delivery_tag", confirm.DeliveryTag, "latency", latency)
 		} else {

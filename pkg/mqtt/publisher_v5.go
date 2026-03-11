@@ -157,7 +157,7 @@ func (p Mqtt5Publisher) Send() {
 	}
 	latency := time.Since(startTime)
 	metrics.MessagesPublished.Inc()
-	metrics.PublishingLatency.Update(latency.Seconds())
+	metrics.RecordPublishingLatency(latency)
 	log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 }
 

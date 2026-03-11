@@ -40,7 +40,7 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 		metrics.MessagesConsumedMetric(0).Inc()
 		payload := rcv.Packet.Payload
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
-		metrics.EndToEndLatency.UpdateDuration(timeSent)
+		metrics.RecordEndToEndLatency(latency)
 
 		if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
 			metrics.MessagesConsumedOutOfOrderMetric(0).Inc()

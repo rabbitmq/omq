@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -153,10 +155,61 @@ func MessagesConsumedOutOfOrderMetric(priority int) *vmetrics.Counter {
 	return vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + labelsToString(labels))
 }
 
+type latencyTracker struct {
+	min atomic.Int64
+	max atomic.Int64
+}
+
+func newLatencyTracker() *latencyTracker {
+	t := &latencyTracker{}
+	t.min.Store(math.MaxInt64)
+	return t
+}
+
+func (t *latencyTracker) record(latency time.Duration) {
+	ns := latency.Nanoseconds()
+	for {
+		old := t.min.Load()
+		if ns >= old || t.min.CompareAndSwap(old, ns) {
+			break
+		}
+	}
+	for {
+		old := t.max.Load()
+		if ns <= old || t.max.CompareAndSwap(old, ns) {
+			break
+		}
+	}
+}
+
+func (t *latencyTracker) reset() (min, max time.Duration, ok bool) {
+	minNs := t.min.Swap(math.MaxInt64)
+	maxNs := t.max.Swap(0)
+	if minNs == math.MaxInt64 {
+		return 0, 0, false
+	}
+	return time.Duration(minNs), time.Duration(maxNs), true
+}
+
 var (
 	previouslyPublished uint64
 	previouslyConsumed  uint64
+	pubLatencyTracker   = newLatencyTracker()
+	e2eLatencyTracker   = newLatencyTracker()
 )
+
+func RecordPublishingLatency(latency time.Duration) {
+	PublishingLatency.Update(latency.Seconds())
+	pubLatencyTracker.record(latency)
+}
+
+func RecordEndToEndLatency(latency time.Duration) {
+	if latency <= 0 {
+		return
+	}
+	EndToEndLatency.Update(latency.Seconds())
+	e2eLatencyTracker.record(latency)
+}
 
 func (m *MetricsServer) printMessageRates(ctx context.Context) {
 	go func() {
@@ -183,6 +236,8 @@ func (m *MetricsServer) printMessageRates(ctx context.Context) {
 				previouslyPublished = published
 				previouslyConsumed = consumed
 
+				fields := buildRateFields(publishedRate, consumedRate)
+
 				if publishedRate == 0 && consumedRate == 0 {
 					if !paused {
 						zeroRateSeconds++
@@ -190,9 +245,7 @@ func (m *MetricsServer) printMessageRates(ctx context.Context) {
 							log.Info("metric printing paused (no activity), will resume when there's something new to print")
 							paused = true
 						} else {
-							log.Print("",
-								"published", fmt.Sprintf("%v/s", publishedRate),
-								"consumed", fmt.Sprintf("%v/s", consumedRate))
+							log.Print("", fields...)
 						}
 					}
 				} else {
@@ -202,13 +255,47 @@ func (m *MetricsServer) printMessageRates(ctx context.Context) {
 						paused = false
 					}
 					zeroRateSeconds = 0
-					log.Print("",
-						"published", fmt.Sprintf("%v/s", publishedRate),
-						"consumed", fmt.Sprintf("%v/s", consumedRate))
+					log.Print("", fields...)
 				}
 			}
 		}
 	}()
+}
+
+func buildRateFields(publishedRate, consumedRate uint64) []any {
+	var fields []any
+	fields = append(fields, "published", fmt.Sprintf("%v/s", publishedRate))
+	fields = append(fields, "consumed", fmt.Sprintf("%v/s", consumedRate))
+	if pubMin, pubMax, ok := pubLatencyTracker.reset(); ok {
+		fields = append(fields, "pub_min", formatLatency(pubMin), "pub_max", formatLatency(pubMax))
+	}
+	if e2eMin, e2eMax, ok := e2eLatencyTracker.reset(); ok {
+		fields = append(fields, "e2e_min", formatLatency(e2eMin), "e2e_max", formatLatency(e2eMax))
+	}
+	return fields
+}
+
+func formatLatency(d time.Duration) string {
+	switch {
+	case d < time.Millisecond:
+		us := float64(d.Microseconds())
+		if us == float64(int64(us)) {
+			return fmt.Sprintf("%dµs", int64(us))
+		}
+		return fmt.Sprintf("%.1f µs", us)
+	case d < time.Second:
+		ms := float64(d.Nanoseconds()) / float64(time.Millisecond)
+		if ms == float64(int64(ms)) {
+			return fmt.Sprintf("%dms", int64(ms))
+		}
+		return fmt.Sprintf("%.1fms", ms)
+	default:
+		s := d.Seconds()
+		if s == float64(int64(s)) {
+			return fmt.Sprintf("%ds", int64(s))
+		}
+		return fmt.Sprintf("%.2fs", s)
+	}
 }
 
 func (m *MetricsServer) StartTime(t time.Time) {
