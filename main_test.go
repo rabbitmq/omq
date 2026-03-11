@@ -3,7 +3,9 @@ package main_test
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"slices"
@@ -398,7 +400,7 @@ var _ = Describe("OMQ CLI", func() {
 
 	DescribeTable("supports MQTT version 3.1, 3.1.1 and 5.0",
 		func(versionFlag string, connectionVersion string) {
-			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			rmqc, err := newRabbitClient()
 			Expect(err).ShouldNot(HaveOccurred())
 			args := []string{
 				"mqtt",
@@ -457,7 +459,7 @@ var _ = Describe("OMQ CLI", func() {
 				"--time", "10s",
 			}
 
-			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			rmqc, err := newRabbitClient()
 			Expect(err).ShouldNot(HaveOccurred())
 			session := omq(args)
 			Eventually(func() bool {
@@ -489,7 +491,7 @@ var _ = Describe("OMQ CLI", func() {
 				"--time", "10s",
 			}
 
-			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			rmqc, err := newRabbitClient()
 			Expect(err).ShouldNot(HaveOccurred())
 			session := omq(args)
 			Eventually(func() bool {
@@ -517,7 +519,7 @@ var _ = Describe("OMQ CLI", func() {
 				"--time", "10s",
 			}
 
-			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			rmqc, err := newRabbitClient()
 			Expect(err).ShouldNot(HaveOccurred())
 			session := omq(args)
 			Eventually(func() bool {
@@ -667,7 +669,7 @@ var _ = Describe("OMQ CLI", func() {
 				"--queues", "exclusive",
 			}
 
-			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			rmqc, err := newRabbitClient()
 			Expect(err).ShouldNot(HaveOccurred())
 			session := omq(args)
 			defer session.Kill()
@@ -839,7 +841,7 @@ var _ = Describe("OMQ CLI", func() {
 		})
 
 		It("AMQP 1.0: should discard roughly 50% of messages with --discard-rate=50", func() {
-			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			rmqc, err := newRabbitClient()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			args := []string{
@@ -879,7 +881,7 @@ var _ = Describe("OMQ CLI", func() {
 		})
 
 		It("AMQP 0.9.1: should requeue roughly 50% of messages with --requeue-rate=50", func() {
-			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			rmqc, err := newRabbitClient()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			args := []string{
@@ -919,7 +921,7 @@ var _ = Describe("OMQ CLI", func() {
 		})
 
 		It("AMQP 1.0: should apply discard rate only to matching priority with --discard-when-priority and --discard-rate", func() {
-			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			rmqc, err := newRabbitClient()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			args := []string{
@@ -959,7 +961,7 @@ var _ = Describe("OMQ CLI", func() {
 		})
 
 		It("AMQP 0.9.1: should not apply requeue rate when priority doesn't match", func() {
-			rmqc, err := rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+			rmqc, err := newRabbitClient()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			args := []string{
@@ -1023,4 +1025,17 @@ func metricValue(buf io.Reader, metric string) float64 {
 		}
 	}
 	return -1
+}
+
+func newRabbitClient() (*rabbithole.Client, error) {
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	rmqc, err := rabbithole.NewTLSClient("https://127.0.0.1:15671", "guest", "guest", transport)
+	if err == nil {
+		if _, apiErr := rmqc.Overview(); apiErr == nil {
+			return rmqc, nil
+		}
+	}
+	return rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
 }
