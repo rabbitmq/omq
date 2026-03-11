@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -66,6 +67,9 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 		KeepAlive:                     20,
 		ConnectRetryDelay:             1 * time.Second,
 		ConnectTimeout:                30 * time.Second,
+		TlsCfg: &tls.Config{
+			InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
+		},
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
 			log.Info("consumer connected", "id", c.Id, "topic", c.Topic)
 			subsPerConsumer := c.Config.MqttConsumer.SubscriptionsPerConsumer

@@ -16,7 +16,7 @@ var (
 	_ = Describe("DeclareAndBind", func() {
 		BeforeEach(func() {
 			log.Setup()
-			rmqMgmt = mgmt.Start(context.Background(), []string{"amqp://localhost/"}, false)
+			rmqMgmt = mgmt.Start(context.Background(), []string{"amqp://localhost/"}, false, false)
 		})
 		It("should not declare anything when using predeclared queues", func() {
 			cfg := config.Config{Queues: config.Predeclared, PublishTo: "foobar"}

@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"context"
+	"crypto/tls"
 	"math/rand/v2"
 	"strings"
 	"sync/atomic"
@@ -64,6 +65,9 @@ func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 		KeepAlive:                     20,
 		ConnectRetryDelay:             1 * time.Second,
 		ConnectTimeout:                30 * time.Second,
+		TlsCfg: &tls.Config{
+			InsecureSkipVerify: p.Config.InsecureSkipTLSVerify,
+		},
 		OnConnectionUp: func(*autopaho.ConnectionManager, *paho.Connack) {
 			log.Info("publisher connected", "id", p.Id)
 		},

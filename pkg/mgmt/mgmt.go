@@ -2,6 +2,7 @@ package mgmt
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"os"
 	"strings"
@@ -22,20 +23,22 @@ var (
 )
 
 type Mgmt struct {
-	ctx            context.Context
-	conn           *rmq.AmqpConnection
-	declaredQueues map[string]bool
-	uris           []string
-	cleanupQueues  bool
+	ctx                   context.Context
+	conn                  *rmq.AmqpConnection
+	declaredQueues        map[string]bool
+	uris                  []string
+	cleanupQueues         bool
+	insecureSkipTLSVerify bool
 }
 
-func Start(ctx context.Context, uris []string, cleanupQueues bool) *Mgmt {
+func Start(ctx context.Context, uris []string, cleanupQueues bool, insecureSkipTLSVerify bool) *Mgmt {
 	once.Do(func() {
 		instance = &Mgmt{
-			ctx:            ctx,
-			uris:           uris,
-			cleanupQueues:  cleanupQueues,
-			declaredQueues: make(map[string]bool),
+			ctx:                   ctx,
+			uris:                  uris,
+			cleanupQueues:         cleanupQueues,
+			insecureSkipTLSVerify: insecureSkipTLSVerify,
+			declaredQueues:        make(map[string]bool),
 		}
 	})
 	return instance
@@ -55,6 +58,9 @@ func (m *Mgmt) connection() *rmq.AmqpConnection {
 		conn, err := rmq.Dial(context.TODO(), m.uris[0], &rmq.AmqpConnOptions{
 			SASLType:    amqp.SASLTypeAnonymous(),
 			ContainerID: "omq-management",
+			TLSConfig: &tls.Config{
+				InsecureSkipVerify: m.insecureSkipTLSVerify,
+			},
 		})
 		if err == nil {
 			m.conn = conn

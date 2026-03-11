@@ -2,8 +2,10 @@ package stomp
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -55,6 +57,7 @@ func (p *StompPublisher) Connect() {
 		}
 		uri := p.Config.PublisherUri[p.whichUri]
 		p.whichUri++
+		useTLS := strings.HasPrefix(uri, "stomp+ssl://") || strings.HasPrefix(uri, "stomps://")
 		parsedUri := utils.ParseURI(uri, "stomp", "61613")
 
 		var o = []func(*stomp.Conn) error{
@@ -62,7 +65,20 @@ func (p *StompPublisher) Connect() {
 			stomp.ConnOpt.Host("/"), // TODO
 		}
 
-		conn, err := stomp.Dial("tcp", parsedUri.Broker, o...)
+		var conn *stomp.Conn
+		var err error
+		if useTLS {
+			netConn, tlsErr := tls.Dial("tcp", parsedUri.Broker, &tls.Config{
+				InsecureSkipVerify: p.Config.InsecureSkipTLSVerify,
+			})
+			if tlsErr != nil {
+				err = tlsErr
+			} else {
+				conn, err = stomp.Connect(netConn, o...)
+			}
+		} else {
+			conn, err = stomp.Dial("tcp", parsedUri.Broker, o...)
+		}
 		if err != nil {
 			log.Error("publisher connection failed", "id", p.Id, "error", err.Error())
 			time.Sleep(1 * time.Second)

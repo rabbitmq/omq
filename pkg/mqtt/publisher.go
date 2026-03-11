@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"context"
+	"crypto/tls"
 	"math/rand/v2"
 	"sync/atomic"
 	"time"
@@ -66,7 +67,10 @@ func (p MqttPublisher) connectionOptions() *mqtt.ClientOptions {
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
 			log.Info("publisher connection lost", "id", p.Id)
 		}).
-		SetProtocolVersion(uint(p.Config.MqttPublisher.Version))
+		SetProtocolVersion(uint(p.Config.MqttPublisher.Version)).
+		SetTLSConfig(&tls.Config{
+			InsecureSkipVerify: p.Config.InsecureSkipTLSVerify,
+		})
 
 	var j int
 	for i, n := range utils.WrappedSequence(len(p.Config.PublisherUri), p.Id-1) {

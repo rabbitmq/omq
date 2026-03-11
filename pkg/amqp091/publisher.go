@@ -2,6 +2,7 @@ package amqp091
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"math/rand/v2"
 	"strconv"
@@ -76,12 +77,15 @@ func (p *Amqp091Publisher) Connect() {
 		}
 		uri := p.Config.PublisherUri[p.whichUri]
 		p.whichUri++
-		config := amqp091.Config{
+		dialCfg := amqp091.Config{
 			Properties: amqp091.Table{
 				"connection_name": fmt.Sprintf("omq-publisher-%d", p.Id),
 			},
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: p.Config.InsecureSkipTLSVerify,
+			},
 		}
-		conn, err := amqp091.DialConfig(uri, config)
+		conn, err := amqp091.DialConfig(uri, dialCfg)
 		if err != nil {
 			log.Error("publisher connection failed", "id", p.Id, "error", err.Error())
 			select {

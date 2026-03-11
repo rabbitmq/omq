@@ -2,6 +2,7 @@ package amqp091
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -65,12 +66,15 @@ func (c *Amqp091Consumer) Connect() {
 		}
 		uri := c.Config.ConsumerUri[c.whichUri]
 		c.whichUri++
-		config := amqp091.Config{
+		dialCfg := amqp091.Config{
 			Properties: amqp091.Table{
 				"connection_name": fmt.Sprintf("omq-consumer-%d", c.Id),
 			},
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
+			},
 		}
-		conn, err := amqp091.DialConfig(uri, config)
+		conn, err := amqp091.DialConfig(uri, dialCfg)
 		if err != nil {
 			log.Error("consumer connection failed", "id", c.Id, "error", err.Error())
 			select {

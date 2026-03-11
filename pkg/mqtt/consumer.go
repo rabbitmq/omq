@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -62,7 +63,10 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
 			log.Info("consumer connection lost", "id", c.Id)
 		}).
-		SetProtocolVersion(uint(c.Config.MqttConsumer.Version))
+		SetProtocolVersion(uint(c.Config.MqttConsumer.Version)).
+		SetTLSConfig(&tls.Config{
+			InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
+		})
 
 	opts.OnConnect = func(client mqtt.Client) {
 		subsPerConsumer := c.Config.MqttConsumer.SubscriptionsPerConsumer

@@ -2,8 +2,10 @@ package stomp
 
 import (
 	"context"
+	"crypto/tls"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -61,6 +63,7 @@ func (c *StompConsumer) Connect() {
 		}
 		uri := c.Config.ConsumerUri[c.whichUri]
 		c.whichUri++
+		useTLS := strings.HasPrefix(uri, "stomp+ssl://") || strings.HasPrefix(uri, "stomps://")
 		parsedUri := utils.ParseURI(uri, "stomp", "61613")
 
 		var o = []func(*stomp.Conn) error{
@@ -69,7 +72,20 @@ func (c *StompConsumer) Connect() {
 		}
 
 		log.Debug("connecting to broker", "id", c.Id, "broker", parsedUri.Broker)
-		conn, err := stomp.Dial("tcp", parsedUri.Broker, o...)
+		var conn *stomp.Conn
+		var err error
+		if useTLS {
+			netConn, tlsErr := tls.Dial("tcp", parsedUri.Broker, &tls.Config{
+				InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
+			})
+			if tlsErr != nil {
+				err = tlsErr
+			} else {
+				conn, err = stomp.Connect(netConn, o...)
+			}
+		} else {
+			conn, err = stomp.Dial("tcp", parsedUri.Broker, o...)
+		}
 
 		if err != nil {
 			log.Error("consumer connection failed", "id", c.Id, "error", err.Error())

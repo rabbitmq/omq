@@ -349,6 +349,8 @@ func RootCmd() *cobra.Command {
 		"URI for declaring queues (must be AMQP)")
 	rootCmd.PersistentFlags().BoolVar(&cfg.SpreadConnections, "spread-connections", true,
 		"Spread connections across URIs")
+	rootCmd.PersistentFlags().BoolVar(&cfg.InsecureSkipTLSVerify, "tls-skip-verify", false,
+		"Skip TLS certificate verification (insecure)")
 
 	rootCmd.PersistentFlags().IntVarP(&cfg.Publishers, "publishers", "x", 1,
 		"The number of publishers to start")
@@ -482,7 +484,7 @@ func start(cfg config.Config) {
 	metricsServer = metrics.Start(ctx, cfg)
 	defer metricsServer.Stop()
 
-	rmqMgmt = mgmt.Start(ctx, cfg.ManagementUri, cfg.CleanupQueues)
+	rmqMgmt = mgmt.Start(ctx, cfg.ManagementUri, cfg.CleanupQueues, cfg.InsecureSkipTLSVerify)
 	defer rmqMgmt.Stop()
 
 	var wg sync.WaitGroup

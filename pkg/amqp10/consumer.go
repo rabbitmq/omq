@@ -78,7 +78,8 @@ func (c *Amqp10Consumer) Connect() {
 			HostName:        vhost,
 			WriteQueueDepth: 10,
 			TLSConfig: &tls.Config{
-				ServerName: hostname,
+				ServerName:         hostname,
+				InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
 			},
 		})
 		if err != nil {

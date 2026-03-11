@@ -95,7 +95,8 @@ func (p *Amqp10Publisher) Connect() {
 			SASLType:        amqp.SASLTypeAnonymous(),
 			HostName:        vhost,
 			TLSConfig: &tls.Config{
-				ServerName: hostname,
+				ServerName:         hostname,
+				InsecureSkipVerify: p.Config.InsecureSkipTLSVerify,
 			},
 		})
 

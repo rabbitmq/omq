@@ -132,6 +132,7 @@ type Config struct {
 	ConsumerBatchSize       int
 	PublisherBatchWait      time.Duration
 	ConsumerBatchWait       time.Duration
+	InsecureSkipTLSVerify   bool
 }
 
 func NewConfig() Config {
