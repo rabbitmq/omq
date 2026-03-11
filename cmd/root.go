@@ -130,6 +130,8 @@ func RootCmd() *cobra.Command {
 		"AMQP property filters, eg. key1=&p:prefix")
 	amqpConsumerFlags.StringVar(&cfg.Amqp.SQLFilter, "amqp-sql-filter", "",
 		"AMQP SQL Filter expression eg 'proprties.subject LIKE 'foo-%'")
+	amqpConsumerFlags.BoolVar(&cfg.Amqp.ConsumeSettled, "amqp-consume-settled", false,
+		"Request the broker to send messages pre-settled (no consumer acknowledgment)")
 
 	amqp091PublisherFlags := pflag.NewFlagSet("amqp091-publisher", pflag.ContinueOnError)
 	amqp091ConsumerFlags := pflag.NewFlagSet("amqp091-consumer", pflag.ContinueOnError)

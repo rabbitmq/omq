@@ -130,10 +130,11 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 			receiver, err := c.Session.NewReceiver(context.TODO(),
 				c.Terminus,
 				&amqp.ReceiverOptions{
-					SourceDurability: durability,
-					Credit:           int32(c.Config.ConsumerCredits),
-					Properties:       buildLinkProperties(c.Config),
-					Filters:          buildLinkFilters(c.Config),
+					SourceDurability:          durability,
+					Credit:                    int32(c.Config.ConsumerCredits),
+					Properties:                buildLinkProperties(c.Config),
+					Filters:                   buildLinkFilters(c.Config),
+					RequestedSenderSettleMode: requestedSenderSettleMode(c.Config),
 				})
 			if err != nil {
 				if err == context.Canceled {
@@ -318,6 +319,13 @@ func (c *Amqp10Consumer) Stop(reason string) {
 		_ = c.Connection.Close()
 	}
 	log.Debug("consumer stopped", "id", c.Id, "reason", reason)
+}
+
+func requestedSenderSettleMode(cfg config.Config) *amqp.SenderSettleMode {
+	if cfg.Amqp.ConsumeSettled {
+		return amqp.SenderSettleModeSettled.Ptr()
+	}
+	return nil
 }
 
 func buildLinkProperties(cfg config.Config) map[string]any {

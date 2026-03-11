@@ -54,6 +54,7 @@ type AmqpOptions struct {
 	Subjects               []string
 	To                     []string
 	SendSettled            bool
+	ConsumeSettled         bool
 	PropertyFilters        map[string]string
 	AppPropertyTemplates   map[string]*template.Template
 	MsgAnnotationTemplates map[string]*template.Template
