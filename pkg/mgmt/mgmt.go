@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -55,10 +56,12 @@ func (m *Mgmt) connection() *rmq.AmqpConnection {
 
 	for {
 		// TODO support multiple URIs
+		u, _ := url.Parse(m.uris[0])
 		conn, err := rmq.Dial(context.TODO(), m.uris[0], &rmq.AmqpConnOptions{
 			SASLType:    amqp.SASLTypeAnonymous(),
 			ContainerID: "omq-management",
 			TLSConfig: &tls.Config{
+				ServerName:         u.Hostname(),
 				InsecureSkipVerify: m.insecureSkipTLSVerify,
 			},
 		})
