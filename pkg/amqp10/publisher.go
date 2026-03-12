@@ -47,7 +47,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publish
 		Connection: nil,
 		Sender:     nil,
 		Config:     cfg,
-		Terminus:   utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, id, cfg),
+		Terminus:   utils.ResolveTerminus(cfg.PublishToTemplate, id),
 		whichUri:   0,
 		ctx:        ctx,
 	}

@@ -32,7 +32,7 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *StompConsumer 
 		Id:           id,
 		Connection:   nil,
 		Subscription: nil,
-		Topic:        utils.ResolveTerminus(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, id, cfg),
+		Topic:        utils.ResolveTerminus(cfg.ConsumeFromTemplate, id),
 		Config:       cfg,
 		ctx:          ctx,
 		whichUri:     0,

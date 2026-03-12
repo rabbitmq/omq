@@ -86,7 +86,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	// declare queues for AMQP 1.0 and 0.9.1 publishers
 	if (cfg.PublisherProto == config.AMQP || cfg.PublisherProto == config.AMQP091) && strings.HasPrefix(cfg.PublishTo, "/queues/") {
 		for i := 1; i <= cfg.Publishers; i++ {
-			q := utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, i, cfg)
+			q := utils.ResolveTerminus(cfg.PublishToTemplate, i)
 			queueName := strings.TrimPrefix(q, "/queues/")
 			m.DeclareAndBind(cfg, queueName, i)
 		}
@@ -95,7 +95,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	if cfg.ConsumerProto == config.AMQP || cfg.ConsumerProto == config.AMQP091 {
 		if _, ok := strings.CutPrefix(cfg.ConsumeFrom, "/queues/"); ok {
 			for i := 1; i <= cfg.Consumers; i++ {
-				q := utils.ResolveTerminus(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, i, cfg)
+				q := utils.ResolveTerminus(cfg.ConsumeFromTemplate, i)
 				queueName := strings.TrimPrefix(q, "/queues/")
 				m.DeclareAndBind(cfg, queueName, i)
 			}
@@ -106,7 +106,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	// declare queues for STOMP publishers
 	if cfg.PublisherProto == config.STOMP && strings.HasPrefix(cfg.PublishTo, "/amq/queue/") {
 		for i := 1; i <= cfg.Publishers; i++ {
-			queueName := utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, i, cfg)
+			queueName := utils.ResolveTerminus(cfg.PublishToTemplate, i)
 			queueName = strings.TrimPrefix(queueName, "/amq/queue/")
 			m.DeclareAndBind(cfg, queueName, i)
 		}
@@ -114,7 +114,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	// declare queues for STOMP consumers
 	if cfg.ConsumerProto == config.STOMP && strings.HasPrefix(cfg.ConsumeFrom, "/amq/queue/") {
 		for i := 1; i <= cfg.Consumers; i++ {
-			q := utils.ResolveTerminus(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, i, cfg)
+			q := utils.ResolveTerminus(cfg.ConsumeFromTemplate, i)
 			queueName := strings.TrimPrefix(q, "/amq/queue/")
 			m.DeclareAndBind(cfg, queueName, i)
 		}
@@ -152,7 +152,7 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 		m.declaredQueues[queueName] = true
 	}
 
-	exchangeName, routingKey := parsePublishTo(cfg.PublisherProto, cfg.PublishTo, cfg.PublishToTemplate, id, cfg)
+	exchangeName, routingKey := parsePublishTo(cfg.PublisherProto, cfg.PublishToTemplate, id)
 
 	// explicitly set routing key overrides everything else
 	if cfg.BindingKey != "" {
@@ -180,8 +180,8 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 	return qi
 }
 
-func parsePublishTo(proto config.Protocol, publishTo string, publishToTemplate *template.Template, id int, cfg config.Config) (string, string) {
-	resolvedPublishTo := utils.ResolveTerminus(publishTo, publishToTemplate, id, cfg)
+func parsePublishTo(proto config.Protocol, publishToTemplate *template.Template, id int) (string, string) {
+	resolvedPublishTo := utils.ResolveTerminus(publishToTemplate, id)
 
 	parts := strings.Split(resolvedPublishTo, "/")
 

@@ -15,7 +15,6 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/Masterminds/sprig/v3"
-	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
 )
@@ -304,8 +303,8 @@ func ExecuteTemplate(tmpl *template.Template, id int, seq ...uint64) string {
 	return result
 }
 
-func ResolveTerminus(destination string, template *template.Template, id int, cfg config.Config) string {
-	return ExecuteTemplate(template, id)
+func ResolveTerminus(tmpl *template.Template, id int) string {
+	return ExecuteTemplate(tmpl, id)
 }
 
 // ReorderUrls reorders URLs based on SpreadConnections setting and client ID.

@@ -32,7 +32,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *StompPublishe
 	publisher := &StompPublisher{
 		Id:         id,
 		Connection: nil,
-		Topic:      utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, id, cfg),
+		Topic:      utils.ResolveTerminus(cfg.PublishToTemplate, id),
 		Config:     cfg,
 		ctx:        ctx,
 	}

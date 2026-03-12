@@ -37,7 +37,7 @@ type Amqp091Publisher struct {
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp091Publisher {
 	// Resolve the full destination first, then parse it
-	resolvedTerminus := utils.ResolveTerminus(cfg.PublishTo, cfg.PublishToTemplate, id, cfg)
+	resolvedTerminus := utils.ResolveTerminus(cfg.PublishToTemplate, id)
 	exchange, routingKey := parseExchangeAndRoutingKey(resolvedTerminus)
 	publisher := &Amqp091Publisher{
 		Id:           id,

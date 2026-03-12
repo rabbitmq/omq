@@ -23,7 +23,7 @@ type Mqtt5Consumer struct {
 }
 
 func NewMqtt5Consumer(ctx context.Context, cfg config.Config, id int) Mqtt5Consumer {
-	topic := publisherTopic(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, id, cfg)
+	topic := publisherTopic(cfg.ConsumeFromTemplate, id)
 	return Mqtt5Consumer{
 		Id:         id,
 		Connection: nil,

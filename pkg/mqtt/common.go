@@ -46,9 +46,9 @@ func stringsToUrls(connectionStrings []string) []*url.URL {
 	return serverUrls
 }
 
-func publisherTopic(topic string, topicTemplate *template.Template, id int, cfg config.Config) string {
+func publisherTopic(topicTemplate *template.Template, id int) string {
 	// Resolve the destination using the generic helper
-	topic = utils.ResolveTerminus(topic, topicTemplate, id, cfg)
+	topic := utils.ResolveTerminus(topicTemplate, id)
 	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix
 	// since MQTT has no concept of exchanges, we need to remove it
 	// this should get more flexible in the future

@@ -23,7 +23,7 @@ type MqttConsumer struct {
 }
 
 func NewMqttConsumer(ctx context.Context, cfg config.Config, id int) MqttConsumer {
-	topic := publisherTopic(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, id, cfg)
+	topic := publisherTopic(cfg.ConsumeFromTemplate, id)
 	return MqttConsumer{
 		Id:         id,
 		Connection: nil,
@@ -39,7 +39,6 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 
 	handler := func(client mqtt.Client, msg mqtt.Message) {
 		payload := msg.Payload()
-		handleMessage(payload)
 		metrics.MessagesConsumedMetric(0).Inc()
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 		metrics.RecordEndToEndLatency(latency)
@@ -128,7 +127,4 @@ func (c MqttConsumer) Stop(reason string) {
 	if c.Connection != nil {
 		c.Connection.Disconnect(250)
 	}
-}
-
-func handleMessage(msg []byte) {
 }

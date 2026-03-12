@@ -35,7 +35,7 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *Amqp091Consume
 		Id:         id,
 		Connection: nil,
 		Channel:    nil,
-		Terminus:   utils.ResolveTerminus(cfg.ConsumeFrom, cfg.ConsumeFromTemplate, id, cfg),
+		Terminus:   utils.ResolveTerminus(cfg.ConsumeFromTemplate, id),
 		Config:     cfg,
 		whichUri:   0,
 		ctx:        ctx,
