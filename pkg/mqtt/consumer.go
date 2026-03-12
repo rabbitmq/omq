@@ -125,7 +125,9 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 
 func (c MqttConsumer) Stop(reason string) {
 	log.Debug("closing consumer connection", "id", c.Id, "reason", reason)
-	c.Connection.Disconnect(250)
+	if c.Connection != nil {
+		c.Connection.Disconnect(250)
+	}
 }
 
 func handleMessage(msg []byte) {
