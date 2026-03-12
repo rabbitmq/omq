@@ -474,6 +474,16 @@ func start(cfg config.Config) {
 		os.Exit(1)
 	}
 
+	// Warn about unsupported requeue/discard features for STOMP and MQTT consumers
+	if cfg.ConsumerProto == config.STOMP || cfg.ConsumerProto == config.MQTT {
+		if cfg.RequeueRate > 0 || len(cfg.RequeueWhenPriority) > 0 {
+			log.Info("WARNING: --requeue-rate and --requeue-when-priority are ignored for STOMP/MQTT consumers")
+		}
+		if cfg.DiscardRate > 0 || len(cfg.DiscardWhenPriority) > 0 {
+			log.Info("WARNING: --discard-rate and --discard-when-priority are ignored for STOMP/MQTT consumers")
+		}
+	}
+
 	if cfg.ExpectedInstances > 1 {
 		joinCluster(cfg.ExpectedInstances, cfg.SyncName)
 	}
