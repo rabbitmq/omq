@@ -82,6 +82,9 @@ func (c *StompConsumer) Connect() {
 				err = tlsErr
 			} else {
 				conn, err = stomp.Connect(netConn, o...)
+				if err != nil {
+					_ = netConn.Close()
+				}
 			}
 		} else {
 			conn, err = stomp.Dial("tcp", parsedUri.Broker, o...)
