@@ -8,6 +8,9 @@ import (
 	"github.com/thediveo/enumflag/v2"
 )
 
+// ReconnectDelay is the default delay between reconnection attempts.
+const ReconnectDelay = 1 * time.Second
+
 type Protocol int
 
 const (

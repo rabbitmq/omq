@@ -95,7 +95,7 @@ func (c *StompConsumer) Connect() {
 			select {
 			case <-c.ctx.Done():
 				return
-			case <-time.After(1 * time.Second):
+			case <-time.After(config.ReconnectDelay):
 				continue
 			}
 		} else {

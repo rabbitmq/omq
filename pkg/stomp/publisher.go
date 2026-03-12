@@ -84,7 +84,7 @@ func (p *StompPublisher) Connect() {
 		}
 		if err != nil {
 			log.Error("publisher connection failed", "id", p.Id, "error", err.Error())
-			time.Sleep(1 * time.Second)
+			time.Sleep(config.ReconnectDelay)
 		} else {
 			p.Connection = conn
 		}

@@ -80,7 +80,7 @@ func (c *Amqp091Consumer) Connect() {
 			select {
 			case <-c.ctx.Done():
 				return
-			case <-time.After(1 * time.Second):
+			case <-time.After(config.ReconnectDelay):
 				continue
 			}
 		} else {
@@ -96,7 +96,7 @@ func (c *Amqp091Consumer) Connect() {
 				return
 			} else {
 				log.Error("consumer failed to create a channel", "id", c.Id, "error", err.Error())
-				time.Sleep(1 * time.Second)
+				time.Sleep(config.ReconnectDelay)
 			}
 		} else {
 			c.Channel = channel

@@ -50,7 +50,7 @@ func (p *MqttPublisher) Connect() {
 		select {
 		case <-p.ctx.Done():
 			return
-		case <-time.After(1 * time.Second):
+		case <-time.After(config.ReconnectDelay):
 			continue
 		}
 	}
@@ -141,7 +141,7 @@ func (p MqttPublisher) StartPublishing() string {
 
 func (p MqttPublisher) Send() {
 	if !p.Connection.IsConnected() {
-		time.Sleep(1 * time.Second)
+		time.Sleep(config.ReconnectDelay)
 		return
 	}
 	if p.Config.SizeTemplate != nil {

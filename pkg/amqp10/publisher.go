@@ -103,7 +103,7 @@ func (p *Amqp10Publisher) Connect() {
 		if err != nil {
 			log.Error("connection failed", "id", p.Id, "error", err.Error())
 			select {
-			case <-time.After(1 * time.Second):
+			case <-time.After(config.ReconnectDelay):
 				continue
 			case <-p.ctx.Done():
 				return
@@ -120,7 +120,7 @@ func (p *Amqp10Publisher) Connect() {
 		})
 		if err != nil {
 			log.Error("publisher failed to create a session", "id", p.Id, "error", err.Error())
-			time.Sleep(1 * time.Second)
+			time.Sleep(config.ReconnectDelay)
 			p.Connect()
 		} else {
 			p.Session = session
@@ -160,7 +160,7 @@ func (p *Amqp10Publisher) CreateSender() {
 			select {
 			case <-p.ctx.Done():
 				return
-			case <-time.After(1 * time.Second):
+			case <-time.After(config.ReconnectDelay):
 				p.Connect()
 			}
 		} else {

@@ -89,7 +89,7 @@ func (p *Amqp091Publisher) Connect() {
 		if err != nil {
 			log.Error("publisher connection failed", "id", p.Id, "error", err.Error())
 			select {
-			case <-time.After(1 * time.Second):
+			case <-time.After(config.ReconnectDelay):
 				continue
 			case <-p.ctx.Done():
 				return
@@ -101,7 +101,7 @@ func (p *Amqp091Publisher) Connect() {
 	}
 	for p.Channel, err = p.Connection.Channel(); err != nil; {
 		log.Error("channel creation failed", "id", p.Id, "error", err.Error())
-		time.Sleep(1 * time.Second)
+		time.Sleep(config.ReconnectDelay)
 	}
 	p.confirms = make(chan amqp091.Confirmation, p.Config.MaxInFlight)
 	p.returns = make(chan amqp091.Return)
