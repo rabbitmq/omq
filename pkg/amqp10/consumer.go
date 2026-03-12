@@ -259,11 +259,11 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 					return
 				}
 				log.Error("failed to "+outcome+" message", "id", c.Id, "terminus", c.Terminus, "error", err)
-			} else {
-				metrics.MessagesConsumedMetric(priority).Inc()
-				i++
-				log.Debug("message "+pastTense(outcome), "id", c.Id, "terminus", c.Terminus)
-			}
+		} else {
+			metrics.MessagesConsumedMetric(priority).Inc()
+			i++
+			log.Debug("message "+utils.PastTense(outcome), "id", c.Id, "terminus", c.Terminus)
+		}
 		}
 	}
 
@@ -294,18 +294,6 @@ func (c *Amqp10Consumer) outcome(ctx context.Context, msg *amqp.Message, priorit
 		return "reject", c.Receiver.RejectMessage(ctx, msg, nil)
 	}
 	return "accept", c.Receiver.AcceptMessage(ctx, msg)
-}
-
-func pastTense(outcome string) string {
-	switch outcome {
-	case "accept":
-		return "accepted"
-	case "release":
-		return "released"
-	case "reject":
-		return "rejected"
-	}
-	return outcome
 }
 
 func (c *Amqp10Consumer) Stop(reason string) {

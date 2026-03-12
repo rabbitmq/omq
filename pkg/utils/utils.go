@@ -322,3 +322,22 @@ func ReorderUrls(urls []*url.URL, spreadConnections bool, clientId int) []*url.U
 	}
 	return reorderedUrls
 }
+
+// PastTense converts message outcome verbs to their past tense form for logging.
+func PastTense(outcome string) string {
+	switch outcome {
+	case "accept":
+		return "accepted"
+	case "release":
+		return "released"
+	case "reject":
+		return "rejected"
+	case "acknowledge":
+		return "acknowledged"
+	case "nack-requeue":
+		return "nacked (requeued)"
+	case "nack-discard":
+		return "nacked (discarded)"
+	}
+	return outcome
+}

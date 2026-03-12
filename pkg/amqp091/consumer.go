@@ -246,9 +246,9 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 				// Don't increment counter on error, but continue to avoid infinite loop
 				continue
 			} else {
-				metrics.MessagesConsumedMetric(priority).Inc()
-				i++
-				log.Debug("message "+pastTense(outcome), "id", c.Id, "terminus", c.Terminus)
+			metrics.MessagesConsumedMetric(priority).Inc()
+			i++
+			log.Debug("message "+utils.PastTense(outcome), "id", c.Id, "terminus", c.Terminus)
 			}
 		}
 	}
@@ -280,24 +280,6 @@ func (c *Amqp091Consumer) outcome(tag uint64, priority int) (string, error) {
 		return "nack-discard", c.Channel.Nack(tag, false, false)
 	}
 	return "acknowledge", c.Channel.Ack(tag, false)
-}
-
-func pastTense(outcome string) string {
-	switch outcome {
-	case "accept":
-		return "accepted"
-	case "release":
-		return "released"
-	case "reject":
-		return "rejected"
-	case "acknowledge":
-		return "acknowledged"
-	case "nack-requeue":
-		return "nacked (requeued)"
-	case "nack-discard":
-		return "nacked (discarded)"
-	}
-	return outcome
 }
 
 func (c *Amqp091Consumer) Stop(reason string) {
