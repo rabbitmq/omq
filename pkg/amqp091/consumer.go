@@ -61,11 +61,7 @@ func (c *Amqp091Consumer) Connect() {
 	c.Connection = nil
 
 	for c.Connection == nil {
-		if c.whichUri >= len(c.Config.ConsumerUri) {
-			c.whichUri = 0
-		}
-		uri := c.Config.ConsumerUri[c.whichUri]
-		c.whichUri++
+		uri := utils.NextURI(c.Config.ConsumerUri, &c.whichUri)
 		dialCfg := amqp091.Config{
 			Properties: amqp091.Table{
 				"connection_name": fmt.Sprintf("omq-consumer-%d", c.Id),

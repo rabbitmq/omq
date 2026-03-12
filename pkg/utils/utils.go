@@ -322,6 +322,17 @@ func ReorderUrls(urls []*url.URL, spreadConnections bool, clientId int) []*url.U
 	return reorderedUrls
 }
 
+// NextURI returns the next URI from the list and updates the index.
+// The index wraps around when it reaches the end of the list.
+func NextURI(uris []string, index *int) string {
+	if *index >= len(uris) {
+		*index = 0
+	}
+	uri := uris[*index]
+	*index++
+	return uri
+}
+
 // PastTense converts message outcome verbs to their past tense form for logging.
 func PastTense(outcome string) string {
 	switch outcome {

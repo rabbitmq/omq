@@ -72,11 +72,7 @@ func (p *Amqp091Publisher) Connect() {
 	p.Connection = nil
 
 	for p.Connection == nil {
-		if p.whichUri >= len(p.Config.PublisherUri) {
-			p.whichUri = 0
-		}
-		uri := p.Config.PublisherUri[p.whichUri]
-		p.whichUri++
+		uri := utils.NextURI(p.Config.PublisherUri, &p.whichUri)
 		dialCfg := amqp091.Config{
 			Properties: amqp091.Table{
 				"connection_name": fmt.Sprintf("omq-publisher-%d", p.Id),

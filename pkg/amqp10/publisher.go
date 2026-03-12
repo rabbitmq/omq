@@ -83,11 +83,7 @@ func (p *Amqp10Publisher) Connect() {
 	}
 
 	for p.Connection == nil {
-		if p.whichUri >= len(p.Config.PublisherUri) {
-			p.whichUri = 0
-		}
-		uri := p.Config.PublisherUri[p.whichUri]
-		p.whichUri++
+		uri := utils.NextURI(p.Config.PublisherUri, &p.whichUri)
 		hostname, vhost := hostAndVHost(uri)
 		conn, err = amqp.Dial(context.TODO(), uri, &amqp.ConnOptions{
 			WriteQueueDepth: 10,

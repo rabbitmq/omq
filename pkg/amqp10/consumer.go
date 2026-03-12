@@ -66,11 +66,7 @@ func (c *Amqp10Consumer) Connect() {
 	c.Connection = nil
 
 	for c.Connection == nil {
-		if c.whichUri >= len(c.Config.ConsumerUri) {
-			c.whichUri = 0
-		}
-		uri := c.Config.ConsumerUri[c.whichUri]
-		c.whichUri++
+		uri := utils.NextURI(c.Config.ConsumerUri, &c.whichUri)
 		hostname, vhost := hostAndVHost(uri)
 		conn, err := amqp.Dial(c.ctx, uri, &amqp.ConnOptions{
 			ContainerID:     utils.InjectId(c.Config.ConsumerId, c.Id),

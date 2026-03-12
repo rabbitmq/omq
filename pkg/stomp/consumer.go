@@ -58,11 +58,7 @@ func (c *StompConsumer) Connect() {
 	c.Connection = nil
 
 	for c.Connection == nil {
-		if c.whichUri >= len(c.Config.ConsumerUri) {
-			c.whichUri = 0
-		}
-		uri := c.Config.ConsumerUri[c.whichUri]
-		c.whichUri++
+		uri := utils.NextURI(c.Config.ConsumerUri, &c.whichUri)
 		useTLS := strings.HasPrefix(uri, "stomp+ssl://") || strings.HasPrefix(uri, "stomps://")
 		parsedUri := utils.ParseURI(uri, "stomp", "61613")
 
