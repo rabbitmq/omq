@@ -123,7 +123,7 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		default:
-			receiver, err := c.Session.NewReceiver(c.ctx,
+			receiver, err := c.Session.NewReceiver(ctx,
 				c.Terminus,
 				&amqp.ReceiverOptions{
 					SourceDurability:          durability,

@@ -57,7 +57,7 @@ func (m *Mgmt) connection() *rmq.AmqpConnection {
 	for {
 		// TODO support multiple URIs
 		u, _ := url.Parse(m.uris[0])
-		conn, err := rmq.Dial(context.TODO(), m.uris[0], &rmq.AmqpConnOptions{
+		conn, err := rmq.Dial(m.ctx, m.uris[0], &rmq.AmqpConnOptions{
 			SASLType:    amqp.SASLTypeAnonymous(),
 			ContainerID: "omq-management",
 			TLSConfig: &tls.Config{
@@ -141,7 +141,7 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 		return nil
 	}
 
-	qi, err := conn.Management().DeclareQueue(context.TODO(), queueSpec)
+	qi, err := conn.Management().DeclareQueue(context.Background(), queueSpec)
 	if err != nil {
 		log.Error("Failed to declare queue", "name", queueName, "error", err)
 		os.Exit(1)
@@ -165,7 +165,7 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 	}
 
 	if exchangeName != "amq.default" {
-		_, err = instance.connection().Management().Bind(context.TODO(), &rmq.ExchangeToQueueBindingSpecification{
+		_, err = instance.connection().Management().Bind(context.Background(), &rmq.ExchangeToQueueBindingSpecification{
 			SourceExchange:   exchangeName,
 			DestinationQueue: queueName,
 			BindingKey:       routingKey,
@@ -269,13 +269,15 @@ func (m *Mgmt) DeleteDeclaredQueues() {
 	}
 
 	log.Info("Deleting queues...")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	for queueName := range m.declaredQueues {
 		if m.conn == nil {
 			log.Info("Management connection lost; some queues were not deleted")
 			return
 		}
 		log.Debug("deleting queue...", "name", queueName)
-		err := m.conn.Management().DeleteQueue(context.TODO(), queueName)
+		err := m.conn.Management().DeleteQueue(ctx, queueName)
 		if err != nil {
 			log.Info("Failed to delete a queue", "queue", queueName, "error", err)
 		}
