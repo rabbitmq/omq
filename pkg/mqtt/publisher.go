@@ -36,13 +36,25 @@ func NewMqttPublisher(ctx context.Context, cfg config.Config, id int) MqttPublis
 }
 
 func (p *MqttPublisher) Connect() {
-	var token mqtt.Token
-
 	opts := p.connectionOptions()
 	connection := mqtt.NewClient(opts)
 	for {
-		token = connection.Connect()
-		token.Wait()
+		select {
+		case <-p.ctx.Done():
+			return
+		default:
+		}
+		token := connection.Connect()
+		// Use WaitTimeout to allow checking context cancellation
+		// The connect timeout is set in connectionOptions, so we just need
+		// to periodically check if context is cancelled
+		for !token.WaitTimeout(100 * time.Millisecond) {
+			select {
+			case <-p.ctx.Done():
+				return
+			default:
+			}
+		}
 		if token.Error() == nil {
 			break
 		}

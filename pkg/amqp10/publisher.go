@@ -85,7 +85,7 @@ func (p *Amqp10Publisher) Connect() {
 	for p.Connection == nil {
 		uri := utils.NextURI(p.Config.PublisherUri, &p.whichUri)
 		hostname, vhost := hostAndVHost(uri)
-		conn, err = amqp.Dial(context.TODO(), uri, &amqp.ConnOptions{
+		conn, err = amqp.Dial(p.ctx, uri, &amqp.ConnOptions{
 			WriteQueueDepth: 10,
 			ContainerID:     utils.InjectId(p.Config.PublisherId, p.Id),
 			SASLType:        amqp.SASLTypeAnonymous(),
@@ -111,7 +111,7 @@ func (p *Amqp10Publisher) Connect() {
 	}
 
 	for p.Session == nil {
-		session, err := p.Connection.NewSession(context.TODO(), &amqp.SessionOptions{
+		session, err := p.Connection.NewSession(p.ctx, &amqp.SessionOptions{
 			TransferQueueDepth: 10,
 		})
 		if err != nil {
@@ -144,7 +144,7 @@ func (p *Amqp10Publisher) CreateSender() {
 	}
 
 	for p.Sender == nil {
-		sender, err := p.Session.NewSender(context.TODO(), p.Terminus, &amqp.SenderOptions{
+		sender, err := p.Session.NewSender(p.ctx, p.Terminus, &amqp.SenderOptions{
 			SettlementQueueDepth: 10,
 
 			SettlementMode:   settleMode,
@@ -218,7 +218,7 @@ func (p *Amqp10Publisher) publishSettled() string {
 				p.Connect()
 				continue
 			}
-			err := p.Sender.Send(context.TODO(), msg, nil)
+			err := p.Sender.Send(p.ctx, msg, nil)
 			latency := time.Since(startTime)
 			if log.IsDebug() {
 				log.Debug("message sent", "id", p.Id, "destination", p.Terminus, "latency", latency, "appProps", msg.ApplicationProperties)

@@ -140,6 +140,9 @@ func (p Mqtt5Publisher) StartPublishing() string {
 }
 
 func (p Mqtt5Publisher) Send() {
+	if p.Connection == nil {
+		return
+	}
 	if p.Config.SizeTemplate != nil {
 		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	}
@@ -168,7 +171,7 @@ func (p Mqtt5Publisher) Send() {
 func (p Mqtt5Publisher) Stop(reason string) {
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Connection != nil {
-		disconnectCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 		_ = p.Connection.Disconnect(disconnectCtx)
 	}

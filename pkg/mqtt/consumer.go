@@ -98,10 +98,18 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 		opts.AddBroker(parsedUri.Broker).SetUsername(parsedUri.Username).SetPassword(parsedUri.Password)
 	}
 
-	var token mqtt.Token
 	c.Connection = mqtt.NewClient(opts)
-	token = c.Connection.Connect()
-	token.Wait()
+	token := c.Connection.Connect()
+	// Use WaitTimeout to allow checking context cancellation
+	for !token.WaitTimeout(100 * time.Millisecond) {
+		select {
+		case <-c.ctx.Done():
+			close(cosumerReady)
+			c.Stop("context cancelled")
+			return
+		default:
+		}
+	}
 	if token.Error() != nil {
 		log.Error("failed to connect", "id", c.Id, "error", token.Error())
 	}
@@ -114,9 +122,8 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 		case <-c.ctx.Done():
 			c.Stop("time limit reached")
 			return
-		default:
-			time.Sleep(1 * time.Second)
-
+		case <-time.After(100 * time.Millisecond):
+			// Check more frequently to respond to context cancellation faster
 		}
 	}
 	c.Stop("--cmessages value reached")

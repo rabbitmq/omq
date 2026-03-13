@@ -69,6 +69,7 @@ func (c *Amqp091Consumer) Connect() {
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
 			},
+			Dial: amqp091.DefaultDial(10 * time.Second),
 		}
 		conn, err := amqp091.DialConfig(uri, dialCfg)
 		if err != nil {

@@ -639,13 +639,21 @@ func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 					}
 				}
 			} else if !cfg.ParallelConsumers {
-				<-consumerReady
+				select {
+				case <-ctx.Done():
+					return
+				case <-consumerReady:
+				}
 			}
 		}
 	}
 	if cfg.ParallelConsumers || cfg.ConsumerBatchSize > 0 {
 		for _, ch := range readyChannels {
-			<-ch
+			select {
+			case <-ctx.Done():
+				return
+			case <-ch:
+			}
 		}
 	}
 }
@@ -681,13 +689,21 @@ func startPublishers(ctx context.Context, wg *sync.WaitGroup, startPublishing ch
 					}
 				}
 			} else if !cfg.ParallelPublishers {
-				<-publisherReady
+				select {
+				case <-ctx.Done():
+					return
+				case <-publisherReady:
+				}
 			}
 		}
 	}
 	if cfg.ParallelPublishers || cfg.PublisherBatchSize > 0 {
 		for _, ch := range readyChannels {
-			<-ch
+			select {
+			case <-ctx.Done():
+				return
+			case <-ch:
+			}
 		}
 	}
 }
@@ -956,9 +972,9 @@ func handleInterupt(ctx context.Context, cancel context.CancelFunc) {
 		case <-c:
 			cancel()
 			log.Print("Received SIGTERM, shutting down...")
-			// PersistentPostRun does all the cleanup
-			// this is just just a backup mechanism
-			time.Sleep(5 * time.Second)
+			// Give goroutines a short time to clean up gracefully,
+			// then force exit to avoid hanging on stuck connections
+			time.Sleep(500 * time.Millisecond)
 			os.Exit(0)
 		case <-ctx.Done():
 			return

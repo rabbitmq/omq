@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/rand/v2"
+	"net"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -17,6 +18,8 @@ import (
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
 )
+
+const dialTimeout = 10 * time.Second
 
 type StompPublisher struct {
 	Id         int
@@ -63,8 +66,9 @@ func (p *StompPublisher) Connect() {
 
 		var conn *stomp.Conn
 		var err error
+		dialer := &net.Dialer{Timeout: dialTimeout}
 		if useTLS {
-			netConn, tlsErr := tls.Dial("tcp", parsedUri.Broker, &tls.Config{
+			netConn, tlsErr := tls.DialWithDialer(dialer, "tcp", parsedUri.Broker, &tls.Config{
 				InsecureSkipVerify: p.Config.InsecureSkipTLSVerify,
 			})
 			if tlsErr != nil {
@@ -76,7 +80,15 @@ func (p *StompPublisher) Connect() {
 				}
 			}
 		} else {
-			conn, err = stomp.Dial("tcp", parsedUri.Broker, o...)
+			netConn, dialErr := dialer.Dial("tcp", parsedUri.Broker)
+			if dialErr != nil {
+				err = dialErr
+			} else {
+				conn, err = stomp.Connect(netConn, o...)
+				if err != nil {
+					_ = netConn.Close()
+				}
+			}
 		}
 		if err != nil {
 			log.Error("publisher connection failed", "id", p.Id, "error", err.Error())

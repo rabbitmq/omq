@@ -3,6 +3,7 @@ package stomp
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -70,8 +71,9 @@ func (c *StompConsumer) Connect() {
 		log.Debug("connecting to broker", "id", c.Id, "broker", parsedUri.Broker)
 		var conn *stomp.Conn
 		var err error
+		dialer := &net.Dialer{Timeout: dialTimeout}
 		if useTLS {
-			netConn, tlsErr := tls.Dial("tcp", parsedUri.Broker, &tls.Config{
+			netConn, tlsErr := tls.DialWithDialer(dialer, "tcp", parsedUri.Broker, &tls.Config{
 				InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
 			})
 			if tlsErr != nil {
@@ -83,7 +85,15 @@ func (c *StompConsumer) Connect() {
 				}
 			}
 		} else {
-			conn, err = stomp.Dial("tcp", parsedUri.Broker, o...)
+			netConn, dialErr := dialer.Dial("tcp", parsedUri.Broker)
+			if dialErr != nil {
+				err = dialErr
+			} else {
+				conn, err = stomp.Connect(netConn, o...)
+				if err != nil {
+					_ = netConn.Close()
+				}
+			}
 		}
 
 		if err != nil {

@@ -113,13 +113,18 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 	}
 
 	var err error
-	c.Connection, err = autopaho.NewConnection(c.ctx, opts)
+	connection, err := autopaho.NewConnection(c.ctx, opts)
 	if err != nil {
 		log.Error("consumer connection failed", "id", c.Id, "error", err)
+		close(consumerReady)
+		return
 	}
+	c.Connection = connection
 	err = c.Connection.AwaitConnection(c.ctx)
 	if err != nil {
 		// AwaitConnection only returns an error if the context is cancelled
+		close(consumerReady)
+		c.Stop("context cancelled")
 		return
 	}
 	close(consumerReady)
@@ -130,9 +135,8 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 		case <-c.ctx.Done():
 			c.Stop("time limit reached")
 			return
-		default:
-			time.Sleep(1 * time.Second)
-
+		case <-time.After(100 * time.Millisecond):
+			// Check more frequently to respond to context cancellation faster
 		}
 	}
 	c.Stop("--cmessages value reached")
@@ -141,7 +145,7 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 func (c Mqtt5Consumer) Stop(reason string) {
 	log.Debug("closing consumer connection", "id", c.Id, "reason", reason)
 	if c.Connection != nil {
-		disconnectCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 		_ = c.Connection.Disconnect(disconnectCtx)
 	}
