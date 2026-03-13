@@ -103,7 +103,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 			log.Info("Not declaring queues for AMQP consumers since the address doesn't start with /queues/")
 		}
 	}
-	// declare queues for STOMP publishers
+	// declare queues for STOMP publishers using /amq/queue/ destination
 	if cfg.PublisherProto == config.STOMP && strings.HasPrefix(cfg.PublishTo, "/amq/queue/") {
 		for i := 1; i <= cfg.Publishers; i++ {
 			queueName := utils.ResolveTerminus(cfg.PublishToTemplate, i)
@@ -111,7 +111,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 			m.DeclareAndBind(cfg, queueName, i)
 		}
 	}
-	// declare queues for STOMP consumers
+	// declare queues for STOMP consumers using /amq/queue/ destination
 	if cfg.ConsumerProto == config.STOMP && strings.HasPrefix(cfg.ConsumeFrom, "/amq/queue/") {
 		for i := 1; i <= cfg.Consumers; i++ {
 			q := utils.ResolveTerminus(cfg.ConsumeFromTemplate, i)

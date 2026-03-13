@@ -115,7 +115,7 @@ func (c *StompConsumer) Subscribe() {
 	var err error
 
 	if c.Connection != nil {
-		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, buildSubscribeOpts(c.Config)...)
+		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, buildSubscribeOpts(c.Config, c.Topic)...)
 		if err != nil {
 			log.Error("subscription failed", "id", c.Id, "queue", c.Topic, "error", err.Error())
 			return
@@ -215,7 +215,7 @@ func (c *StompConsumer) Stop(reason string) {
 	log.Debug("consumer stopped", "id", c.Id, "reason", reason)
 }
 
-func buildSubscribeOpts(cfg config.Config) []func(*frame.Frame) error {
+func buildSubscribeOpts(cfg config.Config, destination string) []func(*frame.Frame) error {
 	var subscribeOpts []func(*frame.Frame) error
 
 	subscribeOpts = append(subscribeOpts,
@@ -238,6 +238,29 @@ func buildSubscribeOpts(cfg config.Config) []func(*frame.Frame) error {
 		subscribeOpts = append(subscribeOpts,
 			stomp.SubscribeOpt.Header("x-stream-filter", cfg.StreamFilterValues))
 	}
+
+	switch cfg.Queues {
+	case config.Classic:
+		subscribeOpts = append(subscribeOpts,
+			stomp.SubscribeOpt.Header("x-queue-type", "classic"))
+	case config.Quorum:
+		subscribeOpts = append(subscribeOpts,
+			stomp.SubscribeOpt.Header("x-queue-type", "quorum"))
+	case config.Stream:
+		subscribeOpts = append(subscribeOpts,
+			stomp.SubscribeOpt.Header("x-queue-type", "stream"))
+	case config.Exclusive:
+		subscribeOpts = append(subscribeOpts,
+			stomp.SubscribeOpt.Header("exclusive", "true"))
+	case config.Predeclared:
+		// For /topic/ destinations with transient queues (QueueDurability == None),
+		// use exclusive to avoid deprecated transient non-exclusive queues
+		if strings.HasPrefix(destination, "/topic/") && cfg.QueueDurability == config.None {
+			subscribeOpts = append(subscribeOpts,
+				stomp.SubscribeOpt.Header("exclusive", "true"))
+		}
+	}
+
 	return subscribeOpts
 }
 
