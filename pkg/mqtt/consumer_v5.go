@@ -145,7 +145,7 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 func (c Mqtt5Consumer) Stop(reason string) {
 	log.Debug("closing consumer connection", "id", c.Id, "reason", reason)
 	if c.Connection != nil {
-		disconnectCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = c.Connection.Disconnect(disconnectCtx)
 	}

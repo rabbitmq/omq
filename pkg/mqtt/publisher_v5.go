@@ -171,7 +171,7 @@ func (p Mqtt5Publisher) Send() {
 func (p Mqtt5Publisher) Stop(reason string) {
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Connection != nil {
-		disconnectCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = p.Connection.Disconnect(disconnectCtx)
 	}

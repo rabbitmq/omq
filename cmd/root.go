@@ -972,9 +972,9 @@ func handleInterupt(ctx context.Context, cancel context.CancelFunc) {
 		case <-c:
 			cancel()
 			log.Print("Received SIGTERM, shutting down...")
-			// Give goroutines a short time to clean up gracefully,
-			// then force exit to avoid hanging on stuck connections
-			time.Sleep(500 * time.Millisecond)
+			// Give goroutines time to clean up gracefully (stop publishers/consumers,
+			// delete queues if --cleanup-queues is set), then force exit
+			time.Sleep(3 * time.Second)
 			os.Exit(0)
 		case <-ctx.Done():
 			return
