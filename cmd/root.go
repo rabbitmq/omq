@@ -849,51 +849,49 @@ func sanitizeConfig(cfg *config.Config) error {
 	// AMQP application properties
 	cfg.Amqp.AppPropertyTemplates = make(map[string]*template.Template)
 	for _, val := range amqpAppProperties {
-		parts := strings.Split(val, "=")
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid AMQP application property: %s, use key=v1,v2 format", val)
-		}
-
-		tmpl, err := config.ParseTemplateValue(parts[1])
+		key, value, err := parseKeyValue(val, "AMQP application property")
 		if err != nil {
-			return fmt.Errorf("invalid template in AMQP application property %s: %v", parts[0], err)
+			return err
 		}
-		cfg.Amqp.AppPropertyTemplates[parts[0]] = tmpl
+		tmpl, err := config.ParseTemplateValue(value)
+		if err != nil {
+			return fmt.Errorf("invalid template in AMQP application property %s: %v", key, err)
+		}
+		cfg.Amqp.AppPropertyTemplates[key] = tmpl
 	}
 
 	// AMQP message annotations
 	cfg.Amqp.MsgAnnotationTemplates = make(map[string]*template.Template)
 	for _, val := range amqpMsgAnnotations {
-		parts := strings.Split(val, "=")
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid AMQP message annotation: %s, use key=v1,v2 format", val)
-		}
-
-		tmpl, err := config.ParseTemplateValue(parts[1])
+		key, value, err := parseKeyValue(val, "AMQP message annotation")
 		if err != nil {
-			return fmt.Errorf("invalid template in AMQP message annotation %s: %v", parts[0], err)
+			return err
 		}
-		cfg.Amqp.MsgAnnotationTemplates[parts[0]] = tmpl
+		tmpl, err := config.ParseTemplateValue(value)
+		if err != nil {
+			return fmt.Errorf("invalid template in AMQP message annotation %s: %v", key, err)
+		}
+		cfg.Amqp.MsgAnnotationTemplates[key] = tmpl
 	}
 
 	// AMQP application property filters
 	cfg.Amqp.AppPropertyFilters = make(map[string]string)
 	for _, filter := range amqpAppPropertyFilters {
-		parts := strings.SplitN(filter, "=", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid AMQP application property filter: %s, use key=filterExpression format", filter)
+		key, value, err := parseKeyValue(filter, "AMQP application property filter")
+		if err != nil {
+			return err
 		}
-		cfg.Amqp.AppPropertyFilters[parts[0]] = parts[1]
+		cfg.Amqp.AppPropertyFilters[key] = value
 	}
 
 	// AMQP property filters
 	cfg.Amqp.PropertyFilters = make(map[string]string)
 	for _, filter := range amqpPropertyFilters {
-		parts := strings.SplitN(filter, "=", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid AMQP property filter: %s, use key=filterExpression format", filter)
+		key, value, err := parseKeyValue(filter, "AMQP property filter")
+		if err != nil {
+			return err
 		}
-		cfg.Amqp.PropertyFilters[parts[0]] = parts[1]
+		cfg.Amqp.PropertyFilters[key] = value
 	}
 
 	// Parse AMQP091 headers with template support
@@ -906,22 +904,21 @@ func sanitizeConfig(cfg *config.Config) error {
 	// parse queue arguments
 	cfg.QueueArgs = make(map[string]any)
 	for _, arg := range queueArgs {
-		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid queue argument: %s, use key=value format", arg)
+		key, value, err := parseKeyValue(arg, "queue argument")
+		if err != nil {
+			return err
 		}
-		key, val := parts[0], parts[1]
-		cfg.QueueArgs[key] = parseQueueArgValue(val)
+		cfg.QueueArgs[key] = parseQueueArgValue(value)
 	}
 
 	// split metric tags into key-value pairs
 	cfg.MetricTags = make(map[string]string)
 	for _, tag := range metricTags {
-		parts := strings.Split(tag, "=")
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid metric tags: %s, use label=value format", tag)
+		key, value, err := parseKeyValue(tag, "metric tag")
+		if err != nil {
+			return err
 		}
-		cfg.MetricTags[parts[0]] = parts[1]
+		cfg.MetricTags[key] = value
 	}
 
 	// Parse publish-to template
@@ -976,6 +973,14 @@ func parseStreamOffset(offset string) (any, error) {
 	}
 	// return "", fmt.Errorf("invalid stream offset: %s", offset)
 	return offset, nil //, fmt.Errorf("invalid stream offset: %s", offset)
+}
+
+func parseKeyValue(s string, context string) (string, string, error) {
+	parts := strings.SplitN(s, "=", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid %s: %s, use key=value format", context, s)
+	}
+	return parts[0], parts[1], nil
 }
 
 func parseQueueArgValue(val string) any {
