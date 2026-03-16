@@ -303,6 +303,14 @@ func (m *MetricsServer) StartTime(t time.Time) {
 }
 
 func (m *MetricsServer) Stop() {
+	publishedFinal := MessagesPublished.Get()
+	consumedFinal := getTotalConsumed()
+	publishedRate := publishedFinal - previouslyPublished
+	consumedRate := consumedFinal - previouslyConsumed
+	if publishedRate > 0 || consumedRate > 0 {
+		fields := buildRateFields(publishedRate, consumedRate)
+		log.Print("", fields...)
+	}
 	m.PrintSummary()
 	if m.printAllOnStop {
 		m.PrintAll()
