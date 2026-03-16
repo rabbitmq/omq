@@ -63,6 +63,7 @@ var (
 	queueArgs              []string
 	streamOffset           string
 	consumerLatencyStr     string
+	consumerPriorityStr    string
 	messagePriorityStr     string
 	publishToStr           string
 	consumeFromStr         string
@@ -374,7 +375,7 @@ func RootCmd() *cobra.Command {
 		"Client ID for AMQP and MQTT consumers (%d => consumer's id)")
 	rootCmd.PersistentFlags().StringVar(&streamOffset, "stream-offset", "",
 		"Stream consumer offset specification (default=next)")
-	rootCmd.PersistentFlags().Int32Var(&cfg.ConsumerPriority, "consumer-priority", 0, "Consumer priority")
+	rootCmd.PersistentFlags().StringVar(&consumerPriorityStr, "consumer-priority", "", "Consumer priority (supports templates")
 	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerCredits, "consumer-credits", 1,
 		"AMQP-1.0 consumer credits / STOMP prefetch count")
 	rootCmd.PersistentFlags().StringVarP(&consumerLatencyStr, "consumer-latency", "L", "",
@@ -829,6 +830,14 @@ func sanitizeConfig(cfg *config.Config) error {
 			return fmt.Errorf("invalid template in message priority: %v", err)
 		}
 		cfg.MessagePriorityTemplate = tmpl
+	}
+
+	if consumerPriorityStr != "" {
+		tmpl, err := config.ParseTemplateValue(consumerPriorityStr)
+		if err != nil {
+			return fmt.Errorf("invalid template in consumer priority: %v", err)
+		}
+		cfg.ConsumerPriorityTemplate = tmpl
 	}
 
 	// Parse consumer latency template if provided as a string

@@ -115,7 +115,7 @@ func (c *StompConsumer) Subscribe() {
 	var err error
 
 	if c.Connection != nil {
-		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, buildSubscribeOpts(c.Config, c.Topic)...)
+		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, buildSubscribeOpts(c.Config, c.Topic, c.Id)...)
 		if err != nil {
 			log.Error("subscription failed", "id", c.Id, "queue", c.Topic, "error", err.Error())
 			return
@@ -215,16 +215,17 @@ func (c *StompConsumer) Stop(reason string) {
 	log.Debug("consumer stopped", "id", c.Id, "reason", reason)
 }
 
-func buildSubscribeOpts(cfg config.Config, destination string) []func(*frame.Frame) error {
+func buildSubscribeOpts(cfg config.Config, destination string, id int) []func(*frame.Frame) error {
 	var subscribeOpts []func(*frame.Frame) error
 
 	subscribeOpts = append(subscribeOpts,
 		stomp.SubscribeOpt.Header("x-stream-offset", offsetToString(cfg.StreamOffset)),
 		stomp.SubscribeOpt.Header("prefetch-count", strconv.Itoa(cfg.ConsumerCredits)))
 
-	if cfg.ConsumerPriority != 0 {
+	if cfg.ConsumerPriorityTemplate != nil {
+		priorityStr := utils.ExecuteTemplate(cfg.ConsumerPriorityTemplate, id)
 		subscribeOpts = append(subscribeOpts,
-			stomp.SubscribeOpt.Header("x-priority", strconv.Itoa(int(cfg.ConsumerPriority))))
+			stomp.SubscribeOpt.Header("x-priority", priorityStr))
 	}
 
 	if cfg.QueueDurability != config.None {

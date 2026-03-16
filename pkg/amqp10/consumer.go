@@ -128,7 +128,7 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 				&amqp.ReceiverOptions{
 					SourceDurability:          durability,
 					Credit:                    int32(c.Config.ConsumerCredits),
-					Properties:                buildLinkProperties(c.Config),
+					Properties:                buildLinkProperties(c.Config, c.Id),
 					Filters:                   buildLinkFilters(c.Config),
 					RequestedSenderSettleMode: requestedSenderSettleMode(c.Config),
 					OnLinkStateProperties: func(props map[string]any) {
@@ -323,11 +323,17 @@ func requestedSenderSettleMode(cfg config.Config) *amqp.SenderSettleMode {
 	return nil
 }
 
-func buildLinkProperties(cfg config.Config) map[string]any {
+func buildLinkProperties(cfg config.Config, id int) map[string]any {
 	props := map[string]any{}
 
-	if cfg.ConsumerPriority != 0 {
-		props["rabbitmq:priority"] = cfg.ConsumerPriority
+	if cfg.ConsumerPriorityTemplate != nil {
+		priorityStr := utils.ExecuteTemplate(cfg.ConsumerPriorityTemplate, id)
+		if priority, err := strconv.ParseInt(priorityStr, 10, 32); err == nil {
+			props["rabbitmq:priority"] = int32(priority)
+		} else {
+			log.Error("failed to parse template-generated consumer priority", "value", priorityStr, "error", err)
+			os.Exit(1)
+		}
 	}
 
 	return props

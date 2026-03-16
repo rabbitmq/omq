@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -141,6 +142,15 @@ func (c *Amqp091Consumer) Subscribe() {
 		consumeArgs := amqp091.Table{}
 		if c.Config.StreamOffset != "" {
 			consumeArgs["x-stream-offset"] = c.Config.StreamOffset
+		}
+		if c.Config.ConsumerPriorityTemplate != nil {
+			priorityStr := utils.ExecuteTemplate(c.Config.ConsumerPriorityTemplate, c.Id)
+			if priority, err := strconv.Atoi(priorityStr); err == nil {
+				consumeArgs["x-priority"] = priority
+			} else {
+				log.Error("failed to parse template-generated consumer priority", "value", priorityStr, "error", err)
+				os.Exit(1)
+			}
 		}
 		sub, err := c.Channel.Consume(strings.TrimPrefix(c.Terminus, "/queues/"), "", false, false, false, false, consumeArgs)
 		if err != nil {

@@ -117,7 +117,7 @@ type Config struct {
 	StreamOffset            any
 	StreamFilterValues      string
 	StreamFilterValueSet    string
-	ConsumerPriority        int32
+	ConsumerPriorityTemplate *template.Template
 	Amqp                    AmqpOptions
 	Amqp091                 Amqp091Options
 	MqttPublisher           MqttOptions
