@@ -243,9 +243,9 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 				// Don't increment counter on error, but continue to avoid infinite loop
 				continue
 			} else {
-			metrics.MessagesConsumedMetric(priority).Inc()
-			i++
-			log.Debug("message "+utils.PastTense(outcome), "id", c.Id, "terminus", c.Terminus)
+				metrics.MessagesConsumedMetric(priority).Inc()
+				i++
+				log.Debug("message "+utils.PastTense(outcome), "id", c.Id, "terminus", c.Terminus)
 			}
 		}
 	}

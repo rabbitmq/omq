@@ -131,6 +131,17 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 					Properties:                buildLinkProperties(c.Config),
 					Filters:                   buildLinkFilters(c.Config),
 					RequestedSenderSettleMode: requestedSenderSettleMode(c.Config),
+					OnLinkStateProperties: func(props map[string]any) {
+						if active, ok := props["rabbitmq:active"]; ok {
+							if activeBool, ok := active.(bool); ok {
+								if activeBool {
+									log.Info("consumer is active", "id", c.Id)
+								} else {
+									log.Info("consumer is not active", "id", c.Id)
+								}
+							}
+						}
+					},
 				})
 			if err != nil {
 				if err == context.Canceled {
@@ -255,11 +266,11 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 					return
 				}
 				log.Error("failed to "+outcome+" message", "id", c.Id, "terminus", c.Terminus, "error", err)
-		} else {
-			metrics.MessagesConsumedMetric(priority).Inc()
-			i++
-			log.Debug("message "+utils.PastTense(outcome), "id", c.Id, "terminus", c.Terminus)
-		}
+			} else {
+				metrics.MessagesConsumedMetric(priority).Inc()
+				i++
+				log.Debug("message "+utils.PastTense(outcome), "id", c.Id, "terminus", c.Terminus)
+			}
 		}
 	}
 
