@@ -137,6 +137,7 @@ type Config struct {
 	PublisherBatchWait      time.Duration
 	ConsumerBatchWait       time.Duration
 	InsecureSkipTLSVerify   bool
+	QueueArgs               map[string]any
 }
 
 func NewConfig() Config {

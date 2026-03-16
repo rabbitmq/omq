@@ -60,6 +60,7 @@ var (
 	amqpAppPropertyFilters []string
 	amqpPropertyFilters    []string
 	amqp091Headers         []string
+	queueArgs              []string
 	streamOffset           string
 	consumerLatencyStr     string
 	messagePriorityStr     string
@@ -401,6 +402,8 @@ func RootCmd() *cobra.Command {
 		"Binding key for queue declarations")
 	rootCmd.PersistentFlags().StringVar(&cfg.Exchange, "exchange", "",
 		"Exchange for binding declarations")
+	rootCmd.PersistentFlags().StringSliceVar(&queueArgs, "queue-args", []string{},
+		"Queue arguments in key=value format, comma-separated (e.g. x-single-active-consumer=true,x-max-length=1000)")
 
 	// messages
 	rootCmd.PersistentFlags().StringVarP(&sizeStr, "size", "s", "12", "Message payload size (supports units like 10mb,templates and comma-separated values like 100,1000)")
@@ -900,6 +903,17 @@ func sanitizeConfig(cfg *config.Config) error {
 	}
 	cfg.Amqp091.HeaderTemplates = headerTemplates
 
+	// parse queue arguments
+	cfg.QueueArgs = make(map[string]any)
+	for _, arg := range queueArgs {
+		parts := strings.SplitN(arg, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid queue argument: %s, use key=value format", arg)
+		}
+		key, val := parts[0], parts[1]
+		cfg.QueueArgs[key] = parseQueueArgValue(val)
+	}
+
 	// split metric tags into key-value pairs
 	cfg.MetricTags = make(map[string]string)
 	for _, tag := range metricTags {
@@ -962,6 +976,19 @@ func parseStreamOffset(offset string) (any, error) {
 	}
 	// return "", fmt.Errorf("invalid stream offset: %s", offset)
 	return offset, nil //, fmt.Errorf("invalid stream offset: %s", offset)
+}
+
+func parseQueueArgValue(val string) any {
+	if val == "true" {
+		return true
+	}
+	if val == "false" {
+		return false
+	}
+	if i, err := strconv.ParseInt(val, 10, 64); err == nil {
+		return i
+	}
+	return val
 }
 
 func handleInterupt(ctx context.Context, cancel context.CancelFunc) {

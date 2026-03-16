@@ -541,6 +541,41 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 
+	Describe("supports queue arguments", func() {
+		It("declares a queue with x-single-active-consumer=true", func() {
+			args := []string{
+				"amqp",
+				"-x", "0",
+				"-y", "1",
+				"-T", "/queues/sac-queue-args-test",
+				"--queues", "classic",
+				"--queue-args", "x-single-active-consumer=true",
+				"--cleanup-queues=true",
+				"--time", "10s",
+			}
+
+			rmqc, err := newRabbitClient()
+			Expect(err).ShouldNot(HaveOccurred())
+			session := omq(args)
+
+			Eventually(func() bool {
+				q, err := rmqc.GetQueue("/", "sac-queue-args-test")
+				if err != nil {
+					return false
+				}
+				sac, ok := q.Arguments["x-single-active-consumer"]
+				return ok && sac == true
+			}).WithTimeout(5 * time.Second).Should(BeTrue())
+
+			session.Signal(os.Signal(os.Interrupt))
+
+			Eventually(func() bool {
+				_, err := rmqc.GetQueue("/", "sac-queue-args-test")
+				return err != nil && strings.Contains(err.Error(), "Object Not Found")
+			}).WithTimeout(5 * time.Second).Should(BeTrue())
+		})
+	})
+
 	Describe("exposes command line flags as a omq_args metric", func() {
 		It("should print omq_args", func() {
 			args := []string{

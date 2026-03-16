@@ -129,11 +129,11 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 	var queueSpec rmq.IQueueSpecification
 	switch cfg.Queues {
 	case config.Classic:
-		queueSpec = &rmq.ClassicQueueSpecification{Name: queueName}
+		queueSpec = &rmq.ClassicQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
 	case config.Quorum:
-		queueSpec = &rmq.QuorumQueueSpecification{Name: queueName}
+		queueSpec = &rmq.QuorumQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
 	case config.Stream:
-		queueSpec = &rmq.StreamQueueSpecification{Name: queueName}
+		queueSpec = &rmq.StreamQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
 	}
 
 	conn := instance.connection()
