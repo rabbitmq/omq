@@ -123,21 +123,26 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		default:
+			linkProperties := buildLinkProperties(c.Config, c.Id)
 			receiver, err := c.Session.NewReceiver(ctx,
 				c.Terminus,
 				&amqp.ReceiverOptions{
 					SourceDurability:          durability,
 					Credit:                    int32(c.Config.ConsumerCredits),
-					Properties:                buildLinkProperties(c.Config, c.Id),
+					Properties:                linkProperties,
 					Filters:                   buildLinkFilters(c.Config),
 					RequestedSenderSettleMode: requestedSenderSettleMode(c.Config),
 					OnLinkStateProperties: func(props map[string]any) {
 						if active, ok := props["rabbitmq:active"]; ok {
 							if activeBool, ok := active.(bool); ok {
+								logArgs := []any{"id", c.Id}
+								if priority, ok := linkProperties["rabbitmq:priority"]; ok {
+									logArgs = append(logArgs, "priority", priority)
+								}
 								if activeBool {
-									log.Info("consumer is active", "id", c.Id)
+									log.Info("consumer is active", logArgs...)
 								} else {
-									log.Info("consumer is not active", "id", c.Id)
+									log.Info("consumer is not active", logArgs...)
 								}
 							}
 						}
