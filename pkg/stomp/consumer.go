@@ -40,7 +40,7 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *StompConsumer 
 	}
 
 	if cfg.SpreadConnections {
-		consumer.whichUri = (id - 1) % len(cfg.ConsumerUri)
+		consumer.whichUri = id % len(cfg.ConsumerUri)
 	}
 
 	consumer.Connect()

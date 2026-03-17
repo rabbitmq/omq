@@ -51,7 +51,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp091Publis
 	}
 
 	if cfg.SpreadConnections {
-		publisher.whichUri = (id - 1) % len(cfg.PublisherUri)
+		publisher.whichUri = id % len(cfg.PublisherUri)
 	}
 
 	publisher.Connect()

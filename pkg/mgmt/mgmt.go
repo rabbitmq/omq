@@ -85,7 +85,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	log.Info("Declaring queues...")
 	// declare queues for AMQP 1.0 and 0.9.1 publishers
 	if (cfg.PublisherProto == config.AMQP || cfg.PublisherProto == config.AMQP091) && strings.HasPrefix(cfg.PublishTo, "/queues/") {
-		for i := 1; i <= cfg.Publishers; i++ {
+		for i := 0; i < cfg.Publishers; i++ {
 			q := utils.ResolveTerminus(cfg.PublishToTemplate, i)
 			queueName := strings.TrimPrefix(q, "/queues/")
 			m.DeclareAndBind(cfg, queueName, i)
@@ -94,7 +94,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	// declare queues for AMQP 1.0 and 0.9.1 consumers
 	if cfg.ConsumerProto == config.AMQP || cfg.ConsumerProto == config.AMQP091 {
 		if _, ok := strings.CutPrefix(cfg.ConsumeFrom, "/queues/"); ok {
-			for i := 1; i <= cfg.Consumers; i++ {
+			for i := 0; i < cfg.Consumers; i++ {
 				q := utils.ResolveTerminus(cfg.ConsumeFromTemplate, i)
 				queueName := strings.TrimPrefix(q, "/queues/")
 				m.DeclareAndBind(cfg, queueName, i)
@@ -105,7 +105,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	}
 	// declare queues for STOMP publishers using /amq/queue/ destination
 	if cfg.PublisherProto == config.STOMP && strings.HasPrefix(cfg.PublishTo, "/amq/queue/") {
-		for i := 1; i <= cfg.Publishers; i++ {
+		for i := 0; i < cfg.Publishers; i++ {
 			queueName := utils.ResolveTerminus(cfg.PublishToTemplate, i)
 			queueName = strings.TrimPrefix(queueName, "/amq/queue/")
 			m.DeclareAndBind(cfg, queueName, i)
@@ -113,7 +113,7 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 	}
 	// declare queues for STOMP consumers using /amq/queue/ destination
 	if cfg.ConsumerProto == config.STOMP && strings.HasPrefix(cfg.ConsumeFrom, "/amq/queue/") {
-		for i := 1; i <= cfg.Consumers; i++ {
+		for i := 0; i < cfg.Consumers; i++ {
 			q := utils.ResolveTerminus(cfg.ConsumeFromTemplate, i)
 			queueName := strings.TrimPrefix(q, "/amq/queue/")
 			m.DeclareAndBind(cfg, queueName, i)

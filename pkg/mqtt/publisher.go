@@ -85,7 +85,7 @@ func (p MqttPublisher) connectionOptions() *mqtt.ClientOptions {
 		})
 
 	var j int
-	for i, n := range utils.WrappedSequence(len(p.Config.PublisherUri), p.Id-1) {
+	for i, n := range utils.WrappedSequence(len(p.Config.PublisherUri), p.Id) {
 		if p.Config.SpreadConnections {
 			j = n
 		} else {

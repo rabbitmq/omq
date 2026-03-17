@@ -620,7 +620,7 @@ func joinCluster(expectedInstances int, serviceName string) {
 func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 	readyChannels := make([]chan bool, 0, cfg.Consumers)
 
-	for i := 1; i <= cfg.Consumers; i++ {
+	for i := 0; i < cfg.Consumers; i++ {
 		select {
 		case <-ctx.Done():
 			return
@@ -640,7 +640,7 @@ func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 			}()
 
 			if cfg.ConsumerBatchSize > 0 {
-				if i%cfg.ConsumerBatchSize == 0 && i < cfg.Consumers {
+				if (i+1)%cfg.ConsumerBatchSize == 0 && i < cfg.Consumers-1 {
 					select {
 					case <-ctx.Done():
 						return
@@ -670,7 +670,7 @@ func startConsumers(ctx context.Context, wg *sync.WaitGroup) {
 func startPublishers(ctx context.Context, wg *sync.WaitGroup, startPublishing chan bool) {
 	readyChannels := make([]chan bool, 0, cfg.Publishers)
 
-	for i := 1; i <= cfg.Publishers; i++ {
+	for i := 0; i < cfg.Publishers; i++ {
 		select {
 		case <-ctx.Done():
 			return
@@ -690,7 +690,7 @@ func startPublishers(ctx context.Context, wg *sync.WaitGroup, startPublishing ch
 			}()
 
 			if cfg.PublisherBatchSize > 0 {
-				if i%cfg.PublisherBatchSize == 0 && i < cfg.Publishers {
+				if (i+1)%cfg.PublisherBatchSize == 0 && i < cfg.Publishers-1 {
 					select {
 					case <-ctx.Done():
 						return

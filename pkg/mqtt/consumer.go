@@ -88,7 +88,7 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 	}
 
 	var j int
-	for i, n := range utils.WrappedSequence(len(c.Config.ConsumerUri), c.Id-1) {
+	for i, n := range utils.WrappedSequence(len(c.Config.ConsumerUri), c.Id) {
 		if c.Config.SpreadConnections {
 			j = n
 		} else {

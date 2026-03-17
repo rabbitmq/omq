@@ -463,18 +463,18 @@ var _ = Describe("OMQ CLI", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			session := omq(args)
 			Eventually(func() bool {
-				q1, err1 := rmqc.GetQueue("/", "declare-without-publishers-1")
-				q2, err2 := rmqc.GetQueue("/", "declare-without-publishers-2")
-				return err1 == nil && q1.Name == "declare-without-publishers-1" &&
-					err2 == nil && q2.Name == "declare-without-publishers-2"
+				q1, err1 := rmqc.GetQueue("/", "declare-without-publishers-0")
+				q2, err2 := rmqc.GetQueue("/", "declare-without-publishers-1")
+				return err1 == nil && q1.Name == "declare-without-publishers-0" &&
+					err2 == nil && q2.Name == "declare-without-publishers-1"
 			}).WithTimeout(3 * time.Second).Should(BeTrue())
 
 			session.Signal(os.Signal(os.Interrupt))
 
 			// eventually the queue should be deleted
 			Eventually(func() bool {
-				_, err1 := rmqc.GetQueue("/", "declare-without-publishers-1")
-				_, err2 := rmqc.GetQueue("/", "declare-without-publishers-2")
+				_, err1 := rmqc.GetQueue("/", "declare-without-publishers-0")
+				_, err2 := rmqc.GetQueue("/", "declare-without-publishers-1")
 				return err1 != nil && strings.Contains(err1.Error(), "Object Not Found") &&
 					err2 != nil && strings.Contains(err2.Error(), "Object Not Found")
 			}).WithTimeout(3 * time.Second).Should(BeTrue())

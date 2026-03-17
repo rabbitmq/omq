@@ -43,7 +43,7 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *Amqp10Consumer
 	}
 
 	if cfg.SpreadConnections {
-		consumer.whichUri = (id - 1) % len(cfg.ConsumerUri)
+		consumer.whichUri = id % len(cfg.ConsumerUri)
 	}
 
 	consumer.Connect()

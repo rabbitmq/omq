@@ -311,7 +311,7 @@ func ResolveTerminus(tmpl *template.Template, id int) string {
 func ReorderUrls(urls []*url.URL, spreadConnections bool, clientId int) []*url.URL {
 	reorderedUrls := make([]*url.URL, len(urls))
 	var j int
-	for i, n := range WrappedSequence(len(urls), clientId-1) {
+	for i, n := range WrappedSequence(len(urls), clientId) {
 		if spreadConnections {
 			j = n
 		} else {
