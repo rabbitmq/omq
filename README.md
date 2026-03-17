@@ -1,11 +1,12 @@
 ## omq
 
-`omq` is a messaging system client for testing purposes. It currently supports AMQP 1.0, AMQP 0.9.1, STOMP and MQTT 3.1/3.1.1/5.0. It is developed mostly for RabbitMQ but might be useful for other brokers
-as well (some tests against ActiveMQ were performed).
+`omq` is a messaging system client for testing purposes. It currently supports
+AMQP 1.0, AMQP 0.9.1, STOMP and MQTT 3.1/3.1.1/5.0. It is developed mostly for
+RabbitMQ but might be useful for other brokers as well (some tests against
+ActiveMQ were performed).
 
-`omq` starts a group of publishers and a group of consumers, in both cases all publishers/consumers are identical,
-except for the target terminus/queue/routing key, which may be slightly different. The publishers can use
-a different protocol than the consumers.
+`omq` starts a group of publishers and a group of consumers. The publishers
+can use a different protocol than the consumers.
 
 `omq` has subcommands for all protocol combinations. For example:
 ```shell
@@ -20,20 +21,37 @@ A more complex example:
 $ omq mqtt-amqp --publishers 10 --publish-to 'sensor/%d' --rate 1 --size 100 \
                 --consumers 1 --consume-from /queues/sensors --binding-key 'sensor.#' --queues classic
 ```
-will start 10 MQTT publishers, each publishing 1 message a second, with 100 bytes of payload, to the `amq.topic` exchange (default for the MQTT plugin)
-with the topic/routing key of `sensor/%d`, where the `%d` is the ID of the publisher (from 1 to 10). It will also start a single AMQP 1.0 consumer that
-consumes all those messages by declaring a classic queue `sensors` with a wildcard subscription.
+will start 10 MQTT publishers, each publishing 1 message a second, with 100
+bytes of payload, to the `amq.topic` exchange (default for the MQTT plugin)
+with the topic/routing key of `sensor/%d`, where the `%d` is the ID of the
+publisher (from 1 to 10). It will also start a single AMQP 1.0 consumer that
+consumes all those messages by declaring a classic queue `sensors` with a
+wildcard subscription.
 
-If the publishing and consuming protocol is the same, you can use abbreviated commands: `amqp` instead of `amqp-amqp`, `stomp` instead of `stomp-stomp`
-and `mqtt` instead of `mqtt-mqtt`.
+If the publishing and consuming protocol is the same, you can use abbreviated
+commands: `amqp` instead of `amqp-amqp`, `stomp` instead of `stomp-stomp`, etc.
 
 ### Installation
+
+#### Binary
+
+You can get the latest binary from there [releases page](https://github.com/rabbitmq/omq/releases).
+
+#### OCI Image
+
+An [OCI image](https://hub.docker.com/r/pivotalrabbitmq/omq/tags) is available: `pivotalrabbitmq/omq`.
+
+#### From source
 
 ```shell
 $ go install github.com/rabbitmq/omq@main
 ```
 
-An [OCI image](https://hub.docker.com/r/pivotalrabbitmq/omq/tags) is also available: `pivotalrabbitmq/omq`.
+or
+```
+git clone github.com/rabbitmq/omq
+go build
+```
 
 ### Connecting to the Broker
 
@@ -44,7 +62,7 @@ you can use `--uri` instead (but can't mix `--uri` with `--publisher-uri` and `-
 
 For example, here both publishers and consumers will connect to either of the 3 URIs:
 ```shell
-$ omq mqtt --uri mqtt://localhost:1883 --uri mqtt://localhost:1884 --uri mqtt://localhost:1885
+$ omq mqtt --uri mqtt://localhost:1883,mqtt://localhost:1884,mqtt://localhost:1885
 ```
 
 And in this case, all consumers will connect to port 1883, while publishers to 1884:
@@ -82,12 +100,17 @@ RabbitMQ 4.1 added [AMQP-1.0 stream filtering support](https://github.com/rabbit
 Note that this is a separate feature from stream filtering of the Stream protocol.
 
 `omq` supports AMQP-1.0 stream filtering in the following ways:
-1. When publishing, you can specify application properties. If multiple values are provided, one of them is used for each message
-   (so you get a mix of messages with different values). For example, `--amqp-app-property key=foo,bar,baz` will publish some messages
-   with `key=foo`, some with `key=bar` and some with `key=baz` (in roughly equal proportions).
-2. When consuming, you can apply a filter, for example, `--amqp-app-property-filter key=&p:ba` will tell RabbitMQ to only deliver
-   messages where the `key` property starts with `ba` (`&p:` means that what follows is a prefix), so it'll return roughly 66%
-   of the messages in the stream. You can filter on properties (eg. `subject`) or application properties.
+1. When publishing, you can specify application properties. If multiple values
+   are provided, one of them is used for each message (so you get a mix of
+messages with different values). For example, `--amqp-app-property
+key=foo,bar,baz` will publish some messages with `key=foo`, some with `key=bar`
+and some with `key=baz` (in roughly equal proportions).
+
+2. When consuming, you can apply a filter, for example,
+   `--amqp-app-property-filter key=&p:ba` will tell RabbitMQ to only deliver
+messages where the `key` property starts with `ba` (`&p:` means that what
+follows is a prefix), so it'll return roughly 66% of the messages in the
+stream. You can filter on properties (eg. `subject`) or application properties.
 
 Here's a full example, where we can see this in action:
 ```shell
@@ -99,17 +122,19 @@ $ omq amqp --queues stream -t /queues/stream -T /queues/stream --rate 100 --amqp
 2024/10/04 13:48:29 published=100/s consumed=34/s
 ```
 
-We publish 100 messages per second with 3 different key values and then consume only messages with one of the values. Therefore, the consumption
-rate is one third of the publishing rate.
+We publish 100 messages per second with 3 different key values and then consume
+only messages with one of the values. Therefore, the consumption rate is one
+third of the publishing rate.
 
 ### Templated Values
 
 Some flags are parsed as Go text templates and provide additional functions from the [Sprig](https://masterminds.github.io/sprig/) library.
 This allows setting random or otherwise generated values. For example:
 
-* `--message-priority '{{ randInt 1 10 }}'` set a random message priority from the given range
-* `--consumer-latency '{{ randInt 1 60 }}ms'` wait a random (between 1 and 60) number of milliseconds before acking a message
+* `--message-priority '{{ randInt 1 10 }}'` sets a random message priority from the given range
+* `--consumer-latency '{{ randInt 1 60 }}ms'` waits a random (between 1 and 60) number of milliseconds before acking a message
 * `--publishers 10 --publish-to '/queues/cq-{{ mod .id 2 }}'` declare 2 queues and start 5 publishers per queue
+* `--amqp-modify "x-timestamp={{ now }}"` sets the `x-timestamp` annotation to the current time
 
 ### Metrics
 
