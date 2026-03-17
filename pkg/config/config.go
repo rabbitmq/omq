@@ -53,6 +53,17 @@ var QueueTypes = map[QueueType][]string{
 	Exclusive:   {"exclusive"},
 }
 
+type AnnotationTemplate struct {
+	Key   *template.Template
+	Value *template.Template
+}
+
+type AmqpModifyOptions struct {
+	DeliveryFailed      *template.Template
+	UndeliverableHere   *template.Template
+	AnnotationTemplates []AnnotationTemplate
+}
+
 type AmqpOptions struct {
 	Subjects               []string
 	To                     []string
@@ -63,6 +74,8 @@ type AmqpOptions struct {
 	MsgAnnotationTemplates map[string]*template.Template
 	AppPropertyFilters     map[string]string
 	SQLFilter              string
+	ModifyOptions          AmqpModifyOptions
+	ModifyRate             int
 }
 
 type MqttOptions struct {

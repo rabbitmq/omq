@@ -59,6 +59,7 @@ var (
 	amqpMsgAnnotations     []string
 	amqpAppPropertyFilters []string
 	amqpPropertyFilters    []string
+	amqpModifyStr          string
 	amqp091Headers         []string
 	queueArgs              []string
 	streamOffset           string
@@ -134,6 +135,10 @@ func RootCmd() *cobra.Command {
 		"AMQP SQL Filter expression eg 'proprties.subject LIKE 'foo-%'")
 	amqpConsumerFlags.BoolVar(&cfg.Amqp.ConsumeSettled, "amqp-consume-settled", false,
 		"Request the broker to send messages pre-settled (no consumer acknowledgment)")
+	amqpConsumerFlags.IntVar(&cfg.Amqp.ModifyRate, "amqp-modify-rate", 0,
+		"Rate of messages to settle with the modified outcome (0-100%)")
+	amqpConsumerFlags.StringVar(&amqpModifyStr, "amqp-modify", "",
+		"Modified outcome options (e.g. delivery-failed=true,undeliverable-here=true,x-opt-delay=5000); unknown keys are sent as message annotations")
 
 	amqp091PublisherFlags := pflag.NewFlagSet("amqp091-publisher", pflag.ContinueOnError)
 	amqp091ConsumerFlags := pflag.NewFlagSet("amqp091-consumer", pflag.ContinueOnError)
@@ -805,8 +810,20 @@ func sanitizeConfig(cfg *config.Config) error {
 		return fmt.Errorf("discard rate can't be more than 100%%")
 	}
 
-	if cfg.RequeueRate+cfg.DiscardRate > 100 {
-		return fmt.Errorf("combined requeue and discard rate can't be more than 100%%")
+	if cfg.Amqp.ModifyRate > 100 {
+		return fmt.Errorf("amqp modify rate can't be more than 100%%")
+	}
+
+	if cfg.RequeueRate+cfg.DiscardRate+cfg.Amqp.ModifyRate > 100 {
+		return fmt.Errorf("combined requeue, discard and modify rate can't be more than 100%%")
+	}
+
+	if amqpModifyStr != "" {
+		opts, err := parseAmqpModifyOptions(amqpModifyStr)
+		if err != nil {
+			return err
+		}
+		cfg.Amqp.ModifyOptions = opts
 	}
 
 	if cfg.MaxInFlight < 1 {
@@ -1003,6 +1020,38 @@ func parseQueueArgValue(val string) any {
 		return i
 	}
 	return val
+}
+
+func parseAmqpModifyOptions(s string) (config.AmqpModifyOptions, error) {
+	opts := config.AmqpModifyOptions{}
+	for _, pair := range strings.Split(s, ",") {
+		parts := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+		if len(parts) != 2 {
+			return opts, fmt.Errorf("invalid --amqp-modify option: %s, use key=value format", pair)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		tmpl, err := config.ParseTemplateValue(value)
+		if err != nil {
+			return opts, fmt.Errorf("invalid template in --amqp-modify %s: %v", key, err)
+		}
+		switch key {
+		case "delivery-failed":
+			opts.DeliveryFailed = tmpl
+		case "undeliverable-here":
+			opts.UndeliverableHere = tmpl
+		default:
+			keyTmpl, err := config.ParseTemplateValue(key)
+			if err != nil {
+				return opts, fmt.Errorf("invalid template in --amqp-modify key %s: %v", key, err)
+			}
+			opts.AnnotationTemplates = append(opts.AnnotationTemplates, config.AnnotationTemplate{
+				Key:   keyTmpl,
+				Value: tmpl,
+			})
+		}
+	}
+	return opts, nil
 }
 
 func handleInterupt(ctx context.Context, cancel context.CancelFunc) {

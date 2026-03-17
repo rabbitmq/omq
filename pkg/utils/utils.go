@@ -342,6 +342,8 @@ func PastTense(outcome string) string {
 		return "released"
 	case "reject":
 		return "rejected"
+	case "modify":
+		return "modified"
 	case "acknowledge":
 		return "acknowledged"
 	case "nack-requeue":

@@ -716,6 +716,36 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 
+	Describe("AMQP modify outcome", func() {
+		It("should add annotations via --amqp-modify that are visible on redelivery", func() {
+			args := []string{
+				"amqp",
+				"--pmessages=1",
+				"--cmessages=2",
+				"--publish-to=/queues/amqp-modify-test",
+				"--consume-from=/queues/amqp-modify-test",
+				"--amqp-modify-rate=100",
+				"--amqp-modify=x-opt-test=12345",
+				"--queues=quorum",
+				"--cleanup-queues=true",
+				"--time=10s",
+				"--log-level=debug",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(11 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Err)
+			outputStr := string(output)
+
+			Expect(outputStr).To(ContainSubstring("TOTAL PUBLISHED messages=1"))
+			Expect(outputStr).To(ContainSubstring("TOTAL CONSUMED messages=2"))
+
+			// The second delivery should contain the annotation set by --amqp-modify
+			Expect(outputStr).To(ContainSubstring("x-opt-test"))
+		})
+	})
+
 	Describe("priority-based message outcome", func() {
 		It("AMQP 1.0: should release messages with matching requeue priority", func() {
 			args := []string{

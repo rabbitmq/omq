@@ -278,13 +278,48 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 	log.Debug("consumer finished", "id", c.Id)
 }
 
+func (c *Amqp10Consumer) modifyMessage(ctx context.Context, msg *amqp.Message) (string, error) {
+	opts := &amqp.ModifyMessageOptions{}
+	modifyCfg := c.Config.Amqp.ModifyOptions
+
+	if modifyCfg.DeliveryFailed != nil {
+		opts.DeliveryFailed = utils.ExecuteTemplate(modifyCfg.DeliveryFailed, c.Id) == "true"
+	}
+	if modifyCfg.UndeliverableHere != nil {
+		opts.UndeliverableHere = utils.ExecuteTemplate(modifyCfg.UndeliverableHere, c.Id) == "true"
+	}
+	if len(modifyCfg.AnnotationTemplates) > 0 {
+		opts.Annotations = make(amqp.Annotations, len(modifyCfg.AnnotationTemplates))
+		for _, at := range modifyCfg.AnnotationTemplates {
+			key := utils.ExecuteTemplate(at.Key, c.Id)
+			opts.Annotations[key] = maybeConvertNumeric(utils.ExecuteTemplate(at.Value, c.Id))
+		}
+	}
+
+	return "modify", c.Receiver.ModifyMessage(ctx, msg, opts)
+}
+
+func maybeConvertNumeric(value string) any {
+	if value == "true" {
+		return true
+	}
+	if value == "false" {
+		return false
+	}
+	if i, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return i
+	}
+	if f, err := strconv.ParseFloat(value, 64); err == nil {
+		return f
+	}
+	return value
+}
+
 func (c *Amqp10Consumer) outcome(ctx context.Context, msg *amqp.Message, priority int) (string, error) {
 	requeuePriorityMatch := len(c.Config.RequeueWhenPriority) == 0 || slices.Contains(c.Config.RequeueWhenPriority, priority)
 	discardPriorityMatch := len(c.Config.DiscardWhenPriority) == 0 || slices.Contains(c.Config.DiscardWhenPriority, priority)
 
-	// don't generate random numbers if not necessary
-	if c.Config.RequeueRate == 0 && c.Config.DiscardRate == 0 {
-		// No rate-based logic, just check priority filters for 100% requeue/discard
+	if c.Config.RequeueRate == 0 && c.Config.DiscardRate == 0 && c.Config.Amqp.ModifyRate == 0 {
 		if len(c.Config.RequeueWhenPriority) > 0 && slices.Contains(c.Config.RequeueWhenPriority, priority) {
 			return "release", c.Receiver.ReleaseMessage(ctx, msg)
 		}
@@ -299,6 +334,8 @@ func (c *Amqp10Consumer) outcome(ctx context.Context, msg *amqp.Message, priorit
 		return "release", c.Receiver.ReleaseMessage(ctx, msg)
 	} else if discardPriorityMatch && n < c.Config.RequeueRate+c.Config.DiscardRate {
 		return "reject", c.Receiver.RejectMessage(ctx, msg, nil)
+	} else if n < c.Config.RequeueRate+c.Config.DiscardRate+c.Config.Amqp.ModifyRate {
+		return c.modifyMessage(ctx, msg)
 	}
 	return "accept", c.Receiver.AcceptMessage(ctx, msg)
 }
