@@ -136,6 +136,25 @@ This allows setting random or otherwise generated values. For example:
 * `--publishers 10 --publish-to '/queues/cq-{{ mod .id 2 }}'` declare 2 queues and start 5 publishers per queue
 * `--amqp-modify "x-timestamp={{ now }}"` sets the `x-timestamp` annotation to the current time
 
+### Detecting Unorderly Messages
+
+* `--detect-out-of-order-messages` can be used to detect messages that were consumed
+  in a different order than they were published; this is detected by adding a publisher
+  ID and a per-publisher sequence number to message annotations/headers/properties
+  (based on the protocol) and then reporting (to the console and through Prometheus metrics)
+  whenever a message is consumed with a sequence number lower than previously seen
+* `--detect-gaps-in-messages` relies on the same per-publisher sequence numbers,
+  but reports situations where a message is consumed but its sequence ID is not
+  the most recently seen ID + 1.
+
+It is important to remember that these features should be used in appropriate scenarios only - there
+are many legitimate reasons for missing/out-of-order messages to be detected, even though
+everything worked perfectly, for example:
+* message priorities (higher-priority messages overtake lower-priority ones)
+* multiple consumers (from each individual consumer's perspective, there will be gaps,
+  since consumers compete for messages)
+* restarts, requeues, etc
+
 ### Metrics
 
 `omq` exposes Prometheus metrics on port 8080, or the next available port if 8080 is in use (so 8081, 8082, and so on). This makes it easy to run multiple

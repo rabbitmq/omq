@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -17,6 +18,11 @@ import (
 	"github.com/Masterminds/sprig/v3"
 	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/metrics"
+)
+
+const (
+	HeaderPublisherID = "x-omq-publisher-id"
+	HeaderSequence    = "x-omq-seq"
 )
 
 // ParseSize parses a size string that may include units (e.g., "10mb", "1kb", "100")
@@ -331,6 +337,52 @@ func NextURI(uris []string, index *int) string {
 	uri := uris[*index]
 	*index++
 	return uri
+}
+
+type SequenceStatus int
+
+const (
+	SequenceOK         SequenceStatus = iota
+	SequenceOutOfOrder                // seq < last seen (reordered)
+	SequenceGap                       // seq > last seen + 1 (missing messages)
+)
+
+// SequenceCheckResult holds the outcome of a sequence check along with context
+// about the previous message from the same publisher.
+type SequenceCheckResult struct {
+	Status  SequenceStatus
+	LastSeq uint64
+}
+
+// OutOfOrderTracker tracks per-publisher sequence numbers to detect out-of-order messages.
+type OutOfOrderTracker struct {
+	mu       sync.Mutex
+	lastSeqs map[int]uint64
+}
+
+func NewOutOfOrderTracker() *OutOfOrderTracker {
+	return &OutOfOrderTracker{
+		lastSeqs: make(map[int]uint64),
+	}
+}
+
+// Check returns the sequence status for a message from the given publisher.
+// The first message from each publisher always returns SequenceOK.
+func (t *OutOfOrderTracker) Check(publisherID int, seq uint64) SequenceCheckResult {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	lastSeq, seen := t.lastSeqs[publisherID]
+	t.lastSeqs[publisherID] = seq
+	if !seen {
+		return SequenceCheckResult{Status: SequenceOK}
+	}
+	if seq <= lastSeq {
+		return SequenceCheckResult{Status: SequenceOutOfOrder, LastSeq: lastSeq}
+	}
+	if seq > lastSeq+1 {
+		return SequenceCheckResult{Status: SequenceGap, LastSeq: lastSeq}
+	}
+	return SequenceCheckResult{Status: SequenceOK, LastSeq: lastSeq}
 }
 
 // PastTense converts message outcome verbs to their past tense form for logging.

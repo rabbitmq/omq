@@ -136,7 +136,8 @@ type Config struct {
 	MqttPublisher           MqttOptions
 	MqttConsumer            MqttOptions
 	MetricTags              map[string]string
-	LogOutOfOrder           bool
+	DetectOutOfOrder        bool
+	DetectGaps              bool
 	PrintAllMetrics         bool
 	ConsumerStartupDelay    time.Duration
 	RequeueWhenPriority     []int

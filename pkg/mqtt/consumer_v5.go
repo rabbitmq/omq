@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/eclipse/paho.golang/autopaho"
@@ -35,7 +36,10 @@ func NewMqtt5Consumer(ctx context.Context, cfg config.Config, id int) Mqtt5Consu
 
 func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 	msgsReceived := 0
-	previousMessageTimeSent := time.Unix(0, 0)
+	var oooTracker *utils.OutOfOrderTracker
+	if c.Config.DetectOutOfOrder || c.Config.DetectGaps {
+		oooTracker = utils.NewOutOfOrderTracker()
+	}
 
 	handler := func(rcv paho.PublishReceived) (bool, error) {
 		metrics.MessagesConsumedMetric(0).Inc()
@@ -43,11 +47,26 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 		metrics.RecordEndToEndLatency(latency)
 
-		if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
-			metrics.MessagesConsumedOutOfOrderMetric(0).Inc()
-			log.Info("out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
+		if oooTracker != nil && rcv.Packet.Properties != nil {
+			if pubID, seq, ok := extractMqtt5OrderingInfo(rcv.Packet.Properties.User); ok {
+				result := oooTracker.Check(pubID, seq)
+				switch result.Status {
+				case utils.SequenceOutOfOrder:
+					if c.Config.DetectOutOfOrder {
+						metrics.MessagesConsumedOutOfOrderMetric(0).Inc()
+						log.Info("out-of-order message",
+							"publisher", pubID, "seq", seq, "lastSeq", result.LastSeq, "timeSent", timeSent)
+					}
+				case utils.SequenceGap:
+					if c.Config.DetectGaps {
+						metrics.MessagesConsumedGapsMetric(0).Inc()
+						log.Info("gap in sequence (missing messages)",
+							"publisher", pubID, "seq", seq, "lastSeq", result.LastSeq,
+							"missed", seq-result.LastSeq-1, "timeSent", timeSent)
+					}
+				}
+			}
 		}
-		previousMessageTimeSent = timeSent
 
 		msgsReceived++
 		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency)
@@ -149,4 +168,25 @@ func (c Mqtt5Consumer) Stop(reason string) {
 		defer cancel()
 		_ = c.Connection.Disconnect(disconnectCtx)
 	}
+}
+
+func extractMqtt5OrderingInfo(userProps []paho.UserProperty) (int, uint64, bool) {
+	var pubIDStr, seqStr string
+	for _, prop := range userProps {
+		switch prop.Key {
+		case utils.HeaderPublisherID:
+			pubIDStr = prop.Value
+		case utils.HeaderSequence:
+			seqStr = prop.Value
+		}
+	}
+	if pubIDStr == "" || seqStr == "" {
+		return 0, 0, false
+	}
+	pubID, err1 := strconv.Atoi(pubIDStr)
+	seq, err2 := strconv.ParseUint(seqStr, 10, 64)
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return pubID, seq, true
 }

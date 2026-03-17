@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"math/rand/v2"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -24,11 +25,12 @@ type Mqtt5Publisher struct {
 	Config     config.Config
 	ctx        context.Context
 	msg        []byte
+	msgSent    atomic.Uint64
 }
 
-func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) Mqtt5Publisher {
+func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Publisher {
 	topic := publisherTopic(cfg.PublishToTemplate, id)
-	return Mqtt5Publisher{
+	return &Mqtt5Publisher{
 		Id:         id,
 		Connection: nil,
 		Topic:      topic,
@@ -51,7 +53,7 @@ func (p *Mqtt5Publisher) Connect() {
 	p.Connection = connection
 }
 
-func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
+func (p *Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 	urls := stringsToUrls(p.Config.PublisherUri)
 	reorderedUrls := utils.ReorderUrls(urls, p.Config.SpreadConnections, p.Id)
 
@@ -87,7 +89,7 @@ func (p Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 	return opts
 }
 
-func (p Mqtt5Publisher) Start(publisherReady chan bool, startPublishing chan bool) {
+func (p *Mqtt5Publisher) Start(publisherReady chan bool, startPublishing chan bool) {
 	p.Connect()
 
 	p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
@@ -119,7 +121,7 @@ func (p Mqtt5Publisher) Start(publisherReady chan bool, startPublishing chan boo
 	p.Stop(farewell)
 }
 
-func (p Mqtt5Publisher) StartPublishing() string {
+func (p *Mqtt5Publisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent atomic.Int64
@@ -139,20 +141,33 @@ func (p Mqtt5Publisher) StartPublishing() string {
 	}
 }
 
-func (p Mqtt5Publisher) Send() {
+func (p *Mqtt5Publisher) Send() {
 	if p.Connection == nil {
 		return
 	}
+	seq := p.msgSent.Add(1) - 1
+
 	if p.Config.SizeTemplate != nil {
 		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	}
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
-	startTime := time.Now()
-	_, err := p.Connection.Publish(p.ctx, &paho.Publish{
+
+	pub := &paho.Publish{
 		QoS:     byte(p.Config.MqttPublisher.QoS),
 		Topic:   p.Topic,
 		Payload: p.msg,
-	})
+	}
+	if p.Config.DetectOutOfOrder || p.Config.DetectGaps {
+		pub.Properties = &paho.PublishProperties{
+			User: []paho.UserProperty{
+				{Key: utils.HeaderPublisherID, Value: strconv.Itoa(p.Id)},
+				{Key: utils.HeaderSequence, Value: strconv.FormatUint(seq, 10)},
+			},
+		}
+	}
+
+	startTime := time.Now()
+	_, err := p.Connection.Publish(p.ctx, pub)
 	if err != nil {
 		// I couldn't find any way to prevent publishing just after omq
 		// initiated the shutdown procedure, so we have to ignore this
@@ -168,7 +183,7 @@ func (p Mqtt5Publisher) Send() {
 	log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 }
 
-func (p Mqtt5Publisher) Stop(reason string) {
+func (p *Mqtt5Publisher) Stop(reason string) {
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Connection != nil {
 		disconnectCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

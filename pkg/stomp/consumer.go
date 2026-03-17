@@ -129,7 +129,10 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "destination", c.Topic)
 
-	previousMessageTimeSent := time.Unix(0, 0)
+	var oooTracker *utils.OutOfOrderTracker
+	if c.Config.DetectOutOfOrder || c.Config.DetectGaps {
+		oooTracker = utils.NewOutOfOrderTracker()
+	}
 
 	for i := 1; i <= c.Config.ConsumeCount; {
 		for c.Subscription == nil {
@@ -155,11 +158,26 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 
 			priority, _ := strconv.Atoi(msg.Header.Get("priority"))
 
-			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
-				metrics.MessagesConsumedOutOfOrderMetric(priority).Inc()
-				log.Info("out of order message received. This message was sent before the previous message", "this messsage", timeSent, "previous message", previousMessageTimeSent)
+			if oooTracker != nil {
+				if pubID, seq, ok := extractStompOrderingInfo(msg); ok {
+					result := oooTracker.Check(pubID, seq)
+					switch result.Status {
+					case utils.SequenceOutOfOrder:
+						if c.Config.DetectOutOfOrder {
+							metrics.MessagesConsumedOutOfOrderMetric(priority).Inc()
+							log.Info("out-of-order message",
+								"publisher", pubID, "seq", seq, "lastSeq", result.LastSeq, "timeSent", timeSent)
+						}
+					case utils.SequenceGap:
+						if c.Config.DetectGaps {
+							metrics.MessagesConsumedGapsMetric(priority).Inc()
+							log.Info("gap in sequence (missing messages)",
+								"publisher", pubID, "seq", seq, "lastSeq", result.LastSeq,
+								"missed", seq-result.LastSeq-1, "timeSent", timeSent)
+						}
+					}
+				}
 			}
-			previousMessageTimeSent = timeSent
 
 			log.Debug("message received", "id", c.Id, "destination", c.Topic, "size", len(msg.Body), "ack required", msg.ShouldAck(), "priority", priority, "latency", latency)
 
@@ -213,6 +231,20 @@ func (c *StompConsumer) Stop(reason string) {
 		}
 	}
 	log.Debug("consumer stopped", "id", c.Id, "reason", reason)
+}
+
+func extractStompOrderingInfo(msg *stomp.Message) (int, uint64, bool) {
+	pubIDStr := msg.Header.Get(utils.HeaderPublisherID)
+	seqStr := msg.Header.Get(utils.HeaderSequence)
+	if pubIDStr == "" || seqStr == "" {
+		return 0, 0, false
+	}
+	pubID, err1 := strconv.Atoi(pubIDStr)
+	seq, err2 := strconv.ParseUint(seqStr, 10, 64)
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return pubID, seq, true
 }
 
 func buildSubscribeOpts(cfg config.Config, destination string, id int) []func(*frame.Frame) error {

@@ -160,7 +160,10 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 	c.CreateReceiver(c.ctx)
 	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "terminus", c.Terminus)
-	previousMessageTimeSent := time.Unix(0, 0)
+	var oooTracker *utils.OutOfOrderTracker
+	if c.Config.DetectOutOfOrder || c.Config.DetectGaps {
+		oooTracker = utils.NewOutOfOrderTracker()
+	}
 
 	for i := 1; i <= c.Config.ConsumeCount; {
 		if c.Receiver == nil {
@@ -225,13 +228,26 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 				}
 			}
 
-			if c.Config.LogOutOfOrder && timeSent.Before(previousMessageTimeSent) {
-				metrics.MessagesConsumedOutOfOrderMetric(priority).Inc()
-				log.Info("out of order message received. This message was sent before the previous message",
-					"this messsage", timeSent,
-					"previous message", previousMessageTimeSent)
+			if oooTracker != nil && msg.Annotations != nil {
+				if pubID, seq, ok := extractOrderingInfo(msg.Annotations); ok {
+					result := oooTracker.Check(pubID, seq)
+					switch result.Status {
+					case utils.SequenceOutOfOrder:
+						if c.Config.DetectOutOfOrder {
+							metrics.MessagesConsumedOutOfOrderMetric(priority).Inc()
+							log.Info("out-of-order message",
+								"publisher", pubID, "seq", seq, "lastSeq", result.LastSeq, "timeSent", timeSent)
+						}
+					case utils.SequenceGap:
+						if c.Config.DetectGaps {
+							metrics.MessagesConsumedGapsMetric(priority).Inc()
+							log.Info("gap in sequence (missing messages)",
+								"publisher", pubID, "seq", seq, "lastSeq", result.LastSeq,
+								"missed", seq-result.LastSeq-1, "timeSent", timeSent)
+						}
+					}
+				}
 			}
-			previousMessageTimeSent = timeSent
 
 			log.Debug("message received",
 				"id", c.Id,
@@ -374,6 +390,43 @@ func buildLinkProperties(cfg config.Config, id int) map[string]any {
 	}
 
 	return props
+}
+
+func extractOrderingInfo(annotations amqp.Annotations) (int, uint64, bool) {
+	pubIDVal, hasPubID := annotations[utils.HeaderPublisherID]
+	seqVal, hasSeq := annotations[utils.HeaderSequence]
+	if !hasPubID || !hasSeq {
+		return 0, 0, false
+	}
+	pubID, okP := toInt(pubIDVal)
+	seq, okS := toUint64(seqVal)
+	return pubID, seq, okP && okS
+}
+
+func toInt(v any) (int, bool) {
+	switch val := v.(type) {
+	case int64:
+		return int(val), true
+	case int32:
+		return int(val), true
+	case int:
+		return val, true
+	}
+	return 0, false
+}
+
+func toUint64(v any) (uint64, bool) {
+	switch val := v.(type) {
+	case int64:
+		return uint64(val), true
+	case int32:
+		return uint64(val), true
+	case int:
+		return uint64(val), true
+	case uint64:
+		return val, true
+	}
+	return 0, false
 }
 
 func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {

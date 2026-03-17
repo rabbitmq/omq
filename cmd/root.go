@@ -385,8 +385,10 @@ func RootCmd() *cobra.Command {
 		"AMQP-1.0 consumer credits / STOMP prefetch count")
 	rootCmd.PersistentFlags().StringVarP(&consumerLatencyStr, "consumer-latency", "L", "",
 		"consumer latency (time to accept message, supports templates like {{randInt 100 1000}}ms)")
-	rootCmd.PersistentFlags().BoolVar(&cfg.LogOutOfOrder, "log-out-of-order-messages", false,
-		"Print a log line when a message is received that is older than the previously received message")
+	rootCmd.PersistentFlags().BoolVar(&cfg.DetectOutOfOrder, "detect-out-of-order-messages", false,
+		"Detect and log out-of-order messages using per-publisher sequence numbers (not supported with MQTT v3)")
+	rootCmd.PersistentFlags().BoolVar(&cfg.DetectGaps, "detect-gaps-in-messages", false,
+		"Detect and log gaps in message sequences (missing messages) using per-publisher sequence numbers (not supported with MQTT v3)")
 	rootCmd.PersistentFlags().DurationVar(&cfg.ConsumerStartupDelay, "consumer-startup-delay", 0,
 		"Delay consumer startup to allow a backlog of messages to build up (eg. 10s)")
 	rootCmd.PersistentFlags().IntSliceVar(&requeueWhenPriority, "requeue-when-priority", []int{},
@@ -481,6 +483,17 @@ func start(cfg config.Config) {
 	if cfg.MaxInFlight > 1 && cfg.PublisherProto != config.AMQP && cfg.PublisherProto != config.AMQP091 {
 		fmt.Println("max-in-flight > 1 is only supported for AMQP and AMQP 0.9.1 publishers")
 		os.Exit(1)
+	}
+
+	if cfg.DetectOutOfOrder || cfg.DetectGaps {
+		if cfg.PublisherProto == config.MQTT && cfg.MqttPublisher.Version != 5 {
+			fmt.Println("--detect-out-of-order-messages/--detect-gaps-in-messages are not supported with MQTT v3 publishers (use --mqtt-publisher-version 5)")
+			os.Exit(1)
+		}
+		if cfg.ConsumerProto == config.MQTT && cfg.MqttConsumer.Version != 5 {
+			fmt.Println("--detect-out-of-order-messages/--detect-gaps-in-messages are not supported with MQTT v3 consumers (use --mqtt-consumer-version 5)")
+			os.Exit(1)
+		}
 	}
 
 	// Warn about unsupported requeue/discard features for STOMP and MQTT consumers

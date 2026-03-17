@@ -32,6 +32,7 @@ type Amqp091Publisher struct {
 	Config           config.Config
 	msg              []byte
 	whichUri         int
+	msgSent          atomic.Uint64
 	ctx              context.Context
 }
 
@@ -223,6 +224,8 @@ func (p *Amqp091Publisher) Stop(reason string) {
 }
 
 func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
+	seq := p.msgSent.Add(1) - 1
+
 	// Regenerate message body on each publish if size template is used
 	if p.Config.SizeTemplate != nil {
 		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
@@ -234,14 +237,13 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 		Body:         p.msg,
 	}
 
-	// Handle template-based headers
-	if len(p.Config.Amqp091.HeaderTemplates) > 0 {
+	needsOrderingMetadata := p.Config.DetectOutOfOrder || p.Config.DetectGaps
+	if len(p.Config.Amqp091.HeaderTemplates) > 0 || needsOrderingMetadata {
 		if msg.Headers == nil {
 			msg.Headers = make(amqp091.Table)
 		}
 		for key, tmpl := range p.Config.Amqp091.HeaderTemplates {
 			stringValue := utils.ExecuteTemplate(tmpl, p.Id)
-			// Convert to appropriate type like the original ParseHeaders function
 			if intVal, err := strconv.ParseInt(stringValue, 10, 64); err == nil {
 				msg.Headers[key] = intVal
 			} else if floatVal, err := strconv.ParseFloat(stringValue, 64); err == nil {
@@ -249,6 +251,10 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 			} else {
 				msg.Headers[key] = stringValue
 			}
+		}
+		if needsOrderingMetadata {
+			msg.Headers[utils.HeaderPublisherID] = int64(p.Id)
+			msg.Headers[utils.HeaderSequence] = int64(seq)
 		}
 	}
 

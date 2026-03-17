@@ -716,6 +716,69 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 
+	DescribeTable("detects out-of-order messages across protocols",
+		func(publishProto string, publishToPrefix string, consumeProto string, consumeFromPrefix string) {
+			suffix := "ooo-" + publishProto + "-" + consumeProto
+			publishTo := publishToPrefix + suffix
+			consumeFrom := consumeFromPrefix + suffix
+			args := []string{
+				publishProto + "-" + consumeProto,
+				"--pmessages=5",
+				"--cmessages=5",
+				"-t", publishTo,
+				"-T", consumeFrom,
+				"--queue-durability=none",
+				"--detect-out-of-order-messages",
+				"--detect-gaps-in-messages",
+				"--time=5s",
+				"--print-all-metrics",
+			}
+			if consumeProto == "amqp" || consumeProto == "amqp091" {
+				args = append(args, "--queues", "classic", "--cleanup-queues=true")
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(7 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Out)
+			stderrOutput, _ := io.ReadAll(session.Err)
+			stderrStr := string(stderrOutput)
+
+			Expect(stderrStr).To(ContainSubstring("TOTAL PUBLISHED messages=5"))
+			Expect(stderrStr).To(ContainSubstring("TOTAL CONSUMED messages=5"))
+
+			buf := bytes.NewReader(output)
+			ooo := metricValue(buf, `omq_messages_consumed_out_of_order`)
+			if ooo == -1 {
+				ooo = 0
+			}
+			Expect(ooo).Should(Equal(0.0))
+			buf.Reset(output)
+			gaps := metricValue(buf, `omq_messages_consumed_gaps`)
+			if gaps == -1 {
+				gaps = 0
+			}
+			Expect(gaps).Should(Equal(0.0))
+		},
+		// MQTT v5 is the default, so no version flags needed
+		Entry("amqp -> amqp", "amqp", "/queues/", "amqp", "/queues/"),
+		Entry("amqp -> amqp091", "amqp", "/queues/", "amqp091", "/queues/"),
+		Entry("amqp -> stomp", "amqp", "/exchanges/amq.topic/", "stomp", "/topic/"),
+		Entry("amqp -> mqtt5", "amqp", "/exchanges/amq.topic/", "mqtt", "/topic/"),
+		Entry("amqp091 -> amqp", "amqp091", "/queues/", "amqp", "/queues/"),
+		Entry("amqp091 -> amqp091", "amqp091", "/queues/", "amqp091", "/queues/"),
+		Entry("amqp091 -> stomp", "amqp091", "/exchanges/amq.topic/", "stomp", "/topic/"),
+		Entry("amqp091 -> mqtt5", "amqp091", "/exchanges/amq.topic/", "mqtt", "/topic/"),
+		Entry("stomp -> amqp", "stomp", "/topic/", "amqp", "/queues/"),
+		Entry("stomp -> amqp091", "stomp", "/topic/", "amqp091", "/queues/"),
+		Entry("stomp -> stomp", "stomp", "/topic/", "stomp", "/topic/"),
+		Entry("stomp -> mqtt5", "stomp", "/topic/", "mqtt", "/topic/"),
+		Entry("mqtt5 -> amqp", "mqtt", "/topic/", "amqp", "/queues/"),
+		Entry("mqtt5 -> amqp091", "mqtt", "/topic/", "amqp091", "/queues/"),
+		Entry("mqtt5 -> stomp", "mqtt", "/topic/", "stomp", "/topic/"),
+		Entry("mqtt5 -> mqtt5", "mqtt", "/topic/", "mqtt", "/topic/"),
+	)
+
 	Describe("AMQP modify outcome", func() {
 		It("should add annotations via --amqp-modify that are visible on redelivery", func() {
 			args := []string{

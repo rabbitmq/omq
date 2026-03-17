@@ -155,6 +155,12 @@ func MessagesConsumedOutOfOrderMetric(priority int) *vmetrics.Counter {
 	return vmetrics.GetOrCreateCounter(`omq_messages_consumed_out_of_order` + labelsToString(labels))
 }
 
+func MessagesConsumedGapsMetric(priority int) *vmetrics.Counter {
+	labels := map[string]string{"priority": strconv.Itoa(priority)}
+	maps.Copy(labels, globalLabels)
+	return vmetrics.GetOrCreateCounter(`omq_messages_consumed_gaps` + labelsToString(labels))
+}
+
 type latencyTracker struct {
 	min atomic.Int64
 	max atomic.Int64

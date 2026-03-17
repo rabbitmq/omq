@@ -466,13 +466,18 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	}
 
 	// Handle template-based message annotations
-	if len(p.Config.Amqp.MsgAnnotationTemplates) > 0 {
+	needsOrderingMetadata := p.Config.DetectOutOfOrder || p.Config.DetectGaps
+	if len(p.Config.Amqp.MsgAnnotationTemplates) > 0 || needsOrderingMetadata {
 		if msg.Annotations == nil {
-			msg.Annotations = make(map[any]any, len(p.Config.Amqp.MsgAnnotationTemplates))
+			msg.Annotations = make(map[any]any, len(p.Config.Amqp.MsgAnnotationTemplates)+2)
 		}
 		for key, tmpl := range p.Config.Amqp.MsgAnnotationTemplates {
 			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
 			msg.Annotations[key] = maybeConvertToInt(stringValue)
+		}
+		if needsOrderingMetadata {
+			msg.Annotations[utils.HeaderPublisherID] = int64(p.Id)
+			msg.Annotations[utils.HeaderSequence] = int64(seq)
 		}
 	}
 

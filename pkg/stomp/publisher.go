@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -29,6 +30,7 @@ type StompPublisher struct {
 	ctx        context.Context
 	msg        []byte
 	whichUri   int
+	msgSent    atomic.Uint64
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *StompPublisher {
@@ -150,13 +152,22 @@ func (p *StompPublisher) StartPublishing() string {
 }
 
 func (p *StompPublisher) Send() error {
+	seq := p.msgSent.Add(1) - 1
+
 	if p.Config.SizeTemplate != nil {
 		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	}
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 
+	headers := buildHeaders(p.Config, p.Id)
+	if p.Config.DetectOutOfOrder || p.Config.DetectGaps {
+		headers = append(headers,
+			stomp.SendOpt.Header(utils.HeaderPublisherID, strconv.Itoa(p.Id)),
+			stomp.SendOpt.Header(utils.HeaderSequence, strconv.FormatUint(seq, 10)))
+	}
+
 	startTime := time.Now()
-	err := p.Connection.Send(p.Topic, "", p.msg, buildHeaders(p.Config, p.Id)...)
+	err := p.Connection.Send(p.Topic, "", p.msg, headers...)
 	latency := time.Since(startTime)
 	if err != nil {
 		log.Error("message sending failure", "id", p.Id, "error", err)
