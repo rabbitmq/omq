@@ -1,4 +1,4 @@
-# Testing JMS Queues with omq
+# Using With RabitMQ JMS Queues
 
 ## Prerequisites
 
@@ -129,12 +129,13 @@ omq amqp --queues jms -x 0 \
 
 ## Queue Overflow (reject-publish)
 
-JMS queues support `x-max-length` with `reject-publish` overflow strategy.
+JMS queues support `x-max-length` with `reject-publish` overflow strategy
+(the `reject-publish` strategy is the default for JMS queues).
 
 ```bash
 # Declare queue with max length 5 and reject-publish
 omq amqp --queues jms \
-  --queue-args 'x-selector-fields=*,x-max-length=5,x-overflow=reject-publish' \
+  --queue-args 'x-selector-fields=*,x-max-length=5' \
   -t /queues/jms-overflow -T /queues/jms-overflow \
   -x 1 -C 20 -y 0
 ```
