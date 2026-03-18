@@ -465,5 +465,9 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 		filters = append(filters, amqp.NewLinkFilter("sql-filter", 0x120,
 			cfg.Amqp.SQLFilter))
 	}
+	if cfg.Amqp.JMSSelectorFilter != "" {
+		filters = append(filters, amqp.NewLinkFilter("jms-selector", 0x0000468C00000004,
+			cfg.Amqp.JMSSelectorFilter))
+	}
 	return filters
 }

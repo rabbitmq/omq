@@ -37,6 +37,7 @@ const (
 	Quorum
 	Stream
 	Exclusive
+	JMS
 )
 
 var AmqpDurabilityModes = map[AmqpDurabilityMode][]string{
@@ -51,6 +52,7 @@ var QueueTypes = map[QueueType][]string{
 	Quorum:      {"quorum"},
 	Stream:      {"stream"},
 	Exclusive:   {"exclusive"},
+	JMS:         {"jms"},
 }
 
 type AnnotationTemplate struct {
@@ -74,6 +76,7 @@ type AmqpOptions struct {
 	MsgAnnotationTemplates map[string]*template.Template
 	AppPropertyFilters     map[string]string
 	SQLFilter              string
+	JMSSelectorFilter      string
 	ModifyOptions          AmqpModifyOptions
 	ModifyRate             int
 }

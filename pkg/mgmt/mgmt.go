@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -126,27 +127,57 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 		return nil
 	}
 
-	var queueSpec rmq.IQueueSpecification
-	switch cfg.Queues {
-	case config.Classic:
-		queueSpec = &rmq.ClassicQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
-	case config.Quorum:
-		queueSpec = &rmq.QuorumQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
-	case config.Stream:
-		queueSpec = &rmq.StreamQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
-	}
-
 	conn := instance.connection()
 	if conn == nil {
 		return nil
 	}
 
-	qi, err := conn.Management().DeclareQueue(context.Background(), queueSpec)
-	if err != nil {
-		log.Error("Failed to declare queue", "name", queueName, "error", err)
-		os.Exit(1)
+	var queueInfo *rmq.AmqpQueueInfo
+
+	if cfg.Queues == config.JMS {
+		args := map[string]any{"x-queue-type": "jms"}
+		for k, v := range cfg.QueueArgs {
+			if k == "x-selector-fields" {
+				if s, ok := v.(string); ok {
+					fields := strings.Split(s, ",")
+					args[k] = fields
+					continue
+				}
+			}
+			args[k] = v
+		}
+		body := map[string]any{
+			"durable":     true,
+			"auto_delete": false,
+			"exclusive":   false,
+			"arguments":   args,
+		}
+		path := fmt.Sprintf("/queues/%s", queueName)
+		_, err := conn.Management().Request(context.Background(), body, path, "PUT", []int{200, 409})
+		if err != nil {
+			log.Error("Failed to declare JMS queue", "name", queueName, "error", err)
+			os.Exit(1)
+		}
+		log.Debug("JMS queue declared", "name", queueName)
+	} else {
+		var queueSpec rmq.IQueueSpecification
+		switch cfg.Queues {
+		case config.Classic:
+			queueSpec = &rmq.ClassicQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
+		case config.Quorum:
+			queueSpec = &rmq.QuorumQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
+		case config.Stream:
+			queueSpec = &rmq.StreamQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
+		}
+
+		qi, err := conn.Management().DeclareQueue(context.Background(), queueSpec)
+		if err != nil {
+			log.Error("Failed to declare queue", "name", queueName, "error", err)
+			os.Exit(1)
+		}
+		log.Debug("queue declared", "name", qi.Name(), "type", qi.Type())
+		queueInfo = qi
 	}
-	log.Debug("queue declared", "name", qi.Name(), "type", qi.Type())
 
 	if m.cleanupQueues {
 		m.declaredQueues[queueName] = true
@@ -154,18 +185,16 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 
 	exchangeName, routingKey := parsePublishTo(cfg.PublisherProto, cfg.PublishToTemplate, id)
 
-	// explicitly set routing key overrides everything else
 	if cfg.BindingKey != "" {
 		routingKey = utils.InjectId(cfg.BindingKey, id)
 	}
 
-	// explicitly set exchange overrides everything else
 	if cfg.Exchange != "" {
 		exchangeName = cfg.Exchange
 	}
 
 	if exchangeName != "amq.default" {
-		_, err = instance.connection().Management().Bind(context.Background(), &rmq.ExchangeToQueueBindingSpecification{
+		_, err := instance.connection().Management().Bind(context.Background(), &rmq.ExchangeToQueueBindingSpecification{
 			SourceExchange:   exchangeName,
 			DestinationQueue: queueName,
 			BindingKey:       routingKey,
@@ -177,7 +206,7 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 		log.Debug("binding declared", "exchange", exchangeName, "queue", queueName, "key", routingKey)
 	}
 
-	return qi
+	return queueInfo
 }
 
 func parsePublishTo(proto config.Protocol, publishToTemplate *template.Template, id int) (string, string) {
