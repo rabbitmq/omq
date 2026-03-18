@@ -145,8 +145,8 @@ func RootCmd() *cobra.Command {
 
 	amqp091PublisherFlags.BoolVar(&cfg.Amqp091.Mandatory, "amqp091-mandatory", false,
 		"Set the mandatory flag when publishing messages")
-	amqp091PublisherFlags.StringArrayVar(&amqp091Headers, "amqp091-headers", []string{},
-		"AMQP 0.9.1 message headers in format 'key1=value1,key2=value2'. Numbers are automatically detected and sent as numeric types.")
+	amqp091PublisherFlags.StringArrayVar(&amqp091Headers, "amqp091-header", []string{},
+		"AMQP 0.9.1 message header, eg. 'key=val1,val2' to cycle values per message. Use multiple flags for multiple headers.")
 
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",

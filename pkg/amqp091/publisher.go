@@ -243,7 +243,7 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 			msg.Headers = make(amqp091.Table)
 		}
 		for key, tmpl := range p.Config.Amqp091.HeaderTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Id)
+			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
 			if intVal, err := strconv.ParseInt(stringValue, 10, 64); err == nil {
 				msg.Headers[key] = intVal
 			} else if floatVal, err := strconv.ParseFloat(stringValue, 64); err == nil {

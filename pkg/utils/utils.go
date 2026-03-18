@@ -241,27 +241,25 @@ func ParseHeaders(headerStrings []string) map[string]any {
 }
 
 // ParseHeadersWithTemplates parses header strings as templates.
-// Non-template strings will return as-is when executed.
+// Each entry is a single key=value pair where the value may contain
+// comma-separated items that will be cycled through per message.
 func ParseHeadersWithTemplates(headerStrings []string) (map[string]any, map[string]*template.Template, error) {
 	headers := make(map[string]any)
 	templates := make(map[string]*template.Template)
 
 	for _, headerString := range headerStrings {
-		pairs := strings.SplitSeq(headerString, ",")
-		for pair := range pairs {
-			parts := strings.SplitN(strings.TrimSpace(pair), "=", 2)
-			if len(parts) == 2 {
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-
-				// Always parse as template (non-template strings will return as-is when executed)
-				tmpl, err := template.New("header").Funcs(sprig.FuncMap()).Parse(value)
-				if err != nil {
-					return nil, nil, err
-				}
-				templates[key] = tmpl
-			}
+		parts := strings.SplitN(strings.TrimSpace(headerString), "=", 2)
+		if len(parts) != 2 {
+			continue
 		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		tmpl, err := template.New("header").Funcs(sprig.FuncMap()).Parse(value)
+		if err != nil {
+			return nil, nil, err
+		}
+		templates[key] = tmpl
 	}
 
 	return headers, templates, nil
