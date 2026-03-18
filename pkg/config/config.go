@@ -77,6 +77,7 @@ type AmqpOptions struct {
 	AppPropertyFilters     map[string]string
 	SQLFilter              string
 	JMSSelectorFilter      string
+	Browse                 bool
 	ModifyOptions          AmqpModifyOptions
 	ModifyRate             int
 }

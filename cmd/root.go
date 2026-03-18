@@ -135,6 +135,8 @@ func RootCmd() *cobra.Command {
 		"AMQP SQL Filter expression eg 'proprties.subject LIKE 'foo-%'")
 	amqpConsumerFlags.StringVar(&cfg.Amqp.JMSSelectorFilter, "amqp-jms-selector", "",
 		"JMS message selector expression for JMS queues, eg. \"color = 'red' AND price > 10\"")
+	amqpConsumerFlags.BoolVar(&cfg.Amqp.Browse, "amqp-browse", false,
+		"Browse messages without consuming them (sets distribution-mode to 'copy')")
 	amqpConsumerFlags.BoolVar(&cfg.Amqp.ConsumeSettled, "amqp-consume-settled", false,
 		"Request the broker to send messages pre-settled (no consumer acknowledgment)")
 	amqpConsumerFlags.IntVar(&cfg.Amqp.ModifyRate, "amqp-modify-rate", 0,
