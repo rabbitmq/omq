@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Tanzu RabbitMQ 4.3+ with the `rabbitmq_jms` plugin enabled
-- `omq` 0.45.0 or newer
+- `omq` 0.46.0 or newer
 
 ## Declaring JMS Queues
 
@@ -173,3 +173,8 @@ The `x-opt-delivery-time` value must be in **milliseconds** since the Unix epoch
 `unixEpoch` sprig function returns seconds, so `| mul 1000` is required.
 Alternative expression to delay by 30s would be `{{ now | unixEpoch | add 30 | mul 1000 }}`.
 
+## Browsing Mode
+
+RabbitMQ JMS queues support browsing mode - messages are dispatched
+to the consumer but not removed from the queue. Use `--amqp-browse`
+to enable this mode.
