@@ -133,7 +133,7 @@ func CalculateDelayAccuracyFromDeliveryTime(deliveryTimeMs int64) (time.Duration
 	}
 
 	expectedDeliveryTime := time.UnixMilli(deliveryTimeMs)
-	delayAccuracy := time.Now().Sub(expectedDeliveryTime)
+	delayAccuracy := time.Since(expectedDeliveryTime)
 
 	return delayAccuracy, true
 }
