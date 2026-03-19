@@ -198,6 +198,21 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 			metrics.RecordEndToEndLatency(latency)
 
+			if len(msg.Headers) > 0 {
+				var delayAccuracy time.Duration
+				var hasDelay bool
+
+				if val, ok := headerToInt64(msg.Headers, "x-delay-processed"); ok {
+					delayAccuracy, hasDelay = utils.CalculateDelayAccuracy(&payload, val)
+				} else if val, ok := headerToInt64(msg.Headers, "x-opt-delivery-time"); ok {
+					delayAccuracy, hasDelay = utils.CalculateDelayAccuracyFromDeliveryTime(val)
+				}
+
+				if hasDelay {
+					metrics.RecordDelayAccuracy(delayAccuracy)
+				}
+			}
+
 			if oooTracker != nil && len(msg.Headers) > 0 {
 				if pubID, seq, ok := extractOrderingInfoFromHeaders(msg.Headers); ok {
 					result := oooTracker.Check(pubID, seq)
@@ -314,6 +329,27 @@ func extractOrderingInfoFromHeaders(headers amqp091.Table) (int, uint64, bool) {
 	pubID, okP := amqpTableValToInt(pubIDVal)
 	seq, okS := amqpTableValToUint64(seqVal)
 	return pubID, seq, okP && okS
+}
+
+func headerToInt64(headers amqp091.Table, key string) (int64, bool) {
+	v, exists := headers[key]
+	if !exists {
+		return 0, false
+	}
+	switch val := v.(type) {
+	case int64:
+		return val, true
+	case int32:
+		return int64(val), true
+	case int:
+		return int64(val), true
+	case string:
+		if parsed, err := strconv.ParseInt(val, 10, 64); err == nil {
+			return parsed, true
+		}
+	}
+	log.Debug("could not parse header", "key", key, "value", v, "type", fmt.Sprintf("%T", v))
+	return 0, false
 }
 
 func amqpTableValToInt(v any) (int, bool) {

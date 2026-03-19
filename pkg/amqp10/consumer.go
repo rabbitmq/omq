@@ -201,37 +201,17 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 
 			// Check for delayed message accuracy
 			if msg.Annotations != nil {
-				if xDelayValue, exists := msg.Annotations["x-delay-processed"]; exists {
-					var delayMs int64
-					var parsed bool
+				var delayAccuracy time.Duration
+				var hasDelay bool
 
-					if val, ok := xDelayValue.(int64); ok {
-						delayMs = val
-						parsed = true
-					} else if val, ok := xDelayValue.(int32); ok {
-						delayMs = int64(val)
-						parsed = true
-					} else if val, ok := xDelayValue.(int); ok {
-						delayMs = int64(val)
-						parsed = true
-					} else if val, ok := xDelayValue.(string); ok {
-						if parsedVal, err := strconv.ParseInt(val, 10, 64); err == nil {
-							delayMs = parsedVal
-							parsed = true
-						}
-					}
+				if val, ok := annotationToInt64(msg.Annotations, "x-delay-processed"); ok {
+					delayAccuracy, hasDelay = utils.CalculateDelayAccuracy(&payload, val)
+				} else if val, ok := annotationToInt64(msg.Annotations, "x-opt-delivery-time"); ok {
+					delayAccuracy, hasDelay = utils.CalculateDelayAccuracyFromDeliveryTime(val)
+				}
 
-					if parsed {
-						delayAccuracy, isDelayed := utils.CalculateDelayAccuracy(&payload, delayMs)
-						if isDelayed {
-							metrics.DelayAccuracy.Update(delayAccuracy.Seconds())
-							if delayAccuracy < 0 {
-								metrics.MessagesDeliveredTooEarly.Inc()
-							}
-						}
-					} else {
-						log.Debug("could not parse x-delay annotation", "value", xDelayValue, "type", fmt.Sprintf("%T", xDelayValue))
-					}
+				if hasDelay {
+					metrics.RecordDelayAccuracy(delayAccuracy)
 				}
 			}
 
@@ -408,6 +388,27 @@ func extractOrderingInfo(annotations amqp.Annotations) (int, uint64, bool) {
 	pubID, okP := toInt(pubIDVal)
 	seq, okS := toUint64(seqVal)
 	return pubID, seq, okP && okS
+}
+
+func annotationToInt64(annotations amqp.Annotations, key string) (int64, bool) {
+	v, exists := annotations[key]
+	if !exists {
+		return 0, false
+	}
+	switch val := v.(type) {
+	case int64:
+		return val, true
+	case int32:
+		return int64(val), true
+	case int:
+		return int64(val), true
+	case string:
+		if parsed, err := strconv.ParseInt(val, 10, 64); err == nil {
+			return parsed, true
+		}
+	}
+	log.Debug("could not parse annotation", "key", key, "value", v, "type", fmt.Sprintf("%T", v))
+	return 0, false
 }
 
 func toInt(v any) (int, bool) {

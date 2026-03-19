@@ -83,6 +83,44 @@ var _ = Context("Utils", func() {
 		})
 	})
 
+	Describe("Delay accuracy from delivery time", func() {
+		It("should report late delivery when delivery time is in the past", func() {
+			deliveryTimeMs := time.Now().Add(-200 * time.Millisecond).UnixMilli()
+
+			delayAccuracy, ok := utils.CalculateDelayAccuracyFromDeliveryTime(deliveryTimeMs)
+
+			Expect(ok).To(BeTrue())
+			Expect(delayAccuracy).To(BeNumerically(">", 0))
+			Expect(delayAccuracy.Milliseconds()).To(BeNumerically(">=", 190))
+			Expect(delayAccuracy.Milliseconds()).To(BeNumerically("<", 250))
+		})
+
+		It("should report early delivery when delivery time is in the future", func() {
+			deliveryTimeMs := time.Now().Add(200 * time.Millisecond).UnixMilli()
+
+			delayAccuracy, ok := utils.CalculateDelayAccuracyFromDeliveryTime(deliveryTimeMs)
+
+			Expect(ok).To(BeTrue())
+			Expect(delayAccuracy).To(BeNumerically("<", 0))
+			Expect(delayAccuracy.Milliseconds()).To(BeNumerically("<=", -190))
+			Expect(delayAccuracy.Milliseconds()).To(BeNumerically(">", -250))
+		})
+
+		It("should return false for zero delivery time", func() {
+			delayAccuracy, ok := utils.CalculateDelayAccuracyFromDeliveryTime(0)
+
+			Expect(ok).To(BeFalse())
+			Expect(delayAccuracy).To(Equal(time.Duration(0)))
+		})
+
+		It("should return false for negative delivery time", func() {
+			delayAccuracy, ok := utils.CalculateDelayAccuracyFromDeliveryTime(-1)
+
+			Expect(ok).To(BeFalse())
+			Expect(delayAccuracy).To(Equal(time.Duration(0)))
+		})
+	})
+
 	Describe("URI Parsing", func() {
 		type test struct {
 			rawURI        string

@@ -123,6 +123,21 @@ func CalculateDelayAccuracy(payload *[]byte, delayMs int64) (time.Duration, bool
 	return delayAccuracy, true
 }
 
+// CalculateDelayAccuracyFromDeliveryTime calculates the accuracy of delayed message delivery
+// using an absolute delivery time (e.g. from x-opt-delivery-time annotation).
+// The deliveryTimeMs is the expected delivery time in milliseconds since Unix epoch.
+// Returns the delay accuracy (negative means early, positive means late) and whether the value was valid.
+func CalculateDelayAccuracyFromDeliveryTime(deliveryTimeMs int64) (time.Duration, bool) {
+	if deliveryTimeMs <= 0 {
+		return 0, false
+	}
+
+	expectedDeliveryTime := time.UnixMilli(deliveryTimeMs)
+	delayAccuracy := time.Now().Sub(expectedDeliveryTime)
+
+	return delayAccuracy, true
+}
+
 func FormatTimestamp(timestamp uint64) time.Time {
 	var t time.Time
 	// should be updated before the year 2100 ;)

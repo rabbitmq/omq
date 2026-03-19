@@ -156,6 +156,16 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 			timeSent, latency := utils.CalculateEndToEndLatency(&msg.Body)
 			metrics.RecordEndToEndLatency(latency)
 
+			if val, err := strconv.ParseInt(msg.Header.Get("x-delay-processed"), 10, 64); err == nil {
+				if delayAccuracy, ok := utils.CalculateDelayAccuracy(&msg.Body, val); ok {
+					metrics.RecordDelayAccuracy(delayAccuracy)
+				}
+			} else if val, err := strconv.ParseInt(msg.Header.Get("x-opt-delivery-time"), 10, 64); err == nil {
+				if delayAccuracy, ok := utils.CalculateDelayAccuracyFromDeliveryTime(val); ok {
+					metrics.RecordDelayAccuracy(delayAccuracy)
+				}
+			}
+
 			priority, _ := strconv.Atoi(msg.Header.Get("priority"))
 
 			if oooTracker != nil {

@@ -217,6 +217,13 @@ func RecordEndToEndLatency(latency time.Duration) {
 	e2eLatencyTracker.record(latency)
 }
 
+func RecordDelayAccuracy(accuracy time.Duration) {
+	DelayAccuracy.Update(accuracy.Seconds())
+	if accuracy < 0 {
+		MessagesDeliveredTooEarly.Inc()
+	}
+}
+
 func (m *MetricsServer) printMessageRates(ctx context.Context) {
 	go func() {
 		zeroRateSeconds := 0
