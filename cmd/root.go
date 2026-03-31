@@ -66,6 +66,7 @@ var (
 	consumerLatencyStr     string
 	consumerPriorityStr    string
 	messagePriorityStr     string
+	messageTTLStr          string
 	publishToStr           string
 	consumeFromStr         string
 	sizeStr                string
@@ -423,7 +424,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().IntVarP(&cfg.MaxInFlight, "max-in-flight", "c", 1, "Maximum number of in-flight messages per publisher")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable")
 	rootCmd.PersistentFlags().StringVar(&messagePriorityStr, "message-priority", "", "Message priority (0-255, default=unset, supports templates like {{randInt 0 255}})")
-	rootCmd.PersistentFlags().DurationVar(&cfg.MessageTTL, "message-ttl", 0, "Message TTL (not set by default)")
+	rootCmd.PersistentFlags().StringVar(&messageTTLStr, "message-ttl", "", "Message TTL (e.g. 60s, 5m; supports templates like {{randInt 1000 5000}}ms)")
 
 	rootCmd.PersistentFlags().StringSliceVar(&metricTags, "metric-tags", []string{},
 		"Prometheus label-value pairs, eg. l1=v1,l2=v2")
@@ -864,6 +865,14 @@ func sanitizeConfig(cfg *config.Config) error {
 			return fmt.Errorf("invalid template in message priority: %v", err)
 		}
 		cfg.MessagePriorityTemplate = tmpl
+	}
+
+	if messageTTLStr != "" {
+		tmpl, err := config.ParseTemplateValue(messageTTLStr)
+		if err != nil {
+			return fmt.Errorf("invalid template in message TTL: %v", err)
+		}
+		cfg.MessageTTLTemplate = tmpl
 	}
 
 	if consumerPriorityStr != "" {

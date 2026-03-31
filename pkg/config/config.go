@@ -130,7 +130,7 @@ type Config struct {
 	QueueDurability          AmqpDurabilityMode
 	MessageDurability        bool
 	MessagePriorityTemplate  *template.Template
-	MessageTTL               time.Duration
+	MessageTTLTemplate       *template.Template
 	StreamOffset             any
 	StreamFilterValues       string
 	StreamFilterValueSet     string

@@ -237,6 +237,15 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 		Body:         p.msg,
 	}
 
+	if p.Config.MessageTTLTemplate != nil {
+		ttlStr := utils.ExecuteTemplate(p.Config.MessageTTLTemplate, p.Id, seq)
+		if ttl, err := time.ParseDuration(ttlStr); err == nil && ttl.Milliseconds() > 0 {
+			msg.Expiration = strconv.FormatInt(ttl.Milliseconds(), 10)
+		} else if err != nil {
+			log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
+		}
+	}
+
 	needsOrderingMetadata := p.Config.DetectOutOfOrder || p.Config.DetectGaps
 	if len(p.Config.Amqp091.HeaderTemplates) > 0 || needsOrderingMetadata {
 		if msg.Headers == nil {

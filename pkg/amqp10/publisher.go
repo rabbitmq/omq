@@ -504,8 +504,14 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 			os.Exit(1)
 		}
 	}
-	if p.Config.MessageTTL.Microseconds() > 0 {
-		header.TTL = p.Config.MessageTTL
+	if p.Config.MessageTTLTemplate != nil {
+		ttlStr := utils.ExecuteTemplate(p.Config.MessageTTLTemplate, p.Id, seq)
+		if ttl, err := time.ParseDuration(ttlStr); err == nil {
+			header.TTL = ttl
+		} else {
+			log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
+			os.Exit(1)
+		}
 	}
 	return msg
 }

@@ -202,8 +202,13 @@ func buildHeaders(cfg config.Config, publisherId int) []func(*frame.Frame) error
 		priorityStr := utils.ExecuteTemplate(cfg.MessagePriorityTemplate, publisherId)
 		headers = append(headers, stomp.SendOpt.Header("priority", priorityStr))
 	}
-	if cfg.MessageTTL.Milliseconds() > 0 {
-		headers = append(headers, stomp.SendOpt.Header("expiration", fmt.Sprint(cfg.MessageTTL.Milliseconds())))
+	if cfg.MessageTTLTemplate != nil {
+		ttlStr := utils.ExecuteTemplate(cfg.MessageTTLTemplate, publisherId)
+		if ttl, err := time.ParseDuration(ttlStr); err == nil && ttl.Milliseconds() > 0 {
+			headers = append(headers, stomp.SendOpt.Header("expiration", fmt.Sprint(ttl.Milliseconds())))
+		} else if err != nil {
+			log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
+		}
 	}
 
 	if cfg.StreamFilterValueSet != "" {
