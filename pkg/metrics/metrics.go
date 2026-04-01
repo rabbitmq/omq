@@ -77,7 +77,7 @@ func startServer() {
 func Start(ctx context.Context, cfg config.Config) *MetricsServer {
 	startServer()
 	metricsServer.printAllOnStop = cfg.PrintAllMetrics
-	registerMetrics(cfg.MetricTags)
+	registerMetrics(cfg.MetricTags, cfg.Publishers*int(cfg.Rate))
 	registerCommandLineMetric(cfg, cfg.MetricTags)
 	metricsServer.printMessageRates(ctx)
 
@@ -96,16 +96,21 @@ func Start(ctx context.Context, cfg config.Config) *MetricsServer {
 	return metricsServer
 }
 
-func registerMetrics(labels map[string]string) {
+func registerMetrics(labels map[string]string, totalRate int) {
+	SummaryWindow := 1 * time.Second
+	if totalRate < 2 {
+		SummaryWindow = 1500 * time.Millisecond
+	}
+
 	globalLabels = labels
 
 	MessagesPublished = vmetrics.GetOrCreateCounter("omq_messages_published_total" + labelsToString(globalLabels))
 	MessagesConfirmed = vmetrics.GetOrCreateCounter("omq_messages_confirmed_total" + labelsToString(globalLabels))
 	MessagesReturned = vmetrics.GetOrCreateCounter("omq_messages_returned_total" + labelsToString(globalLabels))
 	MessagesDeliveredTooEarly = vmetrics.GetOrCreateCounter("omq_early_messages_total" + labelsToString(globalLabels))
-	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`+labelsToString(globalLabels), 1500*time.Millisecond, []float64{0.5, 0.9, 0.95, 0.99})
-	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labelsToString(globalLabels), 1500*time.Millisecond, []float64{0.5, 0.9, 0.95, 0.99})
-	DelayAccuracy = vmetrics.GetOrCreateSummaryExt(`omq_delay_accuracy_seconds`+labelsToString(globalLabels), 1500*time.Millisecond, []float64{0.5, 0.9, 0.95, 0.99})
+	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
+	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
+	DelayAccuracy = vmetrics.GetOrCreateSummaryExt(`omq_delay_accuracy_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
 }
 
 func registerCommandLineMetric(cfg config.Config, globalLabels map[string]string) {
