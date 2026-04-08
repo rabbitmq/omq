@@ -77,7 +77,7 @@ func startServer() {
 func Start(ctx context.Context, cfg config.Config) *MetricsServer {
 	startServer()
 	metricsServer.printAllOnStop = cfg.PrintAllMetrics
-	registerMetrics(cfg.MetricTags, cfg.Publishers*int(cfg.Rate))
+	registerMetrics(cfg.MetricTags, cfg.Publishers, cfg.Rate)
 	registerCommandLineMetric(cfg, cfg.MetricTags)
 	metricsServer.printMessageRates(ctx)
 
@@ -96,10 +96,16 @@ func Start(ctx context.Context, cfg config.Config) *MetricsServer {
 	return metricsServer
 }
 
-func registerMetrics(labels map[string]string, totalRate int) {
-	SummaryWindow := 1 * time.Second
-	if totalRate < 2 {
-		SummaryWindow = 1500 * time.Millisecond
+func registerMetrics(labels map[string]string, publishers int, rate float32) {
+	SummaryWindow := time.Second
+	if rate > 0 {
+		effectiveRate := float64(publishers) * float64(rate)
+		// Span enough time that we expect at least one message in the summary window
+		if effectiveRate > 0 && effectiveRate <= 1 {
+			sec := int(1.0/effectiveRate) + 1
+			SummaryWindow = time.Duration(sec) * time.Second
+			log.Info("Low rate metrics mode", "summary_window", SummaryWindow)
+		}
 	}
 
 	globalLabels = labels
