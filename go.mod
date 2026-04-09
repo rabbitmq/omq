@@ -29,6 +29,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.11.6 // indirect
@@ -72,6 +73,8 @@ require (
 	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/histogram v1.2.0 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
+	go.opentelemetry.io/otel v1.40.0 // indirect
+	go.opentelemetry.io/otel/metric v1.40.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/mod v0.34.0 // indirect
@@ -85,6 +88,6 @@ require (
 require (
 	github.com/go-stomp/stomp/v3 v3.1.5
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/rabbitmq/rabbitmq-amqp-go-client v0.6.0
+	github.com/rabbitmq/rabbitmq-amqp-go-client v0.7.1-0.20260408090748-625953308775
 	github.com/spf13/pflag v1.0.10
 )

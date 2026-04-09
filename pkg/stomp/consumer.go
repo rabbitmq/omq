@@ -292,6 +292,12 @@ func buildSubscribeOpts(cfg config.Config, destination string, id int) []func(*f
 	case config.Stream:
 		subscribeOpts = append(subscribeOpts,
 			stomp.SubscribeOpt.Header("x-queue-type", "stream"))
+	case config.JMS:
+		subscribeOpts = append(subscribeOpts,
+			stomp.SubscribeOpt.Header("x-queue-type", "jms"))
+	case config.Delayed:
+		subscribeOpts = append(subscribeOpts,
+			stomp.SubscribeOpt.Header("x-queue-type", "delayed"))
 	case config.Exclusive:
 		subscribeOpts = append(subscribeOpts,
 			stomp.SubscribeOpt.Header("exclusive", "true"))

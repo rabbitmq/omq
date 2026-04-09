@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -134,42 +133,21 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 
 	var queueInfo *rmq.AmqpQueueInfo
 
-	if cfg.Queues == config.JMS {
-		args := map[string]any{"x-queue-type": "jms"}
-		for k, v := range cfg.QueueArgs {
-			if k == "x-selector-fields" {
-				if s, ok := v.(string); ok {
-					fields := strings.Split(s, ",")
-					args[k] = fields
-					continue
-				}
-			}
-			args[k] = v
-		}
-		body := map[string]any{
-			"durable":     true,
-			"auto_delete": false,
-			"exclusive":   false,
-			"arguments":   args,
-		}
-		path := fmt.Sprintf("/queues/%s", queueName)
-		_, err := conn.Management().Request(context.Background(), body, path, "PUT", []int{200, 409})
-		if err != nil {
-			log.Error("Failed to declare JMS queue", "name", queueName, "error", err)
-			os.Exit(1)
-		}
-		log.Debug("JMS queue declared", "name", queueName)
-	} else {
-		var queueSpec rmq.IQueueSpecification
-		switch cfg.Queues {
-		case config.Classic:
-			queueSpec = &rmq.ClassicQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
-		case config.Quorum:
-			queueSpec = &rmq.QuorumQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
-		case config.Stream:
-			queueSpec = &rmq.StreamQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
-		}
+	var queueSpec rmq.IQueueSpecification
+	switch cfg.Queues {
+	case config.JMS:
+		queueSpec = &rmq.JMSQueueSpecification{Name: queueName, Arguments: jmsArgumentsFromConfig(cfg)}
+	case config.Delayed:
+		queueSpec = &rmq.DelayedQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
+	case config.Classic:
+		queueSpec = &rmq.ClassicQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
+	case config.Quorum:
+		queueSpec = &rmq.QuorumQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
+	case config.Stream:
+		queueSpec = &rmq.StreamQueueSpecification{Name: queueName, Arguments: cfg.QueueArgs}
+	}
 
+	if queueSpec != nil {
 		qi, err := conn.Management().DeclareQueue(context.Background(), queueSpec)
 		if err != nil {
 			log.Error("Failed to declare queue", "name", queueName, "error", err)
@@ -207,6 +185,21 @@ func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.
 	}
 
 	return queueInfo
+}
+
+// x-selector-fields requires special handling
+func jmsArgumentsFromConfig(cfg config.Config) map[string]any {
+	args := map[string]any{}
+	for k, v := range cfg.QueueArgs {
+		if k == "x-selector-fields" {
+			if s, ok := v.(string); ok {
+				args[k] = strings.Split(s, ",")
+				continue
+			}
+		}
+		args[k] = v
+	}
+	return args
 }
 
 func parsePublishTo(proto config.Protocol, publishToTemplate *template.Template, id int) (string, string) {

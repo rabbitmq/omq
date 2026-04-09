@@ -38,6 +38,7 @@ const (
 	Stream
 	Exclusive
 	JMS
+	Delayed
 )
 
 var AmqpDurabilityModes = map[AmqpDurabilityMode][]string{
@@ -53,6 +54,7 @@ var QueueTypes = map[QueueType][]string{
 	Stream:      {"stream"},
 	Exclusive:   {"exclusive"},
 	JMS:         {"jms"},
+	Delayed:     {"delayed"},
 }
 
 type AnnotationTemplate struct {
