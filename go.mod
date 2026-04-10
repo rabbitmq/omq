@@ -2,7 +2,7 @@ module github.com/rabbitmq/omq
 
 go 1.25.0
 
-replace github.com/Azure/go-amqp => github.com/mkuratczyk/go-amqp v0.0.0-20260318132750-0336686049df
+replace github.com/Azure/go-amqp => github.com/mkuratczyk/go-amqp v0.0.0-20260410083403-4f5ad2159091
 
 require (
 	github.com/Azure/go-amqp v1.5.1
