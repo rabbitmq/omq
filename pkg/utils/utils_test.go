@@ -11,6 +11,14 @@ import (
 )
 
 var _ = Context("Utils", func() {
+	It("extends payloads shorter than 12 bytes so UpdatePayload does not panic", func() {
+		short := []byte{1, 2, 3, 4, 5, 6}
+		utils.UpdatePayload(false, &short)
+		Expect(len(short)).To(Equal(12))
+		// Bytes 0–3 are the compat header; timestamp occupies bytes 4–11 (overwriting 4–5 from the original six).
+		Expect(short[:4]).To(Equal([]byte{1, 2, 3, 4}))
+	})
+
 	DescribeTable("Latency calculation",
 		func(units string, useMillis bool) {
 			testMsg := utils.MessageBody(100, nil, 1)

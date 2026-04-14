@@ -86,11 +86,21 @@ func MessageBody(staticSize int, sizeTemplate *template.Template, id int) []byte
 	return b
 }
 
+// Latency tracking uses 4 bytes (compat header) + 8 bytes (timestamp) = 12 bytes minimum.
+const minLatencyPayloadLen = 12
+
 func UpdatePayload(useMillis bool, payload *[]byte) *[]byte {
+	p := *payload
+	if len(p) < minLatencyPayloadLen {
+		extended := make([]byte, minLatencyPayloadLen)
+		copy(extended, p)
+		p = extended
+		*payload = p
+	}
 	if useMillis {
-		binary.BigEndian.PutUint64((*payload)[4:], uint64(time.Now().UnixMilli()))
+		binary.BigEndian.PutUint64(p[4:], uint64(time.Now().UnixMilli()))
 	} else {
-		binary.BigEndian.PutUint64((*payload)[4:], uint64(time.Now().UnixNano()))
+		binary.BigEndian.PutUint64(p[4:], uint64(time.Now().UnixNano()))
 	}
 	return payload
 }
