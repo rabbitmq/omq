@@ -88,6 +88,6 @@ require (
 require (
 	github.com/go-stomp/stomp/v3 v3.1.5
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/rabbitmq/rabbitmq-amqp-go-client v0.7.1-0.20260408090748-625953308775
+	github.com/rabbitmq/rabbitmq-amqp-go-client v1.0.0
 	github.com/spf13/pflag v1.0.10
 )
