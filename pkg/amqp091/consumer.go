@@ -92,9 +92,12 @@ func (c *Amqp091Consumer) Connect() {
 		if err != nil {
 			if err == context.Canceled {
 				return
-			} else {
-				log.Error("consumer failed to create a channel", "id", c.Id, "error", err.Error())
-				time.Sleep(config.ReconnectDelay)
+			}
+			log.Error("consumer failed to create a channel", "id", c.Id, "error", err.Error())
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-time.After(config.ReconnectDelay):
 			}
 		} else {
 			c.Channel = channel

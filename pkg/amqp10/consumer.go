@@ -79,12 +79,11 @@ func (c *Amqp10Consumer) Connect() {
 			},
 		})
 		if err != nil {
+			log.Error("consumer failed to connect", "id", c.Id, "error", err.Error())
 			select {
 			case <-c.ctx.Done():
 				return
-			default:
-				log.Error("consumer failed to connect", "id", c.Id, "error", err.Error())
-				time.Sleep(config.ReconnectDelay)
+			case <-time.After(config.ReconnectDelay):
 			}
 		} else {
 			log.Debug("consumer connected", "id", c.Id, "uri", uri)
@@ -97,9 +96,12 @@ func (c *Amqp10Consumer) Connect() {
 		if err != nil {
 			if err == context.Canceled {
 				return
-			} else {
-				log.Error("consumer failed to create a session", "id", c.Id, "error", err.Error())
-				time.Sleep(config.ReconnectDelay)
+			}
+			log.Error("consumer failed to create a session", "id", c.Id, "error", err.Error())
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-time.After(config.ReconnectDelay):
 			}
 		} else {
 			c.Session = session
@@ -155,7 +157,11 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 					return
 				}
 				log.Error("consumer failed to create a receiver", "id", c.Id, "error", err.Error())
-				time.Sleep(config.ReconnectDelay)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(config.ReconnectDelay):
+				}
 			} else {
 				c.Receiver = receiver
 			}

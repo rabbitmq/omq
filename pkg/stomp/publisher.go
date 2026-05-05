@@ -94,7 +94,11 @@ func (p *StompPublisher) Connect() {
 		}
 		if err != nil {
 			log.Error("publisher connection failed", "id", p.Id, "error", err.Error())
-			time.Sleep(config.ReconnectDelay)
+			select {
+			case <-p.ctx.Done():
+				return
+			case <-time.After(config.ReconnectDelay):
+			}
 		} else {
 			p.Connection = conn
 		}

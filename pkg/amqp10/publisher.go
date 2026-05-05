@@ -116,7 +116,11 @@ func (p *Amqp10Publisher) Connect() {
 		})
 		if err != nil {
 			log.Error("publisher failed to create a session", "id", p.Id, "error", err.Error())
-			time.Sleep(config.ReconnectDelay)
+			select {
+			case <-p.ctx.Done():
+				return
+			case <-time.After(config.ReconnectDelay):
+			}
 			p.Connect()
 		} else {
 			p.Session = session
