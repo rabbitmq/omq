@@ -423,10 +423,11 @@ var _ = Describe("OMQ CLI", func() {
 				conns, err := rmqc.ListConnections()
 				if err == nil &&
 					len(conns) >= 2 &&
-					slices.ContainsFunc(conns, func(conn rabbithole.ConnectionInfo) bool {
-						return conn.Protocol == connectionVersion &&
-							strings.HasPrefix(conn.ClientProperties["client_id"].(string), "omq-version-test")
-					}) {
+				slices.ContainsFunc(conns, func(conn rabbithole.ConnectionInfo) bool {
+					clientId, ok := conn.ClientProperties["client_id"].(string)
+					return ok && conn.Protocol == connectionVersion &&
+						strings.HasPrefix(clientId, "omq-version-test")
+				}) {
 					return true
 				} else {
 					GinkgoWriter.Printf("\n--- time: %v    len: %v ---\n%+v\n---\n", time.Now(), len(conns), conns)
@@ -732,14 +733,14 @@ var _ = Describe("OMQ CLI", func() {
 			session := omq(args)
 			defer session.Kill()
 
+			randomNamePattern := regexp.MustCompile(`^omq-0-[0-9a-f]{6}$`)
 			Eventually(func() bool {
 				qs, err := rmqc.ListQueuesIn("/")
 				if err != nil {
 					return false
 				}
 				for _, q := range qs {
-					matched, _ := regexp.MatchString(`^omq-0-[0-9a-f]{6}$`, q.Name)
-					if !matched {
+					if !randomNamePattern.MatchString(q.Name) {
 						continue
 					}
 					// use GetQueue to check owner_pid_details (not populated by ListQueuesIn)
