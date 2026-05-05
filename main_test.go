@@ -52,7 +52,7 @@ var _ = Describe("OMQ CLI", func() {
 		It("^C can stop omq while it's trying to connect", func() {
 			args := []string{
 				"amqp",
-				"--uri", "amqp://foobar:5672",
+				"--uri", "amqp://127.0.0.1:65534",
 			}
 			session := omq(args)
 			Eventually(session.Err).WithTimeout(5 * time.Second).Should(gbytes.Say(`consumer failed to connect`))
@@ -62,6 +62,7 @@ var _ = Describe("OMQ CLI", func() {
 		It("^C can stop omq while it's trying to create a sender", func() {
 			args := []string{
 				"amqp",
+				"--uri", "amqp://127.0.0.1:5672/",
 				"-y", "0",
 				"-t", "/queues/no-such-queue",
 			}
@@ -76,6 +77,7 @@ var _ = Describe("OMQ CLI", func() {
 		It("^C can stop omq while it's publishing and consuming", func() {
 			args := []string{
 				"mqtt",
+				"--uri", "mqtt://127.0.0.1:1883",
 				"--publishers=2",
 				"--publish-to=can-stop-me-now/%d",
 				"--rate=1",
@@ -405,6 +407,7 @@ var _ = Describe("OMQ CLI", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			args := []string{
 				"mqtt",
+				"--uri", "mqtt://127.0.0.1:1883",
 				"--publish-to=/topic/omq-version-test-topic-" + versionFlag,
 				"--consume-from=/topic/omq-version-test-topic-" + versionFlag,
 				"--consumer-id=omq-version-test-consumer-" + versionFlag,
@@ -423,14 +426,14 @@ var _ = Describe("OMQ CLI", func() {
 				conns, err := rmqc.ListConnections()
 				if err == nil &&
 					len(conns) >= 2 &&
-				slices.ContainsFunc(conns, func(conn rabbithole.ConnectionInfo) bool {
-					clientId, ok := conn.ClientProperties["client_id"].(string)
-					return ok && conn.Protocol == connectionVersion &&
-						strings.HasPrefix(clientId, "omq-version-test")
-				}) {
+					slices.ContainsFunc(conns, func(conn rabbithole.ConnectionInfo) bool {
+						clientId, ok := conn.ClientProperties["client_id"].(string)
+						return ok && conn.Protocol == connectionVersion &&
+							strings.HasPrefix(clientId, "omq-version-test")
+					}) {
 					return true
 				} else {
-					GinkgoWriter.Printf("\n--- time: %v    len: %v ---\n%+v\n---\n", time.Now(), len(conns), conns)
+					GinkgoWriter.Printf("\n--- time: %v    len: %v err: %v ---\n%+v\n---\n", time.Now(), len(conns), err, conns)
 					return false
 				}
 			}, 7*time.Second, 500*time.Millisecond).Should(BeTrue())
@@ -703,6 +706,7 @@ var _ = Describe("OMQ CLI", func() {
 		It("declares exclusive queues for AMQP 0.9.1 consumers", func() {
 			args := []string{
 				"amqp091",
+				"--uri", "amqp://127.0.0.1:5672/",
 				"-y", "1",
 				"-C", "0", // run indefinitely
 				"-T", "/queues/exclusive-amqp091",
