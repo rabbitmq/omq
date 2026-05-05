@@ -337,6 +337,16 @@ func RootCmd() *cobra.Command {
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			log.Setup()
 
+			if cfg.Queues == config.Exclusive {
+				suffix := fmt.Sprintf("%06x", rand.N(uint32(1<<24)))
+				if !cmd.Flags().Changed("consume-from") {
+					consumeFromStr = "/queues/omq-%d-" + suffix
+				}
+				if !cmd.Flags().Changed("publish-to") {
+					publishToStr = "/queues/omq-%d-" + suffix
+				}
+			}
+
 			err := sanitizeConfig(&cfg)
 			if err != nil {
 				fmt.Printf("ERROR: %s\n", err)

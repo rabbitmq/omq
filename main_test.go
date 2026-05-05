@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -715,6 +716,37 @@ var _ = Describe("OMQ CLI", func() {
 			Eventually(func() bool {
 				q, err := rmqc.GetQueue("/", "exclusive-amqp091")
 				return err == nil && q.Name == "exclusive-amqp091" && q.OwnerPidDetails.Name != ""
+			}).WithTimeout(5 * time.Second).Should(BeTrue())
+		})
+
+		It("uses a random name suffix by default when no queue name is specified", func() {
+			args := []string{
+				"amqp091",
+				"-x", "0",
+				"-y", "1",
+				"--queues", "exclusive",
+			}
+
+			rmqc, err := newRabbitClient()
+			Expect(err).ShouldNot(HaveOccurred())
+			session := omq(args)
+			defer session.Kill()
+
+			Eventually(func() bool {
+				qs, err := rmqc.ListQueuesIn("/")
+				if err != nil {
+					return false
+				}
+				for _, q := range qs {
+					matched, _ := regexp.MatchString(`^omq-0-[0-9a-f]{6}$`, q.Name)
+					if !matched {
+						continue
+					}
+					// use GetQueue to check owner_pid_details (not populated by ListQueuesIn)
+					qDetail, err := rmqc.GetQueue("/", q.Name)
+					return err == nil && qDetail.OwnerPidDetails.Name != ""
+				}
+				return false
 			}).WithTimeout(5 * time.Second).Should(BeTrue())
 		})
 	})
