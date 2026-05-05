@@ -14,8 +14,8 @@ require (
 	github.com/felixge/fgprof v0.9.5
 	github.com/hashicorp/memberlist v0.5.4
 	github.com/michaelklishin/rabbit-hole v1.5.0
-	github.com/onsi/ginkgo/v2 v2.28.1
-	github.com/onsi/gomega v1.39.1
+	github.com/onsi/ginkgo/v2 v2.28.3
+	github.com/onsi/gomega v1.40.0
 	github.com/rabbitmq/amqp091-go v1.11.0
 	github.com/spf13/cobra v1.10.2
 	github.com/thediveo/enumflag/v2 v2.2.0
