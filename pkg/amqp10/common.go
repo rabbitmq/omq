@@ -16,7 +16,7 @@ func hostAndVHost(connectionString string) (string, string) {
 	}
 
 	vhost := "/"
-	if uri.Path != "/" {
+	if uri.Path != "" && uri.Path != "/" {
 		vhost = strings.TrimPrefix(uri.Path, "/")
 	}
 

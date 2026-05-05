@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"net/url"
 	"os"
 	"os/signal"
 	"slices"
@@ -780,7 +781,34 @@ func setUris(cfg *config.Config, command string) error {
 		log.Debug("setting default consumer uri", "uri", defaultUri(strings.Split(command, "-")[1]))
 		cfg.ConsumerUri = []string{defaultUri(strings.Split(command, "-")[1])}
 	}
+
+	for i, u := range cfg.PublisherUri {
+		cfg.PublisherUri[i] = normalizeAmqpUri(u)
+	}
+	for i, u := range cfg.ConsumerUri {
+		cfg.ConsumerUri[i] = normalizeAmqpUri(u)
+	}
+	for i, u := range cfg.ManagementUri {
+		cfg.ManagementUri[i] = normalizeAmqpUri(u)
+	}
 	return nil
+}
+
+// normalizeAmqpUri ensures AMQP URIs have an explicit vhost path component.
+// Without a trailing slash, url.Parse returns an empty path, which causes
+// both the AMQP 1.0 vhost negotiation and some AMQP 0.9.1 libraries to
+// use an empty vhost instead of the default "/".
+func normalizeAmqpUri(uri string) string {
+	parsed, err := url.Parse(uri)
+	if err != nil {
+		fmt.Printf("ERROR: invalid URI %q: %s\n", uri, err)
+		os.Exit(1)
+	}
+	if (parsed.Scheme == "amqp" || parsed.Scheme == "amqps") && parsed.Path == "" {
+		parsed.Path = "/"
+		return parsed.String()
+	}
+	return uri
 }
 
 func defaultUri(proto string) string {
