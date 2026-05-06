@@ -201,7 +201,10 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 			}
 
 			payload := msg.GetData()
-			priority := int(msg.Header.Priority)
+			var priority int
+			if msg.Header != nil {
+				priority = int(msg.Header.Priority)
+			}
 			timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 			metrics.RecordEndToEndLatency(latency)
 
