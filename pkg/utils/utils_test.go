@@ -134,21 +134,23 @@ var _ = Context("Utils", func() {
 			rawURI        string
 			defaultScheme string
 			defaultPort   string
+			scheme        string
 			broker        string
 			username      string
 			password      string
 		}
 
 		tests := []test{
-			{rawURI: "mqtt://user:pass@name.com", defaultScheme: "mqtt", defaultPort: "1234", broker: "name.com:1234", username: "user", password: "pass"},
-			{rawURI: "mqtt://name.com", defaultScheme: "mqtt", defaultPort: "1234", broker: "name.com:1234", username: "guest", password: "guest"},
-			{rawURI: "mqtts://local:4321", defaultScheme: "mqtt", defaultPort: "1234", broker: "local:4321", username: "guest", password: "guest"},
-			{rawURI: "local:4321", defaultScheme: "mqtt", defaultPort: "1234", broker: "local:4321", username: "guest", password: "guest"},
+			{rawURI: "mqtt://user:pass@name.com", defaultScheme: "mqtt", defaultPort: "1234", scheme: "mqtt", broker: "name.com:1234", username: "user", password: "pass"},
+			{rawURI: "mqtt://name.com", defaultScheme: "mqtt", defaultPort: "1234", scheme: "mqtt", broker: "name.com:1234", username: "guest", password: "guest"},
+			{rawURI: "mqtts://local:4321", defaultScheme: "mqtt", defaultPort: "1234", scheme: "mqtts", broker: "local:4321", username: "guest", password: "guest"},
+			{rawURI: "local:4321", defaultScheme: "mqtt", defaultPort: "1234", scheme: "mqtt", broker: "local:4321", username: "guest", password: "guest"},
 		}
 
 		for _, tc := range tests {
 			It("should parse URI "+tc.rawURI+"-"+tc.defaultPort, func() {
 				parsed := utils.ParseURI(tc.rawURI, tc.defaultScheme, tc.defaultPort)
+				Expect(parsed.Scheme).To(Equal(tc.scheme))
 				Expect(parsed.Broker).To(Equal(tc.broker))
 				Expect(parsed.Username).To(Equal(tc.username))
 				Expect(parsed.Password).To(Equal(tc.password))

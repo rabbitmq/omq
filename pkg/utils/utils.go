@@ -160,6 +160,7 @@ func FormatTimestamp(timestamp uint64) time.Time {
 }
 
 type uri struct {
+	Scheme   string
 	Broker   string
 	Username string
 	Password string
@@ -191,6 +192,7 @@ func ParseURI(rawURI string, defaultScheme string, defaultPort string) uri {
 	}
 
 	result := &uri{
+		Scheme:   u.Scheme,
 		Broker:   u.Hostname() + ":" + port,
 		Username: user,
 		Password: pass,

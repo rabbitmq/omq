@@ -88,7 +88,7 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 			j = i
 		}
 		parsedUri := utils.ParseURI(c.Config.ConsumerUri[j], "mqtt", "1883")
-		opts.AddBroker(parsedUri.Broker).SetUsername(parsedUri.Username).SetPassword(parsedUri.Password)
+		opts.AddBroker(parsedUri.Scheme + "://" + parsedUri.Broker).SetUsername(parsedUri.Username).SetPassword(parsedUri.Password)
 	}
 
 	c.Connection = mqtt.NewClient(opts)

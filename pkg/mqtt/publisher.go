@@ -92,7 +92,7 @@ func (p MqttPublisher) connectionOptions() *mqtt.ClientOptions {
 			j = i
 		}
 		parsedUri := utils.ParseURI(p.Config.PublisherUri[j], "mqtt", "1883")
-		opts.AddBroker(parsedUri.Broker).SetUsername(parsedUri.Username).SetPassword(parsedUri.Password)
+		opts.AddBroker(parsedUri.Scheme + "://" + parsedUri.Broker).SetUsername(parsedUri.Username).SetPassword(parsedUri.Password)
 	}
 	return opts
 }
