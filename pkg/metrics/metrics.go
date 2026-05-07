@@ -129,10 +129,12 @@ func registerCommandLineMetric(cfg config.Config, globalLabels map[string]string
 		"--uri",
 		"--consumer-uri",
 		"--publisher-uri",
+		"--management-uri",
 		"--metric-tags",
 	}
 	ignoredArgs = append(ignoredArgs, cfg.ConsumerUri...)
 	ignoredArgs = append(ignoredArgs, cfg.PublisherUri...)
+	ignoredArgs = append(ignoredArgs, cfg.ManagementUri...)
 	for _, arg := range os.Args[1:] {
 		if slices.ContainsFunc(ignoredArgs, func(a string) bool { return strings.HasPrefix(arg, a) }) {
 			continue
