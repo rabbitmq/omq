@@ -74,7 +74,19 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 			token := client.Subscribe(topic, byte(c.Config.MqttConsumer.QoS), handler)
 			token.Wait()
 			if token.Error() != nil {
-				log.Error("failed to subscribe", "id", c.Id, "error", token.Error())
+				log.Error("failed to subscribe, reconnecting", "id", c.Id, "topic", topic, "error", token.Error())
+				go func() {
+					select {
+					case <-c.ctx.Done():
+						return
+					case <-time.After(config.ReconnectDelay):
+					}
+					client.Disconnect(250)
+					if t := client.Connect(); t.Wait() && t.Error() != nil {
+						log.Error("consumer reconnect failed", "id", c.Id, "error", t.Error())
+					}
+				}()
+				return
 			}
 			log.Info("consumer subscribed", "id", c.Id, "topic", topic)
 		}

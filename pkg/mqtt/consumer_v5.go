@@ -106,12 +106,34 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 					Topic: topic,
 					QoS:   byte(c.Config.MqttConsumer.QoS),
 				})
-				log.Info("consumer subscribing", "id", c.Id, "topic", topic)
 			}
-			if _, err := cm.Subscribe(context.Background(), &paho.Subscribe{
+			if _, err := cm.Subscribe(c.ctx, &paho.Subscribe{
 				Subscriptions: subscriptions,
 			}); err != nil {
-				fmt.Printf("failed to subscribe (%s). This is likely to mean no messages will be received.", err)
+				log.Error("failed to subscribe, retrying", "id", c.Id, "error", err)
+				go func() {
+					for {
+						select {
+						case <-c.ctx.Done():
+							return
+						case <-time.After(config.ReconnectDelay):
+						}
+						if _, retryErr := cm.Subscribe(c.ctx, &paho.Subscribe{
+							Subscriptions: subscriptions,
+						}); retryErr == nil {
+							for _, sub := range subscriptions {
+								log.Info("consumer subscribed", "id", c.Id, "topic", sub.Topic)
+							}
+							return
+						} else {
+							log.Error("failed to subscribe, retrying", "id", c.Id, "error", retryErr)
+						}
+					}
+				}()
+			} else {
+				for _, sub := range subscriptions {
+					log.Info("consumer subscribed", "id", c.Id, "topic", sub.Topic)
+				}
 			}
 		},
 		OnConnectError: func(err error) {
