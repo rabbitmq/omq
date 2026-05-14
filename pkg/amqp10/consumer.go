@@ -65,7 +65,7 @@ func (c *Amqp10Consumer) Connect() {
 	c.Session = nil
 	c.Connection = nil
 
-	for c.Connection == nil {
+	utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
 		uri := utils.NextURI(c.Config.ConsumerUri, &c.whichUri)
 		hostname, vhost := hostAndVHost(uri)
 		conn, err := amqp.Dial(c.ctx, uri, &amqp.ConnOptions{
@@ -80,33 +80,26 @@ func (c *Amqp10Consumer) Connect() {
 		})
 		if err != nil {
 			log.Error("consumer failed to connect", "id", c.Id, "error", err.Error())
-			select {
-			case <-c.ctx.Done():
-				return
-			case <-time.After(config.ReconnectDelay):
-			}
-		} else {
-			log.Debug("consumer connected", "id", c.Id, "uri", uri)
-			c.Connection = conn
+			return false
 		}
+		log.Debug("consumer connected", "id", c.Id, "uri", uri)
+		c.Connection = conn
+		return true
+	})
+
+	if c.Connection == nil {
+		return
 	}
 
-	for c.Session == nil {
+	utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
 		session, err := c.Connection.NewSession(c.ctx, nil)
 		if err != nil {
-			if err == context.Canceled {
-				return
-			}
 			log.Error("consumer failed to create a session", "id", c.Id, "error", err.Error())
-			select {
-			case <-c.ctx.Done():
-				return
-			case <-time.After(config.ReconnectDelay):
-			}
-		} else {
-			c.Session = session
+			return false
 		}
-	}
+		c.Session = session
+		return true
+	})
 }
 
 func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
@@ -120,53 +113,45 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 		durability = amqp.DurabilityUnsettledState
 	}
 
-	for c.Receiver == nil && c.Session != nil {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			linkProperties := buildLinkProperties(c.Config, c.Id)
-			receiverOpts := &amqp.ReceiverOptions{
-				SourceDurability:          durability,
-				Credit:                    int32(c.Config.ConsumerCredits),
-				Properties:                linkProperties,
-				Filters:                   buildLinkFilters(c.Config),
-				RequestedSenderSettleMode: requestedSenderSettleMode(c.Config),
-				OnLinkStateProperties: func(props map[string]any) {
-					if active, ok := props["rabbitmq:active"]; ok {
-						if activeBool, ok := active.(bool); ok {
-							logArgs := []any{"id", c.Id}
-							if priority, ok := linkProperties["rabbitmq:priority"]; ok {
-								logArgs = append(logArgs, "priority", priority)
-							}
-							if activeBool {
-								log.Info("consumer is active", logArgs...)
-							} else {
-								log.Info("consumer is not active", logArgs...)
-							}
-						}
+	linkProperties := buildLinkProperties(c.Config, c.Id)
+	receiverOpts := &amqp.ReceiverOptions{
+		SourceDurability:          durability,
+		Credit:                    int32(c.Config.ConsumerCredits),
+		Properties:                linkProperties,
+		Filters:                   buildLinkFilters(c.Config),
+		RequestedSenderSettleMode: requestedSenderSettleMode(c.Config),
+		OnLinkStateProperties: func(props map[string]any) {
+			if active, ok := props["rabbitmq:active"]; ok {
+				if activeBool, ok := active.(bool); ok {
+					logArgs := []any{"id", c.Id}
+					if priority, ok := linkProperties["rabbitmq:priority"]; ok {
+						logArgs = append(logArgs, "priority", priority)
 					}
-				},
-			}
-			if c.Config.Amqp.Browse {
-				receiverOpts.SourceDistributionMode = "copy"
-			}
-			receiver, err := c.Session.NewReceiver(ctx, c.Terminus, receiverOpts)
-			if err != nil {
-				if err == context.Canceled {
-					return
+					if activeBool {
+						log.Info("consumer is active", logArgs...)
+					} else {
+						log.Info("consumer is not active", logArgs...)
+					}
 				}
-				log.Error("consumer failed to create a receiver", "id", c.Id, "error", err.Error())
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(config.ReconnectDelay):
-				}
-			} else {
-				c.Receiver = receiver
 			}
-		}
+		},
 	}
+	if c.Config.Amqp.Browse {
+		receiverOpts.SourceDistributionMode = "copy"
+	}
+
+	utils.Retry(ctx, config.ReconnectDelay, func() bool {
+		if c.Session == nil {
+			return true // session gone; caller must reconnect
+		}
+		receiver, err := c.Session.NewReceiver(ctx, c.Terminus, receiverOpts)
+		if err != nil {
+			log.Error("consumer failed to create a receiver", "id", c.Id, "error", err.Error())
+			return false
+		}
+		c.Receiver = receiver
+		return true
+	})
 }
 
 func (c *Amqp10Consumer) Start(consumerReady chan bool) {

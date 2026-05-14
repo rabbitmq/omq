@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"net/url"
@@ -408,6 +409,22 @@ func (t *OutOfOrderTracker) Check(publisherID int, seq uint64) SequenceCheckResu
 		return SequenceCheckResult{Status: SequenceGap, LastSeq: lastSeq}
 	}
 	return SequenceCheckResult{Status: SequenceOK, LastSeq: lastSeq}
+}
+
+// Retry calls f repeatedly until f returns true or ctx is cancelled.
+// A fixed delay is inserted between each failed attempt.
+// Returns true if f succeeded, false if ctx was cancelled first.
+func Retry(ctx context.Context, delay time.Duration, f func() bool) bool {
+	for {
+		if f() {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(delay):
+		}
+	}
 }
 
 // PastTense converts message outcome verbs to their past tense form for logging.

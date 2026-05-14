@@ -61,7 +61,7 @@ func (c *Amqp091Consumer) Connect() {
 	c.Channel = nil
 	c.Connection = nil
 
-	for c.Connection == nil {
+	utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
 		uri := utils.NextURI(c.Config.ConsumerUri, &c.whichUri)
 		dialCfg := amqp091.Config{
 			Properties: amqp091.Table{
@@ -75,34 +75,26 @@ func (c *Amqp091Consumer) Connect() {
 		conn, err := amqp091.DialConfig(uri, dialCfg)
 		if err != nil {
 			log.Error("consumer connection failed", "id", c.Id, "error", err.Error())
-			select {
-			case <-c.ctx.Done():
-				return
-			case <-time.After(config.ReconnectDelay):
-				continue
-			}
-		} else {
-			log.Debug("consumer connected", "id", c.Id, "uri", uri)
-			c.Connection = conn
+			return false
 		}
+		log.Debug("consumer connected", "id", c.Id, "uri", uri)
+		c.Connection = conn
+		return true
+	})
+
+	if c.Connection == nil {
+		return
 	}
 
-	for c.Channel == nil {
+	utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
 		channel, err := c.Connection.Channel()
 		if err != nil {
-			if err == context.Canceled {
-				return
-			}
 			log.Error("consumer failed to create a channel", "id", c.Id, "error", err.Error())
-			select {
-			case <-c.ctx.Done():
-				return
-			case <-time.After(config.ReconnectDelay):
-			}
-		} else {
-			c.Channel = channel
+			return false
 		}
-	}
+		c.Channel = channel
+		return true
+	})
 }
 
 func (c *Amqp091Consumer) Subscribe() {
@@ -165,7 +157,19 @@ func (c *Amqp091Consumer) Subscribe() {
 }
 
 func (c *Amqp091Consumer) Start(consumerReady chan bool) {
-	c.Subscribe()
+	if !utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
+		c.Subscribe()
+		if c.Messages != nil {
+			return true
+		}
+		log.Error("subscription failed, reconnecting", "id", c.Id, "terminus", c.Terminus)
+		c.Connect()
+		return false
+	}) {
+		close(consumerReady)
+		c.Stop("context cancelled")
+		return
+	}
 	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "terminus", c.Terminus)
 	var oooTracker *utils.OutOfOrderTracker
@@ -174,13 +178,13 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 	}
 
 	for i := 1; i <= c.Config.ConsumeCount; {
-		for c.Messages == nil {
-			select {
-			case <-c.ctx.Done():
+		if c.Messages == nil {
+			if !utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
+				c.Subscribe()
+				return c.Messages != nil
+			}) {
 				c.Stop("context cancelled")
 				return
-			default:
-				c.Subscribe()
 			}
 		}
 

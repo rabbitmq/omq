@@ -58,7 +58,7 @@ func (c *StompConsumer) Connect() {
 	c.Subscription = nil
 	c.Connection = nil
 
-	for c.Connection == nil {
+	utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
 		uri := utils.NextURI(c.Config.ConsumerUri, &c.whichUri)
 		useTLS := strings.HasPrefix(uri, "stomp+ssl://") || strings.HasPrefix(uri, "stomps://")
 		parsedUri := utils.ParseURI(uri, "stomp", "61613")
@@ -69,9 +69,9 @@ func (c *StompConsumer) Connect() {
 		}
 
 		log.Debug("connecting to broker", "id", c.Id, "broker", parsedUri.Broker)
+		dialer := &net.Dialer{Timeout: dialTimeout}
 		var conn *stomp.Conn
 		var err error
-		dialer := &net.Dialer{Timeout: dialTimeout}
 		if useTLS {
 			netConn, tlsErr := tls.DialWithDialer(dialer, "tcp", parsedUri.Broker, &tls.Config{
 				InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
@@ -95,19 +95,13 @@ func (c *StompConsumer) Connect() {
 				}
 			}
 		}
-
 		if err != nil {
 			log.Error("consumer connection failed", "id", c.Id, "error", err.Error())
-			select {
-			case <-c.ctx.Done():
-				return
-			case <-time.After(config.ReconnectDelay):
-				continue
-			}
-		} else {
-			c.Connection = conn
+			return false
 		}
-	}
+		c.Connection = conn
+		return true
+	})
 }
 
 func (c *StompConsumer) Subscribe() {
@@ -125,7 +119,19 @@ func (c *StompConsumer) Subscribe() {
 }
 
 func (c *StompConsumer) Start(consumerReady chan bool) {
-	c.Subscribe()
+	if !utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
+		c.Subscribe()
+		if c.Subscription != nil {
+			return true
+		}
+		log.Error("subscription failed, reconnecting", "id", c.Id, "destination", c.Topic)
+		c.Connect()
+		return false
+	}) {
+		close(consumerReady)
+		c.Stop("context cancelled")
+		return
+	}
 	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "destination", c.Topic)
 
@@ -135,13 +141,13 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 	}
 
 	for i := 1; i <= c.Config.ConsumeCount; {
-		for c.Subscription == nil {
-			select {
-			case <-c.ctx.Done():
+		if c.Subscription == nil {
+			if !utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
+				c.Subscribe()
+				return c.Subscription != nil
+			}) {
 				c.Stop("context cancelled")
 				return
-			default:
-				c.Subscribe()
 			}
 		}
 
