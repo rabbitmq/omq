@@ -36,6 +36,10 @@ func NewMqtt5Consumer(ctx context.Context, cfg config.Config, id int) Mqtt5Consu
 
 func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 	msgsReceived := 0
+	// subscribed is signalled (once) when all subscriptions are established.
+	// It is buffered so the OnConnectionUp callback never blocks.
+	subscribed := make(chan struct{}, 1)
+
 	var oooTracker *utils.OutOfOrderTracker
 	if c.Config.DetectOutOfOrder || c.Config.DetectGaps {
 		oooTracker = utils.NewOutOfOrderTracker()
@@ -94,6 +98,10 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 			subsPerConsumer := c.Config.MqttConsumer.SubscriptionsPerConsumer
 			if subsPerConsumer == 0 {
 				log.Info("consumer connected (no subscriptions)", "id", c.Id)
+				select {
+				case subscribed <- struct{}{}:
+				default:
+				}
 				return
 			}
 			subscriptions := make([]paho.SubscribeOptions, 0, subsPerConsumer)
@@ -124,6 +132,10 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 							for _, sub := range subscriptions {
 								log.Info("consumer subscribed", "id", c.Id, "topic", sub.Topic)
 							}
+							select {
+							case subscribed <- struct{}{}:
+							default:
+							}
 							return
 						} else {
 							log.Error("failed to subscribe, retrying", "id", c.Id, "error", retryErr)
@@ -133,6 +145,10 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 			} else {
 				for _, sub := range subscriptions {
 					log.Info("consumer subscribed", "id", c.Id, "topic", sub.Topic)
+				}
+				select {
+				case subscribed <- struct{}{}:
+				default:
 				}
 			}
 		},
@@ -168,7 +184,17 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 		c.Stop("context cancelled")
 		return
 	}
-	close(consumerReady)
+
+	// Don't signal readiness until subscriptions are confirmed — OnConnectionUp
+	// runs asynchronously and may still be retrying after a failed subscribe.
+	select {
+	case <-subscribed:
+		close(consumerReady)
+	case <-c.ctx.Done():
+		close(consumerReady)
+		c.Stop("context cancelled")
+		return
+	}
 
 	// TODO: currently we can consume more than ConsumerCount messages
 	for msgsReceived < c.Config.ConsumeCount {

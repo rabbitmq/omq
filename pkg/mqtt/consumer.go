@@ -35,6 +35,9 @@ func NewMqttConsumer(ctx context.Context, cfg config.Config, id int) MqttConsume
 
 func (c MqttConsumer) Start(cosumerReady chan bool) {
 	msgsReceived := 0
+	// subscribed is signalled (once) when all subscriptions are established.
+	// It is buffered so the OnConnect callback never blocks.
+	subscribed := make(chan struct{}, 1)
 
 	handler := func(client mqtt.Client, msg mqtt.Message) {
 		payload := msg.Payload()
@@ -60,10 +63,15 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 			InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
 		})
 
+	// OnConnect is called asynchronously by paho on every (re)connect.
 	opts.OnConnect = func(client mqtt.Client) {
 		subsPerConsumer := c.Config.MqttConsumer.SubscriptionsPerConsumer
 		if subsPerConsumer == 0 {
 			log.Info("consumer connected (no subscriptions)", "id", c.Id)
+			select {
+			case subscribed <- struct{}{}:
+			default:
+			}
 			return
 		}
 		for i := 1; i <= subsPerConsumer; i++ {
@@ -89,6 +97,10 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 				return
 			}
 			log.Info("consumer subscribed", "id", c.Id, "topic", topic)
+		}
+		select {
+		case subscribed <- struct{}{}:
+		default:
 		}
 	}
 
@@ -119,7 +131,16 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 		log.Error("failed to connect", "id", c.Id, "error", token.Error())
 	}
 
-	close(cosumerReady)
+	// Don't signal readiness until subscriptions are confirmed — OnConnect
+	// runs asynchronously and may still be retrying after a failed subscribe.
+	select {
+	case <-subscribed:
+		close(cosumerReady)
+	case <-c.ctx.Done():
+		close(cosumerReady)
+		c.Stop("context cancelled")
+		return
+	}
 
 	// TODO: currently we can consume more than ConsumerCount messages
 	for msgsReceived < c.Config.ConsumeCount {
