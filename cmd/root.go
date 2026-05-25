@@ -396,6 +396,10 @@ func RootCmd() *cobra.Command {
 		"Client ID for AMQP and MQTT consumers (%d => consumer's id)")
 	rootCmd.PersistentFlags().StringVar(&streamOffset, "stream-offset", "",
 		"Stream consumer offset specification (default=next)")
+	rootCmd.PersistentFlags().StringVar(&cfg.StreamFilterValues, "stream-filter-values", "",
+		"Stream consumer filter value(s)")
+	rootCmd.PersistentFlags().StringSliceVar(&cfg.StreamFilterValueSet, "stream-filter-value-set", []string{},
+		"Stream filter value(s) set on published messages (cycled per message)")
 	rootCmd.PersistentFlags().StringVar(&consumerPriorityStr, "consumer-priority", "", "Consumer priority (supports templates")
 	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerCredits, "consumer-credits", 1,
 		"AMQP-1.0 consumer credits / STOMP prefetch count")

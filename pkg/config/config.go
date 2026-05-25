@@ -135,7 +135,7 @@ type Config struct {
 	MessageTTLTemplate       *template.Template
 	StreamOffset             any
 	StreamFilterValues       string
-	StreamFilterValueSet     string
+	StreamFilterValueSet     []string
 	ConsumerPriorityTemplate *template.Template
 	Amqp                     AmqpOptions
 	Amqp091                  Amqp091Options

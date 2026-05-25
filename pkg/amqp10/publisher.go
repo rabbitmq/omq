@@ -493,8 +493,11 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 		props.To = &p.Config.Amqp.To[seq%uint64(len(p.Config.Amqp.To))]
 	}
 
-	if p.Config.StreamFilterValueSet != "" {
-		msg.Annotations = amqp.Annotations{"x-stream-filter-value": p.Config.StreamFilterValueSet}
+	if len(p.Config.StreamFilterValueSet) > 0 {
+		if msg.Annotations == nil {
+			msg.Annotations = make(amqp.Annotations)
+		}
+		msg.Annotations["x-stream-filter-value"] = p.Config.StreamFilterValueSet[seq%uint64(len(p.Config.StreamFilterValueSet))]
 	}
 
 	header.Durable = p.Config.MessageDurability

@@ -163,7 +163,7 @@ func (p *StompPublisher) Send() error {
 	}
 	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
 
-	headers := buildHeaders(p.Config, p.Id)
+	headers := buildHeaders(p.Config, p.Id, seq)
 	if p.Config.DetectOutOfOrder || p.Config.DetectGaps {
 		headers = append(headers,
 			stomp.SendOpt.Header(utils.HeaderPublisherID, strconv.Itoa(p.Id)),
@@ -188,7 +188,7 @@ func (p *StompPublisher) Stop(reason string) {
 	_ = p.Connection.Disconnect()
 }
 
-func buildHeaders(cfg config.Config, publisherId int) []func(*frame.Frame) error {
+func buildHeaders(cfg config.Config, publisherId int, seq uint64) []func(*frame.Frame) error {
 	var headers []func(*frame.Frame) error
 
 	headers = append(headers, stomp.SendOpt.Receipt)
@@ -215,8 +215,9 @@ func buildHeaders(cfg config.Config, publisherId int) []func(*frame.Frame) error
 		}
 	}
 
-	if cfg.StreamFilterValueSet != "" {
-		headers = append(headers, stomp.SendOpt.Header("x-stream-filter-value", cfg.StreamFilterValueSet))
+	if len(cfg.StreamFilterValueSet) > 0 {
+		filterValue := cfg.StreamFilterValueSet[seq%uint64(len(cfg.StreamFilterValueSet))]
+		headers = append(headers, stomp.SendOpt.Header("x-stream-filter-value", filterValue))
 	}
 
 	return headers

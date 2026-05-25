@@ -219,6 +219,30 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 
+	DescribeTable("supports stream filtering",
+		func(proto string, publishTo string, consumeFrom string) {
+			args := []string{
+				proto,
+				"--pmessages=9",
+				"--cmessages=10",
+				"--publish-to=" + publishTo,
+				"--consume-from=" + consumeFrom,
+				"--stream-filter-value-set=myfilter,otherfilter,yet-another",
+				"--stream-filter-values=myfilter",
+				"--queues=stream",
+				"--cleanup-queues=true",
+				"--time=3s",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=9`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=3`))
+		},
+		Entry("amqp", "amqp", "/queues/stream-filter-amqp", "/queues/stream-filter-amqp"),
+		Entry("stomp", "stomp", "/amq/queue/stream-filter-stomp", "/amq/queue/stream-filter-stomp"),
+	)
+
 	Describe("supports AMQP Message Annotations", func() {
 		It("should set annotations and they should be present when consuming", func() {
 			args := []string{
