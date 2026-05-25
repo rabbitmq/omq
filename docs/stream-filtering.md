@@ -33,3 +33,20 @@ omq amqp \
     --amqp-app-property-filter "color=&p:r" \
     --amqp-app-property-filter "size=&p:s"
 ```
+
+## SQL Filtering
+
+Here's an example using an SQL filter.
+Note: RabbitMQ requires SQL keywords to be uppercase. Otherwise,
+the filter is considered invalid and all messages are returned.
+
+```
+omq amqp \
+    --queues predeclared \
+    -t /queues/sql-filter-1 \
+    -T /queues/sql-filter-1 \
+    --stream-offset first \
+    --amqp-app-property 'color={{ index (list "red" "rose" "blue" "green") (randInt 0 4) }}' \
+    --amqp-app-property 'size={{ index (list "small" "slim" "large" "huge") (randInt 0 4) }}' \
+    --amqp-sql-filter "color IN ('red', 'blue') AND size IN ('small', 'medium')"
+```
