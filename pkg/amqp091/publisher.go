@@ -141,8 +141,7 @@ func (p *Amqp091Publisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 	p.sem = make(chan struct{}, p.Config.MaxInFlight)
 
-	go p.handleConfirms()
-	go p.handleReturns()
+	p.resetConfirmsAndReturns()
 
 	var msgSent atomic.Int64
 	for {
@@ -165,13 +164,20 @@ func (p *Amqp091Publisher) StartPublishing() string {
 			err := p.SendAsync(n)
 			if err != nil {
 				<-p.sem
+				log.Info("publisher disconnected; reconnecting...", "id", p.Id, "error", err.Error())
 				p.Connect()
+				p.resetConfirmsAndReturns()
 			} else {
 				metrics.MessagesPublished.Inc()
 				log.Debug("message sent", "id", p.Id, "deliveryTag", n)
 			}
 		}
 	}
+}
+
+func (p *Amqp091Publisher) resetConfirmsAndReturns() {
+	go p.handleConfirms()
+	go p.handleReturns()
 }
 
 func (p *Amqp091Publisher) SendAsync(n uint64) error {

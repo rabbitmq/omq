@@ -26,6 +26,7 @@ type StompConsumer struct {
 	Config       config.Config
 	ctx          context.Context
 	whichUri     int
+	lastOffset   *int64
 }
 
 func NewConsumer(ctx context.Context, cfg config.Config, id int) *StompConsumer {
@@ -37,6 +38,7 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *StompConsumer 
 		Config:       cfg,
 		ctx:          ctx,
 		whichUri:     0,
+		lastOffset:   nil,
 	}
 
 	if cfg.SpreadConnections {
@@ -109,7 +111,7 @@ func (c *StompConsumer) Subscribe() {
 	var err error
 
 	if c.Connection != nil {
-		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, buildSubscribeOpts(c.Config, c.Topic, c.Id)...)
+		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, c.buildSubscribeOpts(c.Topic)...)
 		if err != nil {
 			log.Error("subscription failed", "id", c.Id, "queue", c.Topic, "error", err.Error())
 			return
@@ -144,7 +146,12 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 		if c.Subscription == nil {
 			if !utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
 				c.Subscribe()
-				return c.Subscription != nil
+				if c.Subscription != nil {
+					return true
+				}
+				log.Error("subscription failed, reconnecting", "id", c.Id, "destination", c.Topic)
+				c.Connect()
+				return false
 			}) {
 				c.Stop("context cancelled")
 				return
@@ -156,6 +163,7 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 			if msg.Err != nil {
 				log.Error("failed to receive a message", "id", c.Id, "c.Topic", c.Topic, "error", msg.Err)
 				c.Connect()
+				c.Subscription = nil // Reset subscription so the outer loop retries with RetryDelay
 				continue
 			}
 
@@ -169,6 +177,14 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 			} else if val, err := strconv.ParseInt(msg.Header.Get("x-opt-delivery-time"), 10, 64); err == nil {
 				if delayAccuracy, ok := utils.CalculateDelayAccuracyFromDeliveryTime(val); ok {
 					metrics.RecordDelayAccuracy(delayAccuracy)
+				}
+			}
+
+			if c.Config.StreamOffset != "" {
+				if offsetStr := msg.Header.Get("x-stream-offset"); offsetStr != "" {
+					if val, err := strconv.ParseInt(offsetStr, 10, 64); err == nil {
+						c.lastOffset = &val
+					}
 				}
 			}
 
@@ -263,32 +279,40 @@ func extractStompOrderingInfo(msg *stomp.Message) (int, uint64, bool) {
 	return pubID, seq, true
 }
 
-func buildSubscribeOpts(cfg config.Config, destination string, id int) []func(*frame.Frame) error {
+func (c *StompConsumer) buildSubscribeOpts(destination string) []func(*frame.Frame) error {
 	var subscribeOpts []func(*frame.Frame) error
 
-	subscribeOpts = append(subscribeOpts,
-		stomp.SubscribeOpt.Header("x-stream-offset", offsetToString(cfg.StreamOffset)),
-		stomp.SubscribeOpt.Header("prefetch-count", strconv.Itoa(cfg.ConsumerCredits)))
+	var offsetHeader string
+	if c.lastOffset != nil {
+		log.Info("reconnecting stream consumer", "id", c.Id, "offset", *c.lastOffset+1)
+		offsetHeader = "offset=" + strconv.FormatInt(*c.lastOffset+1, 10)
+	} else {
+		offsetHeader = offsetToString(c.Config.StreamOffset)
+	}
 
-	if cfg.ConsumerPriorityTemplate != nil {
-		priorityStr := utils.ExecuteTemplate(cfg.ConsumerPriorityTemplate, id)
+	subscribeOpts = append(subscribeOpts,
+		stomp.SubscribeOpt.Header("x-stream-offset", offsetHeader),
+		stomp.SubscribeOpt.Header("prefetch-count", strconv.Itoa(c.Config.ConsumerCredits)))
+
+	if c.Config.ConsumerPriorityTemplate != nil {
+		priorityStr := utils.ExecuteTemplate(c.Config.ConsumerPriorityTemplate, c.Id)
 		subscribeOpts = append(subscribeOpts,
 			stomp.SubscribeOpt.Header("x-priority", priorityStr))
 	}
 
-	if cfg.QueueDurability != config.None {
+	if c.Config.QueueDurability != config.None {
 		subscribeOpts = append(subscribeOpts,
 			stomp.SubscribeOpt.Header("durable", "true"),
 			stomp.SubscribeOpt.Header("auto-delete", "false"),
 		)
 	}
 
-	if cfg.StreamFilterValues != "" {
+	if c.Config.StreamFilterValues != "" {
 		subscribeOpts = append(subscribeOpts,
-			stomp.SubscribeOpt.Header("x-stream-filter", cfg.StreamFilterValues))
+			stomp.SubscribeOpt.Header("x-stream-filter", c.Config.StreamFilterValues))
 	}
 
-	switch cfg.Queues {
+	switch c.Config.Queues {
 	case config.Classic:
 		subscribeOpts = append(subscribeOpts,
 			stomp.SubscribeOpt.Header("x-queue-type", "classic"))
@@ -310,7 +334,7 @@ func buildSubscribeOpts(cfg config.Config, destination string, id int) []func(*f
 	case config.Predeclared:
 		// For /topic/ destinations with transient queues (QueueDurability == None),
 		// use exclusive to avoid deprecated transient non-exclusive queues
-		if strings.HasPrefix(destination, "/topic/") && cfg.QueueDurability == config.None {
+		if strings.HasPrefix(destination, "/topic/") && c.Config.QueueDurability == config.None {
 			subscribeOpts = append(subscribeOpts,
 				stomp.SubscribeOpt.Header("exclusive", "true"))
 		}
@@ -328,6 +352,9 @@ func offsetToString(offset any) string {
 	}
 	if i, ok := offset.(int); ok {
 		return "offset=" + strconv.Itoa(i)
+	}
+	if i, ok := offset.(int64); ok {
+		return "offset=" + strconv.FormatInt(i, 10)
 	}
 	return "next"
 }

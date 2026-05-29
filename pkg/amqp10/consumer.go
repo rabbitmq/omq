@@ -28,6 +28,7 @@ type Amqp10Consumer struct {
 	Config     config.Config
 	whichUri   int
 	ctx        context.Context
+	lastOffset *int64
 }
 
 func NewConsumer(ctx context.Context, cfg config.Config, id int) *Amqp10Consumer {
@@ -40,6 +41,7 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *Amqp10Consumer
 		Config:     cfg,
 		whichUri:   0,
 		ctx:        ctx,
+		lastOffset: nil,
 	}
 
 	if cfg.SpreadConnections {
@@ -118,7 +120,7 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 		SourceDurability:          durability,
 		Credit:                    int32(c.Config.ConsumerCredits),
 		Properties:                linkProperties,
-		Filters:                   buildLinkFilters(c.Config),
+		Filters:                   c.buildLinkFilters(),
 		RequestedSenderSettleMode: requestedSenderSettleMode(c.Config),
 		OnLinkStateProperties: func(props map[string]any) {
 			if active, ok := props["rabbitmq:active"]; ok {
@@ -206,6 +208,12 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 
 				if hasDelay {
 					metrics.RecordDelayAccuracy(delayAccuracy)
+				}
+
+				if c.Config.StreamOffset != "" {
+					if val, ok := annotationToInt64(msg.Annotations, "x-stream-offset"); ok {
+						c.lastOffset = &val
+					}
 				}
 			}
 
@@ -431,18 +439,21 @@ func toUint64(v any) (uint64, bool) {
 	return 0, false
 }
 
-func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
+func (c *Amqp10Consumer) buildLinkFilters() []amqp.LinkFilter {
 	var filters []amqp.LinkFilter
 
-	if cfg.StreamOffset != "" {
-		filters = append(filters, amqp.NewLinkFilter("rabbitmq:stream-offset-spec", 0, cfg.StreamOffset))
+	if c.lastOffset != nil {
+		log.Info("reconnecting stream consumer", "id", c.Id, "offset", *c.lastOffset+1)
+		filters = append(filters, amqp.NewLinkFilter("rabbitmq:stream-offset-spec", 0, *c.lastOffset+1))
+	} else if c.Config.StreamOffset != "" {
+		filters = append(filters, amqp.NewLinkFilter("rabbitmq:stream-offset-spec", 0, c.Config.StreamOffset))
 	}
 
-	if cfg.StreamFilterValues != "" {
-		filters = append(filters, amqp.NewLinkFilter("rabbitmq:stream-filter", 0, cfg.StreamFilterValues))
+	if c.Config.StreamFilterValues != "" {
+		filters = append(filters, amqp.NewLinkFilter("rabbitmq:stream-filter", 0, c.Config.StreamFilterValues))
 	}
 
-	for appProperty, filterExpression := range cfg.Amqp.AppPropertyFilters {
+	for appProperty, filterExpression := range c.Config.Amqp.AppPropertyFilters {
 		filters = append(filters, amqp.NewLinkFilter("amqp:application-properties-filter",
 			0,
 			map[string]any{
@@ -450,7 +461,7 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 			}))
 	}
 
-	for property, filterExpression := range cfg.Amqp.PropertyFilters {
+	for property, filterExpression := range c.Config.Amqp.PropertyFilters {
 		filters = append(filters,
 			amqp.NewLinkFilter("amqp:properties-filter",
 				0,
@@ -458,13 +469,13 @@ func buildLinkFilters(cfg config.Config) []amqp.LinkFilter {
 					amqp.Symbol(property): filterExpression,
 				}))
 	}
-	if cfg.Amqp.SQLFilter != "" {
+	if c.Config.Amqp.SQLFilter != "" {
 		filters = append(filters, amqp.NewLinkFilter("sql-filter", 0x120,
-			cfg.Amqp.SQLFilter))
+			c.Config.Amqp.SQLFilter))
 	}
-	if cfg.Amqp.JMSSelectorFilter != "" {
+	if c.Config.Amqp.JMSSelectorFilter != "" {
 		filters = append(filters, amqp.NewLinkFilter("jms-selector", 0x0000468C00000004,
-			cfg.Amqp.JMSSelectorFilter))
+			c.Config.Amqp.JMSSelectorFilter))
 	}
 	return filters
 }

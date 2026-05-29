@@ -29,6 +29,7 @@ type Amqp091Consumer struct {
 	Config     config.Config
 	whichUri   int
 	ctx        context.Context
+	lastOffset *int64
 }
 
 func NewConsumer(ctx context.Context, cfg config.Config, id int) *Amqp091Consumer {
@@ -40,6 +41,7 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *Amqp091Consume
 		Config:     cfg,
 		whichUri:   0,
 		ctx:        ctx,
+		lastOffset: nil,
 	}
 
 	if cfg.SpreadConnections {
@@ -135,7 +137,10 @@ func (c *Amqp091Consumer) Subscribe() {
 
 		// TODO add auto-ack
 		consumeArgs := amqp091.Table{}
-		if c.Config.StreamOffset != "" {
+		if c.lastOffset != nil {
+			log.Info("reconnecting stream consumer", "id", c.Id, "offset", *c.lastOffset+1)
+			consumeArgs["x-stream-offset"] = *c.lastOffset + 1
+		} else if c.Config.StreamOffset != "" {
 			consumeArgs["x-stream-offset"] = c.Config.StreamOffset
 		}
 		if c.Config.ConsumerPriorityTemplate != nil {
@@ -181,7 +186,12 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 		if c.Messages == nil {
 			if !utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
 				c.Subscribe()
-				return c.Messages != nil
+				if c.Messages != nil {
+					return true
+				}
+				log.Error("subscription failed, reconnecting", "id", c.Id, "terminus", c.Terminus)
+				c.Connect()
+				return false
 			}) {
 				c.Stop("context cancelled")
 				return
@@ -217,6 +227,12 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 
 				if hasDelay {
 					metrics.RecordDelayAccuracy(delayAccuracy)
+				}
+
+				if c.Config.StreamOffset != "" {
+					if val, ok := headerToInt64(msg.Headers, "x-stream-offset"); ok {
+						c.lastOffset = &val
+					}
 				}
 			}
 

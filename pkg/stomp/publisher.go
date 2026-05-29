@@ -55,6 +55,7 @@ func (p *StompPublisher) Connect() {
 	if p.Connection != nil {
 		_ = p.Connection.Disconnect()
 	}
+	p.Connection = nil
 
 	for p.Connection == nil {
 		uri := utils.NextURI(p.Config.PublisherUri, &p.whichUri)
@@ -101,8 +102,8 @@ func (p *StompPublisher) Connect() {
 			}
 		} else {
 			p.Connection = conn
+			log.Info("connection established", "id", p.Id)
 		}
-		log.Info("connection established", "id", p.Id)
 	}
 }
 
@@ -149,6 +150,7 @@ func (p *StompPublisher) StartPublishing() string {
 			}
 			err := p.Send()
 			if err != nil {
+				log.Info("publisher disconnected; reconnecting...", "id", p.Id, "error", err.Error())
 				p.Connect()
 			}
 		}
