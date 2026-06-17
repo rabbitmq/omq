@@ -134,6 +134,11 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 		c.Stop("context cancelled")
 		return
 	}
+	// TODO?
+	// Since go-stomp's Subscribe() is asynchronous and doesn't wait for server confirmation,
+	// perhaps we should sleep here for a moment?
+	// otherwise we may start publishing before the consuemr is ready
+	// time.Sleep(50 * time.Millisecond)
 	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "destination", c.Topic)
 
