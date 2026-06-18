@@ -226,7 +226,7 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
-	stomp_amqp.Flags().AddFlagSet(amqp091ConsumerFlags)
+	stomp_amqp091.Flags().AddFlagSet(amqp091ConsumerFlags)
 
 	stomp_mqtt = &cobra.Command{
 		Use: "stomp-mqtt",
@@ -269,8 +269,8 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
-	mqtt_amqp.Flags().AddFlagSet(mqttPublisherFlags)
-	mqtt_amqp.Flags().AddFlagSet(amqp091ConsumerFlags)
+	mqtt_amqp091.Flags().AddFlagSet(mqttPublisherFlags)
+	mqtt_amqp091.Flags().AddFlagSet(amqp091ConsumerFlags)
 
 	mqtt_stomp = &cobra.Command{
 		Use: "mqtt-stomp",
@@ -314,6 +314,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	amqp091_mqtt.Flags().AddFlagSet(amqp091PublisherFlags)
+	amqp091_mqtt.Flags().AddFlagSet(mqttConsumerFlags)
 
 	amqp091_stomp = &cobra.Command{
 		Use: "amqp091-stomp",
