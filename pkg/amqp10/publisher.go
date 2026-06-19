@@ -255,6 +255,7 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 				p.drainSettlements(&ptMu, publishTimes)
 				return
 			case <-p.ctx.Done():
+				p.drainSettlements(&ptMu, publishTimes)
 				return
 			}
 		}
@@ -321,12 +322,12 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 
 // drainSettlements waits for remaining in-flight settlements after the send
 // loop has finished. It returns immediately once all in-flight messages are
-// settled, or after 5 seconds of no new settlements arriving.
+// settled, or after 2 seconds of no new settlements arriving.
 func (p *Amqp10Publisher) drainSettlements(ptMu *sync.Mutex, publishTimes map[uint64]time.Time) {
 	if len(p.sem) == 0 {
 		return
 	}
-	timeout := time.NewTimer(5 * time.Second)
+	timeout := time.NewTimer(2 * time.Second)
 	defer timeout.Stop()
 	for {
 		select {
@@ -339,7 +340,7 @@ func (p *Amqp10Publisher) drainSettlements(ptMu *sync.Mutex, publishTimes map[ui
 			if !timeout.Stop() {
 				<-timeout.C
 			}
-			timeout.Reset(5 * time.Second)
+			timeout.Reset(2 * time.Second)
 		case <-timeout.C:
 			log.Info("timed out waiting for remaining settlements", "id", p.Id, "inFlight", len(p.sem))
 			return

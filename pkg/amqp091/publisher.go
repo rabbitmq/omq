@@ -222,7 +222,14 @@ func (p *Amqp091Publisher) handleReturns() {
 
 func (p *Amqp091Publisher) Stop(reason string) {
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
-	for len(p.publishTimes) > 0 {
+	limit := time.Now().Add(2 * time.Second)
+	for time.Now().Before(limit) {
+		p.publishTimesLock.Lock()
+		empty := len(p.publishTimes) == 0
+		p.publishTimesLock.Unlock()
+		if empty {
+			break
+		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	if p.Channel != nil {
