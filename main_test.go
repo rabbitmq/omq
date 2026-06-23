@@ -1304,6 +1304,37 @@ var _ = Describe("OMQ CLI", func() {
 			Expect(outputStr).To(ContainSubstring("userProperties=[mykey:myval]"))
 		})
 	})
+
+	Describe("supports Stream protocol", func() {
+		It("should publish and consume messages using the native Stream protocol", func() {
+			rmqc, err := newRabbitClient()
+			Expect(err).ShouldNot(HaveOccurred())
+			_, _ = rmqc.DeleteQueue("/", "my-stream-test")
+
+			args := []string{
+				"stream",
+				"--pmessages=5",
+				"--cmessages=5",
+				"--publish-to=my-stream-test",
+				"--consume-from=my-stream-test",
+				"--time=5s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=5`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=5`))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(5.0))
+
+			// Cleanup
+			_, _ = rmqc.DeleteQueue("/", "my-stream-test")
+		})
+	})
 })
 
 func omq(args []string) *gexec.Session {

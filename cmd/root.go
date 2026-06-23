@@ -51,6 +51,7 @@ var (
 	amqp091_amqp    = &cobra.Command{}
 	amqp091_mqtt    = &cobra.Command{}
 	amqp091_stomp   = &cobra.Command{}
+	stream_stream   = &cobra.Command{}
 	versionCmd      = &cobra.Command{}
 )
 
@@ -329,6 +330,16 @@ func RootCmd() *cobra.Command {
 	}
 	amqp091_stomp.Flags().AddFlagSet(amqp091PublisherFlags)
 
+	stream_stream = &cobra.Command{
+		Use:     "stream-stream",
+		Aliases: []string{"stream"},
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.STREAM
+			cfg.ConsumerProto = config.STREAM
+			start(cfg)
+		},
+	}
+
 	versionCmd = &cobra.Command{
 		Use: "version",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -491,6 +502,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.AddCommand(amqp091_amqp)
 	rootCmd.AddCommand(amqp091_mqtt)
 	rootCmd.AddCommand(amqp091_stomp)
+	rootCmd.AddCommand(stream_stream)
 	rootCmd.AddCommand(versionCmd)
 
 	return rootCmd
@@ -504,8 +516,8 @@ func start(cfg config.Config) {
 		os.Exit(1)
 	}
 
-	if cfg.MaxInFlight > 1 && cfg.PublisherProto != config.AMQP && cfg.PublisherProto != config.AMQP091 && cfg.PublisherProto != config.MQTT {
-		fmt.Println("max-in-flight > 1 is only supported for AMQP, AMQP 0.9.1, and MQTT publishers")
+	if cfg.MaxInFlight > 1 && cfg.PublisherProto != config.AMQP && cfg.PublisherProto != config.AMQP091 && cfg.PublisherProto != config.MQTT && cfg.PublisherProto != config.STREAM {
+		fmt.Println("max-in-flight > 1 is only supported for AMQP, AMQP 0.9.1, MQTT, and STREAM publishers")
 		os.Exit(1)
 	}
 
@@ -527,6 +539,16 @@ func start(cfg config.Config) {
 		}
 		if cfg.DiscardRate > 0 || len(cfg.DiscardWhenPriority) > 0 {
 			log.Info("WARNING: --discard-rate and --discard-when-priority are ignored for MQTT consumers")
+		}
+	}
+
+	// Warn about unsupported requeue/discard features for STREAM consumers
+	if cfg.ConsumerProto == config.STREAM {
+		if cfg.RequeueRate > 0 || len(cfg.RequeueWhenPriority) > 0 {
+			log.Info("WARNING: --requeue-rate and --requeue-when-priority are ignored for STREAM consumers")
+		}
+		if cfg.DiscardRate > 0 || len(cfg.DiscardWhenPriority) > 0 {
+			log.Info("WARNING: --discard-rate and --discard-when-priority are ignored for STREAM consumers")
 		}
 	}
 

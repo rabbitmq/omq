@@ -19,6 +19,7 @@ const (
 	STOMP
 	MQTT
 	MQTT5
+	STREAM
 )
 
 type QueueType enumflag.Flag

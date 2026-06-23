@@ -9,6 +9,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/config"
 	"github.com/rabbitmq/omq/pkg/mqtt"
 	"github.com/rabbitmq/omq/pkg/stomp"
+	"github.com/rabbitmq/omq/pkg/stream"
 )
 
 type Publisher interface {
@@ -45,6 +46,12 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) (Publisher, er
 			return nil, fmt.Errorf("failed to create an MQTT publisher")
 		}
 		return p, nil
+	case config.STREAM:
+		p := stream.NewPublisher(ctx, cfg, id)
+		if p == nil {
+			return nil, fmt.Errorf("failed to create a STREAM publisher")
+		}
+		return p, nil
 	}
 
 	return nil, fmt.Errorf("unknown protocol")
@@ -74,6 +81,12 @@ func NewConsumer(ctx context.Context, protocol config.Protocol, cfg config.Confi
 		c := mqtt.NewConsumer(ctx, cfg, id)
 		if c == nil {
 			return nil, fmt.Errorf("failed to create an MQTT consumer")
+		}
+		return c, nil
+	case config.STREAM:
+		c := stream.NewConsumer(ctx, cfg, id)
+		if c == nil {
+			return nil, fmt.Errorf("failed to create a STREAM consumer")
 		}
 		return c, nil
 	}
