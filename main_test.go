@@ -240,6 +240,7 @@ var _ = Describe("OMQ CLI", func() {
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=3`))
 		},
 		Entry("amqp", "amqp", "/queues/stream-filter-amqp", "/queues/stream-filter-amqp"),
+		Entry("amqp091", "amqp091", "/queues/stream-filter-amqp091", "/queues/stream-filter-amqp091"),
 		Entry("stomp", "stomp", "/amq/queue/stream-filter-stomp", "/amq/queue/stream-filter-stomp"),
 	)
 
@@ -1190,6 +1191,96 @@ var _ = Describe("OMQ CLI", func() {
 
 			// Cleanup
 			_, _ = rmqc.DeleteQueue("/", "priority-rate-no-match-amqp091")
+		})
+
+		It("AMQP 0.9.1: should publish and consume with matching priority", func() {
+			args := []string{
+				"amqp091",
+				"--pmessages=3",
+				"--cmessages=3",
+				"--publish-to=/queues/priority-test-amqp091",
+				"--consume-from=/queues/priority-test-amqp091",
+				"--message-priority=3",
+				"--queues=classic",
+				"--cleanup-queues=true",
+				"--time=5s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			// All messages should be consumed with priority 3
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="3"}`)).Should(Equal(3.0))
+		})
+
+		It("STOMP: should nack with requeue for matching priority", func() {
+			args := []string{
+				"stomp",
+				"--pmessages=3",
+				"--cmessages=6", // expect to consume each message twice (requeued once)
+				"--publish-to=/topic/priority-requeue-stomp",
+				"--consume-from=/topic/priority-requeue-stomp",
+				"--message-priority=5",
+				"--requeue-when-priority=5",
+				"--time=10s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(11 * time.Second).Should(gexec.Exit(0))
+
+			// All 3 messages should be consumed twice (nacked with requeue once, then acked)
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="5"}`)).Should(Equal(6.0))
+		})
+
+		It("MQTT v5: should expire messages with --message-ttl", func() {
+			args := []string{
+				"mqtt",
+				"--pmessages=3",
+				"--cmessages=3",
+				"--publish-to=/topic/ttl-mqtt",
+				"--consume-from=/topic/ttl-mqtt",
+				"--message-ttl=1s",
+				"--consumer-startup-delay=2s",
+				"--time=5s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			// The consumer started after 2 seconds, but the messages had a 1-second TTL,
+			// so they should have expired and 0 messages should be consumed.
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Or(Equal(0.0), Equal(-1.0)))
+		})
+
+		It("MQTT: supports max-in-flight flag", func() {
+			args := []string{
+				"mqtt",
+				"--pmessages=10",
+				"--cmessages=10",
+				"--publish-to=/topic/max-in-flight-mqtt",
+				"--consume-from=/topic/max-in-flight-mqtt",
+				"--max-in-flight=2",
+				"--time=5s",
+				"--print-all-metrics",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_published_total`)).Should(Equal(10.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(10.0))
 		})
 	})
 })
