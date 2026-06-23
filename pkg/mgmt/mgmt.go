@@ -30,6 +30,7 @@ type Mgmt struct {
 	uris                  []string
 	cleanupQueues         bool
 	insecureSkipTLSVerify bool
+	whichUri              int
 }
 
 func Start(ctx context.Context, uris []string, cleanupQueues bool, insecureSkipTLSVerify bool) *Mgmt {
@@ -55,9 +56,13 @@ func (m *Mgmt) connection() *rmq.AmqpConnection {
 	}
 
 	for {
-		// TODO support multiple URIs
-		u, _ := url.Parse(m.uris[0])
-		conn, err := rmq.Dial(m.ctx, m.uris[0], &rmq.AmqpConnOptions{
+		uri := utils.NextURI(m.uris, &m.whichUri)
+		u, err := url.Parse(uri)
+		if err != nil {
+			log.Error("can't parse management URI", "uri", uri, "error", err)
+			continue
+		}
+		conn, err := rmq.Dial(m.ctx, uri, &rmq.AmqpConnOptions{
 			SASLType:    amqp.SASLTypeAnonymous(),
 			ContainerID: "omq-management",
 			TLSConfig: &tls.Config{
@@ -67,9 +72,10 @@ func (m *Mgmt) connection() *rmq.AmqpConnection {
 		})
 		if err == nil {
 			m.conn = conn
+			log.Debug("management connection established", "uri", uri)
 			break
 		}
-		log.Error("can't establish a management connection; retrying...", "uri", m.uris[0], "error", err)
+		log.Error("can't establish a management connection; retrying...", "uri", uri, "error", err)
 		select {
 		case <-m.ctx.Done():
 			return nil
@@ -77,7 +83,6 @@ func (m *Mgmt) connection() *rmq.AmqpConnection {
 			continue
 		}
 	}
-	log.Debug("management connection established", "uri", m.uris[0])
 	return m.conn
 }
 
