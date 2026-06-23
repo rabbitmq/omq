@@ -123,7 +123,11 @@ func (c *StompConsumer) Subscribe() {
 	var err error
 
 	if c.Connection != nil {
-		sub, err = c.Connection.Subscribe(c.Topic, stomp.AckClient, c.buildSubscribeOpts(c.Topic)...)
+		ackMode := stomp.AckClient
+		if c.Config.Amqp.ConsumeSettled {
+			ackMode = stomp.AckAuto
+		}
+		sub, err = c.Connection.Subscribe(c.Topic, ackMode, c.buildSubscribeOpts(c.Topic)...)
 		if err != nil {
 			log.Error("subscription failed", "id", c.Id, "queue", c.Topic, "error", err.Error())
 			return
@@ -247,13 +251,19 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 				time.Sleep(consumerLatency)
 			}
 
-			err := c.Connection.Ack(msg)
-			if err != nil {
-				log.Error("message NOT acknowledged", "id", c.Id, "destination", c.Topic)
-			} else {
+			if c.Config.Amqp.ConsumeSettled {
 				metrics.MessagesConsumedMetric(priority).Inc()
 				i++
-				log.Debug("message acknowledged", "id", c.Id, "terminus", c.Topic)
+				log.Debug("message auto-acknowledged", "id", c.Id, "terminus", c.Topic)
+			} else {
+				err := c.Connection.Ack(msg)
+				if err != nil {
+					log.Error("message NOT acknowledged", "id", c.Id, "destination", c.Topic)
+				} else {
+					metrics.MessagesConsumedMetric(priority).Inc()
+					i++
+					log.Debug("message acknowledged", "id", c.Id, "terminus", c.Topic)
+				}
 			}
 		case <-c.ctx.Done():
 			c.Stop("time limit reached")

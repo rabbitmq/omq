@@ -155,7 +155,8 @@ func (c *Amqp091Consumer) Subscribe() {
 				os.Exit(1)
 			}
 		}
-		sub, err := c.Channel.Consume(strings.TrimPrefix(c.Terminus, "/queues/"), "", false, false, false, false, consumeArgs)
+		autoAck := c.Config.Amqp.ConsumeSettled
+		sub, err := c.Channel.Consume(strings.TrimPrefix(c.Terminus, "/queues/"), "", autoAck, false, false, false, consumeArgs)
 		if err != nil {
 			log.Error("subscription failed", "id", c.Id, "queue", c.Terminus, "error", err.Error())
 			return
@@ -294,25 +295,31 @@ func (c *Amqp091Consumer) Start(consumerReady chan bool) {
 				time.Sleep(consumerLatency)
 			}
 
-			outcome, err := c.outcome(msg.DeliveryTag, priority)
-			if err != nil {
-				if err == context.Canceled {
-					c.Stop("context canceled")
-					return
-				}
-				if err == amqp091.ErrClosed {
-					log.Info("channel closed during acknowledgment, reconnecting", "id", c.Id)
-					c.Connect()
-					c.Messages = nil
-					continue
-				}
-				log.Error("failed to "+outcome+" message", "id", c.Id, "terminus", c.Terminus, "error", err)
-				// Don't increment counter on error, but continue to avoid infinite loop
-				continue
-			} else {
+			if c.Config.Amqp.ConsumeSettled {
 				metrics.MessagesConsumedMetric(priority).Inc()
 				i++
-				log.Debug("message "+utils.PastTense(outcome), "id", c.Id, "terminus", c.Terminus)
+				log.Debug("message auto-acknowledged", "id", c.Id, "terminus", c.Terminus)
+			} else {
+				outcome, err := c.outcome(msg.DeliveryTag, priority)
+				if err != nil {
+					if err == context.Canceled {
+						c.Stop("context canceled")
+						return
+					}
+					if err == amqp091.ErrClosed {
+						log.Info("channel closed during acknowledgment, reconnecting", "id", c.Id)
+						c.Connect()
+						c.Messages = nil
+						continue
+					}
+					log.Error("failed to "+outcome+" message", "id", c.Id, "terminus", c.Terminus, "error", err)
+					// Don't increment counter on error, but continue to avoid infinite loop
+					continue
+				} else {
+					metrics.MessagesConsumedMetric(priority).Inc()
+					i++
+					log.Debug("message "+utils.PastTense(outcome), "id", c.Id, "terminus", c.Terminus)
+				}
 			}
 		}
 	}
