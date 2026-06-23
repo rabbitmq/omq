@@ -166,6 +166,19 @@ func (p *Mqtt5Publisher) Send() {
 		}
 	}
 
+	if p.Config.MessageTTLTemplate != nil {
+		ttlStr := utils.ExecuteTemplate(p.Config.MessageTTLTemplate, p.Id, seq)
+		if ttl, err := time.ParseDuration(ttlStr); err == nil {
+			expirySecs := uint32(ttl.Seconds())
+			if pub.Properties == nil {
+				pub.Properties = &paho.PublishProperties{}
+			}
+			pub.Properties.MessageExpiry = &expirySecs
+		} else {
+			log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
+		}
+	}
+
 	startTime := time.Now()
 	_, err := p.Connection.Publish(p.ctx, pub)
 	if err != nil {
