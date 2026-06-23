@@ -511,6 +511,13 @@ func RootCmd() *cobra.Command {
 func start(cfg config.Config) {
 	// we can't do this in sanitizeConfig because we need to know
 	// the publisher and consumer protocols and these are set later on
+	if cfg.PublisherProto == config.STREAM || cfg.ConsumerProto == config.STREAM {
+		if cfg.Queues != config.Stream && cfg.Queues != config.Predeclared {
+			fmt.Println("only 'stream' or 'predeclared' queue types are supported for stream publishers/consumers")
+			os.Exit(1)
+		}
+	}
+
 	if cfg.ConsumerLatencyTemplate != nil && cfg.ConsumerProto == config.MQTT {
 		fmt.Println("Consumer latency is not supported for MQTT consumers")
 		os.Exit(1)
