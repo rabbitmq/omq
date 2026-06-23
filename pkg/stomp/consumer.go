@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -65,9 +66,20 @@ func (c *StompConsumer) Connect() {
 		useTLS := strings.HasPrefix(uri, "stomp+ssl://") || strings.HasPrefix(uri, "stomps://")
 		parsedUri := utils.ParseURI(uri, "stomp", "61613")
 
+		vhost := "/"
+		if u, err := url.Parse(uri); err == nil {
+			if u.Path != "" && u.Path != "/" {
+				if unescaped, err := url.PathUnescape(strings.TrimPrefix(u.Path, "/")); err == nil {
+					vhost = unescaped
+				} else {
+					vhost = strings.TrimPrefix(u.Path, "/")
+				}
+			}
+		}
+
 		var o = []func(*stomp.Conn) error{
 			stomp.ConnOpt.Login(parsedUri.Username, parsedUri.Password),
-			stomp.ConnOpt.Host("/"), // TODO
+			stomp.ConnOpt.Host(vhost),
 		}
 
 		log.Debug("connecting to broker", "id", c.Id, "broker", parsedUri.Broker)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -62,9 +63,20 @@ func (p *StompPublisher) Connect() {
 		useTLS := strings.HasPrefix(uri, "stomp+ssl://") || strings.HasPrefix(uri, "stomps://")
 		parsedUri := utils.ParseURI(uri, "stomp", "61613")
 
+		vhost := "/"
+		if u, err := url.Parse(uri); err == nil {
+			if u.Path != "" && u.Path != "/" {
+				if unescaped, err := url.PathUnescape(strings.TrimPrefix(u.Path, "/")); err == nil {
+					vhost = unescaped
+				} else {
+					vhost = strings.TrimPrefix(u.Path, "/")
+				}
+			}
+		}
+
 		var o = []func(*stomp.Conn) error{
 			stomp.ConnOpt.Login(parsedUri.Username, parsedUri.Password),
-			stomp.ConnOpt.Host("/"), // TODO
+			stomp.ConnOpt.Host(vhost),
 		}
 
 		var conn *stomp.Conn
