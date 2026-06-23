@@ -74,17 +74,17 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 			}
 		}
 
-		userPropsInfo := ""
+		logArgs := []any{"id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency}
 		if rcv.Packet.Properties != nil && len(rcv.Packet.Properties.User) > 0 {
 			propPairs := make([]string, 0, len(rcv.Packet.Properties.User))
 			for _, prop := range rcv.Packet.Properties.User {
 				propPairs = append(propPairs, fmt.Sprintf("%s:%s", prop.Key, prop.Value))
 			}
-			userPropsInfo = fmt.Sprintf(" userProperties=[%s]", strings.Join(propPairs, ","))
+			logArgs = append(logArgs, "userProperties", fmt.Sprintf("[%s]", strings.Join(propPairs, ",")))
 		}
 
 		msgsReceived.Add(1)
-		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency, "userProperties", userPropsInfo)
+		log.Debug("message received", logArgs...)
 		return true, nil
 	}
 

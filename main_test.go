@@ -1301,7 +1301,8 @@ var _ = Describe("OMQ CLI", func() {
 			// Verify that the user property was logged on receipt
 			output, _ := io.ReadAll(session.Err)
 			outputStr := string(output)
-			Expect(outputStr).To(ContainSubstring("userProperties=[mykey:myval]"))
+			Expect(outputStr).To(ContainSubstring("userProperties="))
+			Expect(outputStr).To(ContainSubstring("mykey:myval"))
 		})
 	})
 
