@@ -1225,6 +1225,7 @@ var _ = Describe("OMQ CLI", func() {
 				"--consume-from=/topic/priority-requeue-stomp",
 				"--message-priority=5",
 				"--requeue-when-priority=5",
+				"--queue-durability=none",
 				"--time=10s",
 				"--print-all-metrics",
 			}

@@ -360,6 +360,11 @@ func (c *StompConsumer) buildSubscribeOpts(destination string) []func(*frame.Fra
 			stomp.SubscribeOpt.Header("durable", "true"),
 			stomp.SubscribeOpt.Header("auto-delete", "false"),
 		)
+	} else {
+		subscribeOpts = append(subscribeOpts,
+			stomp.SubscribeOpt.Header("durable", "false"),
+			stomp.SubscribeOpt.Header("auto-delete", "true"),
+		)
 	}
 
 	if c.Config.StreamFilterValues != "" {
