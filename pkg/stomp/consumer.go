@@ -3,9 +3,11 @@ package stomp
 import (
 	"context"
 	"crypto/tls"
+	"math/rand/v2"
 	"net"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -256,13 +258,13 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 				i++
 				log.Debug("message auto-acknowledged", "id", c.Id, "terminus", c.Topic)
 			} else {
-				err := c.Connection.Ack(msg)
+				outcome, err := c.outcome(msg, priority)
 				if err != nil {
-					log.Error("message NOT acknowledged", "id", c.Id, "destination", c.Topic)
+					log.Error("failed to "+outcome+" message", "id", c.Id, "destination", c.Topic, "error", err)
 				} else {
 					metrics.MessagesConsumedMetric(priority).Inc()
 					i++
-					log.Debug("message acknowledged", "id", c.Id, "terminus", c.Topic)
+					log.Debug("message "+utils.PastTense(outcome), "id", c.Id, "terminus", c.Topic)
 				}
 			}
 		case <-c.ctx.Done():
@@ -290,6 +292,32 @@ func (c *StompConsumer) Stop(reason string) {
 		}
 	}
 	log.Debug("consumer stopped", "id", c.Id, "reason", reason)
+}
+
+func (c *StompConsumer) outcome(msg *stomp.Message, priority int) (string, error) {
+	requeuePriorityMatch := len(c.Config.RequeueWhenPriority) == 0 || slices.Contains(c.Config.RequeueWhenPriority, priority)
+	discardPriorityMatch := len(c.Config.DiscardWhenPriority) == 0 || slices.Contains(c.Config.DiscardWhenPriority, priority)
+
+	// don't generate random numbers if not necessary
+	if c.Config.RequeueRate == 0 && c.Config.DiscardRate == 0 {
+		// No rate-based logic, just check priority filters for 100% requeue/discard
+		if len(c.Config.RequeueWhenPriority) > 0 && slices.Contains(c.Config.RequeueWhenPriority, priority) {
+			return "nack-requeue", c.Connection.Nack(msg)
+		}
+		if len(c.Config.DiscardWhenPriority) > 0 && slices.Contains(c.Config.DiscardWhenPriority, priority) {
+			// In STOMP, we discard by acknowledging the message (removing it from queue)
+			return "ack-discard", c.Connection.Ack(msg)
+		}
+		return "acknowledge", c.Connection.Ack(msg)
+	}
+
+	n := rand.IntN(100)
+	if requeuePriorityMatch && n < c.Config.RequeueRate {
+		return "nack-requeue", c.Connection.Nack(msg)
+	} else if discardPriorityMatch && n < c.Config.RequeueRate+c.Config.DiscardRate {
+		return "ack-discard", c.Connection.Ack(msg)
+	}
+	return "acknowledge", c.Connection.Ack(msg)
 }
 
 func extractStompOrderingInfo(msg *stomp.Message) (int, uint64, bool) {
