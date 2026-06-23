@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/eclipse/paho.golang/autopaho"
@@ -35,7 +36,7 @@ func NewMqtt5Consumer(ctx context.Context, cfg config.Config, id int) Mqtt5Consu
 }
 
 func (c Mqtt5Consumer) Start(consumerReady chan bool) {
-	msgsReceived := 0
+	var msgsReceived atomic.Int64
 	// subscribed is signalled (once) when all subscriptions are established.
 	// It is buffered so the OnConnectionUp callback never blocks.
 	subscribed := make(chan struct{}, 1)
@@ -72,7 +73,7 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 			}
 		}
 
-		msgsReceived++
+		msgsReceived.Add(1)
 		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency)
 		return true, nil
 	}
@@ -197,7 +198,7 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 	}
 
 	// TODO: currently we can consume more than ConsumerCount messages
-	for msgsReceived < c.Config.ConsumeCount {
+	for msgsReceived.Load() < int64(c.Config.ConsumeCount) {
 		select {
 		case <-c.ctx.Done():
 			c.Stop("time limit reached")

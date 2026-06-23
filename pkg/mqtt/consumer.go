@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -34,7 +35,7 @@ func NewMqttConsumer(ctx context.Context, cfg config.Config, id int) MqttConsume
 }
 
 func (c MqttConsumer) Start(cosumerReady chan bool) {
-	msgsReceived := 0
+	var msgsReceived atomic.Int64
 	// subscribed is signalled (once) when all subscriptions are established.
 	// It is buffered so the OnConnect callback never blocks.
 	subscribed := make(chan struct{}, 1)
@@ -45,7 +46,7 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 		_, latency := utils.CalculateEndToEndLatency(&payload)
 		metrics.RecordEndToEndLatency(latency)
 
-		msgsReceived++
+		msgsReceived.Add(1)
 		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency)
 	}
 
@@ -143,7 +144,7 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 	}
 
 	// TODO: currently we can consume more than ConsumerCount messages
-	for msgsReceived < c.Config.ConsumeCount {
+	for msgsReceived.Load() < int64(c.Config.ConsumeCount) {
 		select {
 		case <-c.ctx.Done():
 			c.Stop("time limit reached")
