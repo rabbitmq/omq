@@ -62,6 +62,7 @@ var (
 	amqpPropertyFilters    []string
 	amqpModifyStr          string
 	amqp091Headers         []string
+	mqttUserProperties     []string
 	queueArgs              []string
 	streamOffset           string
 	consumerLatencyStr     string
@@ -113,6 +114,8 @@ func RootCmd() *cobra.Command {
 		"MQTT publisher clean session")
 	mqttPublisherFlags.DurationVar(&cfg.MqttPublisher.SessionExpiryInterval, "mqtt-publisher-session-expiry-interval", 0,
 		"MQTT publisher session expiry interval")
+	mqttPublisherFlags.StringArrayVar(&mqttUserProperties, "mqtt-user-property", []string{},
+		"MQTT v5 user property, eg. key1=val1")
 
 	amqpPublisherFlags := pflag.NewFlagSet("amqp-publisher", pflag.ContinueOnError)
 
@@ -953,6 +956,20 @@ func sanitizeConfig(cfg *config.Config) error {
 			return fmt.Errorf("invalid template in AMQP application property %s: %v", key, err)
 		}
 		cfg.Amqp.AppPropertyTemplates[key] = tmpl
+	}
+
+	// MQTT user properties
+	cfg.MqttPublisher.UserPropertyTemplates = make(map[string]*template.Template)
+	for _, val := range mqttUserProperties {
+		key, value, err := parseKeyValue(val, "MQTT user property")
+		if err != nil {
+			return err
+		}
+		tmpl, err := config.ParseTemplateValue(value)
+		if err != nil {
+			return fmt.Errorf("invalid template in MQTT user property %s: %v", key, err)
+		}
+		cfg.MqttPublisher.UserPropertyTemplates[key] = tmpl
 	}
 
 	// AMQP message annotations

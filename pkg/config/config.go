@@ -90,6 +90,7 @@ type MqttOptions struct {
 	CleanSession             bool
 	SessionExpiryInterval    time.Duration
 	SubscriptionsPerConsumer int
+	UserPropertyTemplates    map[string]*template.Template
 }
 
 type Amqp091Options struct {

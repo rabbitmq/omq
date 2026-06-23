@@ -1282,6 +1282,27 @@ var _ = Describe("OMQ CLI", func() {
 			buf.Reset(output)
 			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(10.0))
 		})
+
+		It("MQTT v5: should publish and consume with user properties", func() {
+			args := []string{
+				"mqtt",
+				"--pmessages=1",
+				"--cmessages=1",
+				"--publish-to=/topic/user-props-mqtt",
+				"--consume-from=/topic/user-props-mqtt",
+				"--mqtt-user-property", "mykey=myval",
+				"--time=5s",
+				"--log-level=debug",
+			}
+
+			session := omq(args)
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			// Verify that the user property was logged on receipt
+			output, _ := io.ReadAll(session.Err)
+			outputStr := string(output)
+			Expect(outputStr).To(ContainSubstring("userProperties=[mykey:myval]"))
+		})
 	})
 })
 

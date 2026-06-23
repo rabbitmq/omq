@@ -186,6 +186,16 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 		}
 	}
 
+	if len(p.Config.MqttPublisher.UserPropertyTemplates) > 0 {
+		if pub.Properties == nil {
+			pub.Properties = &paho.PublishProperties{}
+		}
+		for key, tmpl := range p.Config.MqttPublisher.UserPropertyTemplates {
+			val := utils.ExecuteTemplate(tmpl, p.Id, seq)
+			pub.Properties.User = append(pub.Properties.User, paho.UserProperty{Key: key, Value: val})
+		}
+	}
+
 	if p.Config.MessageTTLTemplate != nil {
 		ttlStr := utils.ExecuteTemplate(p.Config.MessageTTLTemplate, p.Id, seq)
 		if ttl, err := time.ParseDuration(ttlStr); err == nil {

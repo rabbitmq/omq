@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -73,8 +74,17 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 			}
 		}
 
+		userPropsInfo := ""
+		if rcv.Packet.Properties != nil && len(rcv.Packet.Properties.User) > 0 {
+			propPairs := make([]string, 0, len(rcv.Packet.Properties.User))
+			for _, prop := range rcv.Packet.Properties.User {
+				propPairs = append(propPairs, fmt.Sprintf("%s:%s", prop.Key, prop.Value))
+			}
+			userPropsInfo = fmt.Sprintf(" userProperties=[%s]", strings.Join(propPairs, ","))
+		}
+
 		msgsReceived.Add(1)
-		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency)
+		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency, "userProperties", userPropsInfo)
 		return true, nil
 	}
 
