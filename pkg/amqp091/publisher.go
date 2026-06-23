@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -263,8 +264,18 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 		}
 	}
 
+	if p.Config.MessagePriorityTemplate != nil {
+		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id, seq)
+		if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
+			msg.Priority = uint8(priority)
+		} else {
+			log.Error("failed to parse template-generated priority", "value", priorityStr, "error", err)
+			os.Exit(1)
+		}
+	}
+
 	needsOrderingMetadata := p.Config.DetectOutOfOrder || p.Config.DetectGaps
-	if len(p.Config.Amqp091.HeaderTemplates) > 0 || needsOrderingMetadata {
+	if len(p.Config.Amqp091.HeaderTemplates) > 0 || needsOrderingMetadata || len(p.Config.StreamFilterValueSet) > 0 {
 		if msg.Headers == nil {
 			msg.Headers = make(amqp091.Table)
 		}
@@ -281,6 +292,9 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 		if needsOrderingMetadata {
 			msg.Headers[utils.HeaderPublisherID] = int64(p.Id)
 			msg.Headers[utils.HeaderSequence] = int64(seq)
+		}
+		if len(p.Config.StreamFilterValueSet) > 0 {
+			msg.Headers["x-stream-filter-value"] = p.Config.StreamFilterValueSet[seq%uint64(len(p.Config.StreamFilterValueSet))]
 		}
 	}
 

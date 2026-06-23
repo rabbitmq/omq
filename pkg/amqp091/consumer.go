@@ -143,6 +143,9 @@ func (c *Amqp091Consumer) Subscribe() {
 		} else if c.Config.StreamOffset != "" {
 			consumeArgs["x-stream-offset"] = c.Config.StreamOffset
 		}
+		if c.Config.StreamFilterValues != "" {
+			consumeArgs["x-stream-filter"] = c.Config.StreamFilterValues
+		}
 		if c.Config.ConsumerPriorityTemplate != nil {
 			priorityStr := utils.ExecuteTemplate(c.Config.ConsumerPriorityTemplate, c.Id)
 			if priority, err := strconv.Atoi(priorityStr); err == nil {
