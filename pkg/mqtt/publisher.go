@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"math/rand/v2"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -22,16 +23,19 @@ type MqttPublisher struct {
 	Config     config.Config
 	ctx        context.Context
 	msg        []byte
+	sem        chan struct{}
+	wg         sync.WaitGroup
 }
 
-func NewMqttPublisher(ctx context.Context, cfg config.Config, id int) MqttPublisher {
+func NewMqttPublisher(ctx context.Context, cfg config.Config, id int) *MqttPublisher {
 	topic := publisherTopic(cfg.PublishToTemplate, id)
-	return MqttPublisher{
+	return &MqttPublisher{
 		Id:         id,
 		Connection: nil,
 		Topic:      topic,
 		Config:     cfg,
 		ctx:        ctx,
+		sem:        make(chan struct{}, cfg.MaxInFlight),
 	}
 }
 
@@ -69,7 +73,7 @@ func (p *MqttPublisher) Connect() {
 	p.Connection = connection
 }
 
-func (p MqttPublisher) connectionOptions() *mqtt.ClientOptions {
+func (p *MqttPublisher) connectionOptions() *mqtt.ClientOptions {
 	opts := mqtt.NewClientOptions().
 		SetClientID(utils.InjectId(p.Config.PublisherId, p.Id)).
 		SetAutoReconnect(true).
@@ -97,7 +101,7 @@ func (p MqttPublisher) connectionOptions() *mqtt.ClientOptions {
 	return opts
 }
 
-func (p MqttPublisher) Start(publisherReady chan bool, startPublishing chan bool) {
+func (p *MqttPublisher) Start(publisherReady chan bool, startPublishing chan bool) {
 	defer func() {
 		if p.Connection != nil {
 			p.Connection.Disconnect(250)
@@ -131,7 +135,7 @@ func (p MqttPublisher) Start(publisherReady chan bool, startPublishing chan bool
 	p.Stop(farewell)
 }
 
-func (p MqttPublisher) StartPublishing() string {
+func (p *MqttPublisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent atomic.Int64
@@ -140,28 +144,47 @@ func (p MqttPublisher) StartPublishing() string {
 		case <-p.ctx.Done():
 			return "time limit reached"
 		default:
-			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+			seq := uint64(msgSent.Add(1) - 1)
+			if seq >= uint64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
 				_ = limiter.Wait(p.ctx)
 			}
-			p.Send()
+			select {
+			case p.sem <- struct{}{}:
+			case <-p.ctx.Done():
+				return "context cancelled"
+			}
+			p.wg.Add(1)
+			go func() {
+				defer func() {
+					<-p.sem
+					p.wg.Done()
+				}()
+				p.Send()
+			}()
 		}
 	}
 }
 
-func (p MqttPublisher) Send() {
+func (p *MqttPublisher) Send() {
 	if !p.Connection.IsConnected() {
 		time.Sleep(config.ReconnectDelay)
 		return
 	}
+
+	var body []byte
 	if p.Config.SizeTemplate != nil {
-		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
+		body = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
+	} else {
+		body = make([]byte, len(p.msg))
+		copy(body, p.msg)
 	}
-	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
+	utils.UpdatePayload(p.Config.UseMillis, &body)
+
 	startTime := time.Now()
-	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), false, p.msg)
+	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), false, body)
 	token.Wait()
 	latency := time.Since(startTime)
 	if token.Error() != nil {
@@ -173,7 +196,8 @@ func (p MqttPublisher) Send() {
 	}
 }
 
-func (p MqttPublisher) Stop(reason string) {
+func (p *MqttPublisher) Stop(reason string) {
+	p.wg.Wait()
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Connection != nil {
 		p.Connection.Disconnect(250)

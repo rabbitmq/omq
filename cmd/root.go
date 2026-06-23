@@ -501,8 +501,8 @@ func start(cfg config.Config) {
 		os.Exit(1)
 	}
 
-	if cfg.MaxInFlight > 1 && cfg.PublisherProto != config.AMQP && cfg.PublisherProto != config.AMQP091 {
-		fmt.Println("max-in-flight > 1 is only supported for AMQP and AMQP 0.9.1 publishers")
+	if cfg.MaxInFlight > 1 && cfg.PublisherProto != config.AMQP && cfg.PublisherProto != config.AMQP091 && cfg.PublisherProto != config.MQTT {
+		fmt.Println("max-in-flight > 1 is only supported for AMQP, AMQP 0.9.1, and MQTT publishers")
 		os.Exit(1)
 	}
 

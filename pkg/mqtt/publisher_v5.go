@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,6 +27,8 @@ type Mqtt5Publisher struct {
 	ctx        context.Context
 	msg        []byte
 	msgSent    atomic.Uint64
+	sem        chan struct{}
+	wg         sync.WaitGroup
 }
 
 func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Publisher {
@@ -36,6 +39,7 @@ func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Pub
 		Topic:      topic,
 		Config:     cfg,
 		ctx:        ctx,
+		sem:        make(chan struct{}, cfg.MaxInFlight),
 	}
 }
 
@@ -130,32 +134,48 @@ func (p *Mqtt5Publisher) StartPublishing() string {
 		case <-p.ctx.Done():
 			return "time limit reached"
 		default:
-			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+			seq := uint64(msgSent.Add(1) - 1)
+			if seq >= uint64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
 				_ = limiter.Wait(p.ctx)
 			}
-			p.Send()
+			select {
+			case p.sem <- struct{}{}:
+			case <-p.ctx.Done():
+				return "context cancelled"
+			}
+			p.wg.Add(1)
+			go func(s uint64) {
+				defer func() {
+					<-p.sem
+					p.wg.Done()
+				}()
+				p.Send(s)
+			}(seq)
 		}
 	}
 }
 
-func (p *Mqtt5Publisher) Send() {
+func (p *Mqtt5Publisher) Send(seq uint64) {
 	if p.Connection == nil {
 		return
 	}
-	seq := p.msgSent.Add(1) - 1
 
+	var body []byte
 	if p.Config.SizeTemplate != nil {
-		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
+		body = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
+	} else {
+		body = make([]byte, len(p.msg))
+		copy(body, p.msg)
 	}
-	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
+	utils.UpdatePayload(p.Config.UseMillis, &body)
 
 	pub := &paho.Publish{
 		QoS:     byte(p.Config.MqttPublisher.QoS),
 		Topic:   p.Topic,
-		Payload: p.msg,
+		Payload: body,
 	}
 	if p.Config.DetectOutOfOrder || p.Config.DetectGaps {
 		pub.Properties = &paho.PublishProperties{
@@ -197,6 +217,7 @@ func (p *Mqtt5Publisher) Send() {
 }
 
 func (p *Mqtt5Publisher) Stop(reason string) {
+	p.wg.Wait()
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Connection != nil {
 		disconnectCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
