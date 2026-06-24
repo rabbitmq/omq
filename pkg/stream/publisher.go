@@ -19,17 +19,20 @@ import (
 )
 
 type StreamPublisher struct {
-	Id           int
-	Environment  *stream.Environment
-	Producer     *stream.Producer
-	Topic        string
-	Config       config.Config
-	ctx          context.Context
-	msg          []byte
-	msgSent      atomic.Uint64
-	sem          chan struct{}
-	wg           sync.WaitGroup
-	confirmsChan chan bool
+	Id               int
+	Environment      *stream.Environment
+	Producer         *stream.Producer
+	Topic            string
+	Config           config.Config
+	ctx              context.Context
+	msg              []byte
+	msgSent          atomic.Uint64
+	sem              chan struct{}
+	wg               sync.WaitGroup
+	confirmsChan     chan bool
+	publishTimes     map[int64]time.Time
+	publishTimesLock sync.Mutex
+	basePublishingId int64
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *StreamPublisher {
@@ -37,11 +40,12 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *StreamPublish
 	topic = utils.InjectId(topic, id)
 
 	return &StreamPublisher{
-		Id:     id,
-		Topic:  topic,
-		Config: cfg,
-		ctx:    ctx,
-		sem:    make(chan struct{}, cfg.MaxInFlight),
+		Id:           id,
+		Topic:        topic,
+		Config:       cfg,
+		ctx:          ctx,
+		sem:          make(chan struct{}, cfg.MaxInFlight),
+		publishTimes: make(map[int64]time.Time),
 	}
 }
 
@@ -86,6 +90,15 @@ func (p *StreamPublisher) Connect() {
 	}
 	p.Producer = producer
 
+	lastId, err := producer.GetLastPublishingId()
+	if err != nil {
+		log.Debug("failed to query last publishing ID, starting from 0", "id", p.Id, "error", err.Error())
+		p.basePublishingId = 0
+	} else {
+		p.basePublishingId = lastId
+		log.Debug("queried last publishing ID", "id", p.Id, "lastId", lastId)
+	}
+
 	chPublishConfirm := producer.NotifyPublishConfirmation()
 	p.confirmsChan = make(chan bool, 1)
 	p.handlePublishConfirm(chPublishConfirm, p.Config.PublishCount, p.confirmsChan)
@@ -96,9 +109,24 @@ func (p *StreamPublisher) handlePublishConfirm(confirms stream.ChannelPublishCon
 		confirmedCount := 0
 		for confirmed := range confirms {
 			for _, msg := range confirmed {
+				publishingId := msg.GetPublishingId()
 				if msg.IsConfirmed() {
 					confirmedCount++
 					metrics.MessagesConfirmed.Inc()
+
+					p.publishTimesLock.Lock()
+					startTime, exists := p.publishTimes[publishingId]
+					if exists {
+						delete(p.publishTimes, publishingId)
+					}
+					p.publishTimesLock.Unlock()
+
+					if exists {
+						latency := time.Since(startTime)
+						metrics.RecordPublishingLatency(latency)
+						log.Debug("message confirmed", "id", p.Id, "publishing_id", publishingId, "latency", latency)
+					}
+
 					select {
 					case <-p.sem:
 					default:
@@ -107,6 +135,11 @@ func (p *StreamPublisher) handlePublishConfirm(confirms stream.ChannelPublishCon
 						ch <- true
 						return
 					}
+				} else {
+					p.publishTimesLock.Lock()
+					delete(p.publishTimes, publishingId)
+					p.publishTimesLock.Unlock()
+					log.Debug("message not confirmed by the broker", "id", p.Id, "publishing_id", publishingId)
 				}
 			}
 		}
@@ -189,6 +222,8 @@ func (p *StreamPublisher) Send(seq uint64) {
 	utils.UpdatePayload(p.Config.UseMillis, &body)
 
 	msg := amqp.NewMessage(body)
+	publishingId := p.basePublishingId + 1 + int64(seq)
+	msg.SetPublishingId(publishingId)
 
 	if p.Config.DetectOutOfOrder || p.Config.DetectGaps {
 		props := &amqp.MessageProperties{
@@ -202,18 +237,23 @@ func (p *StreamPublisher) Send(seq uint64) {
 	}
 
 	startTime := time.Now()
+	p.publishTimesLock.Lock()
+	p.publishTimes[publishingId] = startTime
+	p.publishTimesLock.Unlock()
+
 	err := p.Producer.Send(msg)
 	if err != nil {
+		p.publishTimesLock.Lock()
+		delete(p.publishTimes, publishingId)
+		p.publishTimesLock.Unlock()
 		if !strings.Contains(err.Error(), "use of closed network connection") &&
 			!strings.Contains(err.Error(), "context canceled") {
 			log.Error("message sending failure", "id", p.Id, "error", err)
 		}
 		return
 	}
-	latency := time.Since(startTime)
 	metrics.MessagesPublished.Inc()
-	metrics.RecordPublishingLatency(latency)
-	log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+	log.Debug("message sent", "id", p.Id, "destination", p.Topic)
 }
 
 func (p *StreamPublisher) Stop(reason string) {

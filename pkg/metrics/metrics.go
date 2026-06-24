@@ -189,13 +189,19 @@ func (t *latencyTracker) record(latency time.Duration) {
 	ns := latency.Nanoseconds()
 	for {
 		old := t.min.Load()
-		if ns >= old || t.min.CompareAndSwap(old, ns) {
+		if ns >= old {
+			break
+		}
+		if t.min.CompareAndSwap(old, ns) {
 			break
 		}
 	}
 	for {
 		old := t.max.Load()
-		if ns <= old || t.max.CompareAndSwap(old, ns) {
+		if ns <= old {
+			break
+		}
+		if t.max.CompareAndSwap(old, ns) {
 			break
 		}
 	}
