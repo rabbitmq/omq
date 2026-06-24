@@ -52,6 +52,14 @@ var (
 	amqp091_mqtt    = &cobra.Command{}
 	amqp091_stomp   = &cobra.Command{}
 	stream_stream   = &cobra.Command{}
+	stream_amqp     = &cobra.Command{}
+	stream_amqp091  = &cobra.Command{}
+	stream_stomp    = &cobra.Command{}
+	stream_mqtt     = &cobra.Command{}
+	amqp_stream     = &cobra.Command{}
+	amqp091_stream  = &cobra.Command{}
+	stomp_stream    = &cobra.Command{}
+	mqtt_stream     = &cobra.Command{}
 	versionCmd      = &cobra.Command{}
 )
 
@@ -340,6 +348,84 @@ func RootCmd() *cobra.Command {
 		},
 	}
 
+	stream_amqp = &cobra.Command{
+		Use: "stream-amqp",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.STREAM
+			cfg.ConsumerProto = config.AMQP
+			start(cfg)
+		},
+	}
+	stream_amqp.Flags().AddFlagSet(amqpConsumerFlags)
+
+	stream_amqp091 = &cobra.Command{
+		Use: "stream-amqp091",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.STREAM
+			cfg.ConsumerProto = config.AMQP091
+			start(cfg)
+		},
+	}
+	stream_amqp091.Flags().AddFlagSet(amqp091ConsumerFlags)
+
+	stream_stomp = &cobra.Command{
+		Use: "stream-stomp",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.STREAM
+			cfg.ConsumerProto = config.STOMP
+			start(cfg)
+		},
+	}
+
+	stream_mqtt = &cobra.Command{
+		Use: "stream-mqtt",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.STREAM
+			cfg.ConsumerProto = config.MQTT
+			start(cfg)
+		},
+	}
+	stream_mqtt.Flags().AddFlagSet(mqttConsumerFlags)
+
+	amqp_stream = &cobra.Command{
+		Use: "amqp-stream",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.AMQP
+			cfg.ConsumerProto = config.STREAM
+			start(cfg)
+		},
+	}
+	amqp_stream.Flags().AddFlagSet(amqpPublisherFlags)
+
+	amqp091_stream = &cobra.Command{
+		Use: "amqp091-stream",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.AMQP091
+			cfg.ConsumerProto = config.STREAM
+			start(cfg)
+		},
+	}
+	amqp091_stream.Flags().AddFlagSet(amqp091PublisherFlags)
+
+	stomp_stream = &cobra.Command{
+		Use: "stomp-stream",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.STOMP
+			cfg.ConsumerProto = config.STREAM
+			start(cfg)
+		},
+	}
+
+	mqtt_stream = &cobra.Command{
+		Use: "mqtt-stream",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.MQTT
+			cfg.ConsumerProto = config.STREAM
+			start(cfg)
+		},
+	}
+	mqtt_stream.Flags().AddFlagSet(mqttPublisherFlags)
+
 	versionCmd = &cobra.Command{
 		Use: "version",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -503,6 +589,14 @@ func RootCmd() *cobra.Command {
 	rootCmd.AddCommand(amqp091_mqtt)
 	rootCmd.AddCommand(amqp091_stomp)
 	rootCmd.AddCommand(stream_stream)
+	rootCmd.AddCommand(stream_amqp)
+	rootCmd.AddCommand(stream_amqp091)
+	rootCmd.AddCommand(stream_stomp)
+	rootCmd.AddCommand(stream_mqtt)
+	rootCmd.AddCommand(amqp_stream)
+	rootCmd.AddCommand(amqp091_stream)
+	rootCmd.AddCommand(stomp_stream)
+	rootCmd.AddCommand(mqtt_stream)
 	rootCmd.AddCommand(versionCmd)
 
 	return rootCmd
