@@ -26,7 +26,6 @@ type Mqtt5Publisher struct {
 	Config     config.Config
 	ctx        context.Context
 	msg        []byte
-	msgSent    atomic.Uint64
 	sem        chan struct{}
 	wg         sync.WaitGroup
 }

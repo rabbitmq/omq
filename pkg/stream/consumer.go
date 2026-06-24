@@ -201,11 +201,12 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 	if c.Config.StreamOffset != nil && c.Config.StreamOffset != "" {
 		switch v := c.Config.StreamOffset.(type) {
 		case string:
-			if v == "first" {
+			switch v {
+			case "first":
 				consumerOpts.SetOffset(stream.OffsetSpecification{}.First())
-			} else if v == "last" {
+			case "last":
 				consumerOpts.SetOffset(stream.OffsetSpecification{}.Last())
-			} else if v == "next" {
+			case "next":
 				consumerOpts.SetOffset(stream.OffsetSpecification{}.Next())
 			}
 		case int64:
@@ -262,11 +263,12 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 		if c.Config.StreamOffset != nil && c.Config.StreamOffset != "" {
 			switch v := c.Config.StreamOffset.(type) {
 			case string:
-				if v == "first" {
+				switch v {
+				case "first":
 					superConsumerOpts.SetOffset(stream.OffsetSpecification{}.First())
-				} else if v == "last" {
+				case "last":
 					superConsumerOpts.SetOffset(stream.OffsetSpecification{}.Last())
-				} else if v == "next" {
+				case "next":
 					superConsumerOpts.SetOffset(stream.OffsetSpecification{}.Next())
 				}
 			case int64:
