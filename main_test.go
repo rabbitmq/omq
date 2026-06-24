@@ -1357,12 +1357,12 @@ var _ = Describe("OMQ CLI", func() {
 				Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=5`))
 				Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=5`))
 			},
-			Entry("stream -> amqp",    "stream-amqp",    "stream-amqp-xp",             "/queues/stream-amqp-xp"),
-			Entry("stream -> amqp091", "stream-amqp091", "stream-amqp091-xp",           "/queues/stream-amqp091-xp"),
-			Entry("stream -> stomp",   "stream-stomp",   "stream-stomp-xp",             "/amq/queue/stream-stomp-xp"),
-			Entry("amqp -> stream",    "amqp-stream",    "/queues/amqp-stream-xp",      "amqp-stream-xp"),
-			Entry("amqp091 -> stream", "amqp091-stream", "/queues/amqp091-stream-xp",   "amqp091-stream-xp"),
-			Entry("stomp -> stream",   "stomp-stream",   "/amq/queue/stomp-stream-xp",  "stomp-stream-xp"),
+			Entry("stream -> amqp", "stream-amqp", "stream-amqp-xp", "/queues/stream-amqp-xp"),
+			Entry("stream -> amqp091", "stream-amqp091", "stream-amqp091-xp", "/queues/stream-amqp091-xp"),
+			Entry("stream -> stomp", "stream-stomp", "stream-stomp-xp", "/amq/queue/stream-stomp-xp"),
+			Entry("amqp -> stream", "amqp-stream", "/queues/amqp-stream-xp", "amqp-stream-xp"),
+			Entry("amqp091 -> stream", "amqp091-stream", "/queues/amqp091-stream-xp", "amqp091-stream-xp"),
+			Entry("stomp -> stream", "stomp-stream", "/amq/queue/stomp-stream-xp", "stomp-stream-xp"),
 		)
 
 		It("replays messages from the beginning with --stream-offset=first", func() {
