@@ -139,6 +139,8 @@ type Config struct {
 	StreamFilterValues          string
 	StreamFilterValueSet        []string
 	StreamSingleActiveConsumer  bool
+	StreamSuperStream           bool
+	StreamSuperStreamPartitions int
 	ConsumerPriorityTemplate *template.Template
 	Amqp                     AmqpOptions
 	Amqp091                  Amqp091Options

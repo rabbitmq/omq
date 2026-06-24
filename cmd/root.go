@@ -503,6 +503,10 @@ func RootCmd() *cobra.Command {
 		"Stream filter value(s) set on published messages (cycled per message)")
 	rootCmd.PersistentFlags().BoolVar(&cfg.StreamSingleActiveConsumer, "stream-single-active-consumer", false,
 		"Enable single active consumer on a stream")
+	rootCmd.PersistentFlags().BoolVar(&cfg.StreamSuperStream, "stream-super-stream", false,
+		"Use a super stream (partitioned stream)")
+	rootCmd.PersistentFlags().IntVar(&cfg.StreamSuperStreamPartitions, "stream-super-stream-partitions", 3,
+		"Number of partitions for super streams")
 	rootCmd.PersistentFlags().StringVar(&consumerPriorityStr, "consumer-priority", "", "Consumer priority (supports templates")
 	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerCredits, "consumer-credits", 1,
 		"AMQP-1.0 consumer credits / STOMP prefetch count")

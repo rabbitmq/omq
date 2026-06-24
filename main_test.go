@@ -1516,6 +1516,33 @@ var _ = Describe("OMQ CLI", func() {
 
 			_, _ = rmqc.DeleteQueue("/", "stream-sac-test")
 		})
+
+		It("supports --stream-super-stream", func() {
+			rmqc, err := newRabbitClient()
+			Expect(err).ShouldNot(HaveOccurred())
+			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-0")
+			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-1")
+			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-2")
+
+			session := omq([]string{
+				"stream",
+				"--pmessages=10",
+				"--cmessages=10",
+				"--publish-to=omq-super-stream-test",
+				"--consume-from=omq-super-stream-test",
+				"--stream-super-stream",
+				"--stream-super-stream-partitions=3",
+				"--time=15s",
+				"--print-all-metrics",
+			})
+			Eventually(session).WithTimeout(16 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=10`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=10`))
+
+			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-0")
+			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-1")
+			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-2")
+		})
 	})
 })
 

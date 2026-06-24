@@ -124,16 +124,16 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 			m.DeclareAndBind(cfg, queueName, i)
 		}
 	}
-	// declare queues for STREAM publishers
-	if cfg.PublisherProto == config.STREAM {
+	// declare queues for STREAM publishers (super stream declaration is handled by the stream environment)
+	if cfg.PublisherProto == config.STREAM && !cfg.StreamSuperStream {
 		for i := 0; i < cfg.Publishers; i++ {
 			q := utils.ResolveTerminus(cfg.PublishToTemplate, i)
 			queueName := strings.TrimPrefix(q, "/queues/")
 			m.DeclareAndBind(cfg, queueName, i)
 		}
 	}
-	// declare queues for STREAM consumers
-	if cfg.ConsumerProto == config.STREAM {
+	// declare queues for STREAM consumers (super stream declaration is handled by the stream environment)
+	if cfg.ConsumerProto == config.STREAM && !cfg.StreamSuperStream {
 		for i := 0; i < cfg.Consumers; i++ {
 			q := utils.ResolveTerminus(cfg.ConsumeFromTemplate, i)
 			queueName := strings.TrimPrefix(q, "/queues/")

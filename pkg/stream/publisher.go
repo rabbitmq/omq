@@ -25,6 +25,7 @@ type StreamPublisher struct {
 	Id               int
 	Environment      *stream.Environment
 	Producer         *ha.ReliableProducer
+	SuperProducer    *ha.ReliableSuperStreamProducer
 	Topic            string
 	Config           config.Config
 	ctx              context.Context
@@ -118,16 +119,7 @@ func (p *StreamPublisher) Connect() {
 		}))
 	}
 
-	lastId, err := env.QuerySequence(producerName, p.Topic)
-	if err != nil {
-		log.Debug("failed to query last publishing ID, starting from 0", "id", p.Id, "error", err.Error())
-		p.basePublishingId = 0
-	} else {
-		p.basePublishingId = lastId
-		log.Debug("queried last publishing ID", "id", p.Id, "lastId", lastId)
-	}
-
-	producer, err := ha.NewReliableProducer(env, p.Topic, producerOpts, func(confirms []*stream.ConfirmationStatus) {
+	confirmHandler := func(confirms []*stream.ConfirmationStatus) {
 		for _, msg := range confirms {
 			publishingId := msg.GetPublishingId()
 			if msg.IsConfirmed() {
@@ -161,7 +153,50 @@ func (p *StreamPublisher) Connect() {
 				log.Debug("message not confirmed by the broker", "id", p.Id, "publishing_id", publishingId)
 			}
 		}
-	})
+	}
+
+	if p.Config.StreamSuperStream {
+		if p.Config.Queues != config.Predeclared {
+			partitions := p.Config.StreamSuperStreamPartitions
+			if partitions <= 0 {
+				partitions = 3
+			}
+			if err := env.DeclareSuperStream(p.Topic, stream.NewPartitionsOptions(partitions)); err != nil {
+				log.Error("failed to declare super stream", "id", p.Id, "error", err.Error())
+				os.Exit(1)
+			}
+		}
+
+		superOpts := stream.NewSuperStreamProducerOptions(
+			stream.NewHashRoutingStrategy(func(msg message.StreamMessage) string {
+				return strconv.FormatInt(msg.GetPublishingId(), 10)
+			}),
+		)
+
+		superProducer, err := ha.NewReliableSuperStreamProducer(env, p.Topic, superOpts,
+			func(confirms []*stream.PartitionPublishConfirm) {
+				for _, partConfirm := range confirms {
+					confirmHandler(partConfirm.ConfirmationStatus)
+				}
+			})
+		if err != nil {
+			log.Error("failed to create super stream producer", "id", p.Id, "error", err.Error())
+			os.Exit(1)
+		}
+		p.SuperProducer = superProducer
+		return
+	}
+
+	lastId, err := env.QuerySequence(producerName, p.Topic)
+	if err != nil {
+		log.Debug("failed to query last publishing ID, starting from 0", "id", p.Id, "error", err.Error())
+		p.basePublishingId = 0
+	} else {
+		p.basePublishingId = lastId
+		log.Debug("queried last publishing ID", "id", p.Id, "lastId", lastId)
+	}
+
+	producer, err := ha.NewReliableProducer(env, p.Topic, producerOpts, confirmHandler)
 	if err != nil {
 		log.Error("failed to create stream producer", "id", p.Id, "error", err.Error())
 		os.Exit(1)
@@ -171,6 +206,9 @@ func (p *StreamPublisher) Connect() {
 
 func (p *StreamPublisher) Start(publisherReady chan bool, startPublishing chan bool) {
 	defer func() {
+		if p.SuperProducer != nil {
+			_ = p.SuperProducer.Close()
+		}
 		if p.Producer != nil {
 			_ = p.Producer.Close()
 		}
@@ -231,7 +269,7 @@ func (p *StreamPublisher) StartPublishing() string {
 }
 
 func (p *StreamPublisher) Send(seq uint64) {
-	if p.Producer == nil {
+	if p.Producer == nil && p.SuperProducer == nil {
 		return
 	}
 
@@ -275,8 +313,13 @@ func (p *StreamPublisher) Send(seq uint64) {
 	p.publishTimes[publishingId] = startTime
 	p.publishTimesLock.Unlock()
 
-	err := p.Producer.Send(msg)
-	if err != nil {
+	var sendErr error
+	if p.Config.StreamSuperStream {
+		sendErr = p.SuperProducer.Send(msg)
+	} else {
+		sendErr = p.Producer.Send(msg)
+	}
+	if sendErr != nil {
 		p.publishTimesLock.Lock()
 		delete(p.publishTimes, publishingId)
 		p.publishTimesLock.Unlock()
@@ -284,9 +327,9 @@ func (p *StreamPublisher) Send(seq uint64) {
 		case <-p.sem:
 		default:
 		}
-		if !strings.Contains(err.Error(), "use of closed network connection") &&
-			!strings.Contains(err.Error(), "context canceled") {
-			log.Error("message sending failure", "id", p.Id, "error", err)
+		if !strings.Contains(sendErr.Error(), "use of closed network connection") &&
+			!strings.Contains(sendErr.Error(), "context canceled") {
+			log.Error("message sending failure", "id", p.Id, "error", sendErr)
 		}
 		return
 	}

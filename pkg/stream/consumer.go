@@ -19,12 +19,13 @@ import (
 )
 
 type StreamConsumer struct {
-	Id          int
-	Environment *stream.Environment
-	Consumer    *ha.ReliableConsumer
-	Topic       string
-	Config      config.Config
-	ctx         context.Context
+	Id            int
+	Environment   *stream.Environment
+	Consumer      *ha.ReliableConsumer
+	SuperConsumer *ha.ReliableSuperStreamConsumer
+	Topic         string
+	Config        config.Config
+	ctx           context.Context
 }
 
 func NewConsumer(ctx context.Context, cfg config.Config, id int) *StreamConsumer {
@@ -88,6 +89,17 @@ func (c *StreamConsumer) Connect() {
 		os.Exit(1)
 	}
 	c.Environment = env
+
+	if c.Config.StreamSuperStream && c.Config.Queues != config.Predeclared {
+		partitions := c.Config.StreamSuperStreamPartitions
+		if partitions <= 0 {
+			partitions = 3
+		}
+		if err := env.DeclareSuperStream(c.Topic, stream.NewPartitionsOptions(partitions)); err != nil {
+			log.Error("failed to declare super stream", "id", c.Id, "error", err.Error())
+			os.Exit(1)
+		}
+	}
 }
 
 func (c *StreamConsumer) Start(consumerReady chan bool) {
@@ -237,12 +249,42 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 		consumerOpts.SetFilter(filter)
 	}
 
-	consumer, err := ha.NewReliableConsumer(c.Environment, c.Topic, consumerOpts, handleMessages)
-	if err != nil {
-		log.Error("failed to create stream consumer", "id", c.Id, "error", err.Error())
-		os.Exit(1)
+	if c.Config.StreamSuperStream {
+		superConsumerOpts := stream.NewSuperStreamConsumerOptions().
+			SetClientProvidedName("omq-consumer-" + strconv.Itoa(c.Id)).
+			SetConsumerName("omq-consumer-" + strconv.Itoa(c.Id))
+		if c.Config.StreamOffset != nil && c.Config.StreamOffset != "" {
+			switch v := c.Config.StreamOffset.(type) {
+			case string:
+				if v == "first" {
+					superConsumerOpts.SetOffset(stream.OffsetSpecification{}.First())
+				} else if v == "last" {
+					superConsumerOpts.SetOffset(stream.OffsetSpecification{}.Last())
+				} else if v == "next" {
+					superConsumerOpts.SetOffset(stream.OffsetSpecification{}.Next())
+				}
+			case int64:
+				superConsumerOpts.SetOffset(stream.OffsetSpecification{}.Offset(v))
+			case time.Time:
+				superConsumerOpts.SetOffset(stream.OffsetSpecification{}.Timestamp(v.UnixNano() / int64(time.Millisecond)))
+			}
+		} else {
+			superConsumerOpts.SetOffset(stream.OffsetSpecification{}.Next())
+		}
+		superConsumer, err := ha.NewReliableSuperStreamConsumer(c.Environment, c.Topic, handleMessages, superConsumerOpts)
+		if err != nil {
+			log.Error("failed to create super stream consumer", "id", c.Id, "error", err.Error())
+			os.Exit(1)
+		}
+		c.SuperConsumer = superConsumer
+	} else {
+		consumer, err := ha.NewReliableConsumer(c.Environment, c.Topic, consumerOpts, handleMessages)
+		if err != nil {
+			log.Error("failed to create stream consumer", "id", c.Id, "error", err.Error())
+			os.Exit(1)
+		}
+		c.Consumer = consumer
 	}
-	c.Consumer = consumer
 
 	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "destination", c.Topic)
@@ -261,6 +303,9 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 
 func (c *StreamConsumer) Stop(reason string) {
 	log.Debug("closing consumer connection", "id", c.Id, "reason", reason)
+	if c.SuperConsumer != nil {
+		_ = c.SuperConsumer.Close()
+	}
 	if c.Consumer != nil {
 		_ = c.Consumer.Close()
 	}
