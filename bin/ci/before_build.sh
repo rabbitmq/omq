@@ -27,6 +27,10 @@ $CTL set_cluster_name rabbitmq@localhost
 
 $CTL enable_feature_flag all
 
+# configure stream advertised port and host
+$CTL eval 'application:set_env(rabbitmq_stream, advertised_host, "localhost").'
+$CTL eval 'application:set_env(rabbitmq_stream, advertised_port, 5552).'
+
 # Enable shovel plugin
 $PLUGINS enable rabbitmq_prometheus rabbitmq_amqp1_0 rabbitmq_mqtt rabbitmq_stomp rabbitmq_stream
 
