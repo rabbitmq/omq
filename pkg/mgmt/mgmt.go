@@ -124,6 +124,22 @@ func (m *Mgmt) DeclareQueues(cfg config.Config) {
 			m.DeclareAndBind(cfg, queueName, i)
 		}
 	}
+	// declare queues for STREAM publishers
+	if cfg.PublisherProto == config.STREAM {
+		for i := 0; i < cfg.Publishers; i++ {
+			q := utils.ResolveTerminus(cfg.PublishToTemplate, i)
+			queueName := strings.TrimPrefix(q, "/queues/")
+			m.DeclareAndBind(cfg, queueName, i)
+		}
+	}
+	// declare queues for STREAM consumers
+	if cfg.ConsumerProto == config.STREAM {
+		for i := 0; i < cfg.Consumers; i++ {
+			q := utils.ResolveTerminus(cfg.ConsumeFromTemplate, i)
+			queueName := strings.TrimPrefix(q, "/queues/")
+			m.DeclareAndBind(cfg, queueName, i)
+		}
+	}
 }
 
 func (m *Mgmt) DeclareAndBind(cfg config.Config, queueName string, id int) *rmq.AmqpQueueInfo {
@@ -209,6 +225,10 @@ func jmsArgumentsFromConfig(cfg config.Config) map[string]any {
 
 func parsePublishTo(proto config.Protocol, publishToTemplate *template.Template, id int) (string, string) {
 	resolvedPublishTo := utils.ResolveTerminus(publishToTemplate, id)
+
+	if proto == config.STREAM {
+		return "amq.default", strings.TrimPrefix(resolvedPublishTo, "/queues/")
+	}
 
 	parts := strings.Split(resolvedPublishTo, "/")
 

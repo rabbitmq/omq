@@ -76,10 +76,6 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 		return
 	}
 
-	if c.Config.Queues == config.Stream {
-		_ = c.Environment.DeclareStream(c.Topic, &stream.StreamOptions{})
-	}
-
 	var msgsReceived atomic.Int64
 	var oooTracker *utils.OutOfOrderTracker
 	if c.Config.DetectOutOfOrder || c.Config.DetectGaps {

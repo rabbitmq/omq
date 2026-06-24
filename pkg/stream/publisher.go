@@ -76,10 +76,6 @@ func (p *StreamPublisher) Connect() {
 	}
 	p.Environment = env
 
-	if p.Config.Queues == config.Stream {
-		_ = env.DeclareStream(p.Topic, &stream.StreamOptions{})
-	}
-
 	producerOpts := stream.NewProducerOptions()
 	producerOpts.SetProducerName("omq-publisher-" + strconv.Itoa(p.Id))
 
