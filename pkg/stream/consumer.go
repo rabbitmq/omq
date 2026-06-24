@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"crypto/tls"
 	"os"
 	"strconv"
 	"strings"
@@ -47,13 +48,24 @@ func (c *StreamConsumer) Connect() {
 		uriStr = "rabbitmq-stream://guest:guest@localhost:5552"
 	}
 
-	parsedUri := utils.ParseURI(uriStr, "rabbitmq-stream", "5552")
+	defaultPort := "5552"
+	if strings.HasPrefix(uriStr, "rabbitmq-stream+tls") {
+		defaultPort = "5551"
+	}
+	parsedUri := utils.ParseURI(uriStr, "rabbitmq-stream", defaultPort)
 
+	isTLS := parsedUri.Scheme == "rabbitmq-stream+tls"
 	opts := stream.NewEnvironmentOptions().
 		SetHost(strings.Split(parsedUri.Broker, ":")[0]).
-		SetPort(5552).
 		SetUser(parsedUri.Username).
-		SetPassword(parsedUri.Password)
+		SetPassword(parsedUri.Password).
+		IsTLS(isTLS)
+
+	if isTLS {
+		opts.SetTLSConfig(&tls.Config{
+			InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
+		})
+	}
 
 	if parts := strings.Split(parsedUri.Broker, ":"); len(parts) > 1 {
 		if port, err := strconv.Atoi(parts[1]); err == nil {
@@ -140,7 +152,7 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 		SetConsumerName("omq-consumer-" + strconv.Itoa(c.Id)).
 		SetCRCCheck(false)
 
-	if c.Config.StreamOffset != nil {
+	if c.Config.StreamOffset != nil && c.Config.StreamOffset != "" {
 		switch v := c.Config.StreamOffset.(type) {
 		case string:
 			if v == "first" {
@@ -156,7 +168,38 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 			consumerOpts.SetOffset(stream.OffsetSpecification{}.Timestamp(v.UnixNano() / int64(time.Millisecond)))
 		}
 	} else {
-		consumerOpts.SetOffset(stream.OffsetSpecification{}.First())
+		consumerOpts.SetOffset(stream.OffsetSpecification{}.Next())
+	}
+
+	if c.Config.StreamFilterValues != "" {
+		filterValues := strings.Split(c.Config.StreamFilterValues, ",")
+		for i, v := range filterValues {
+			filterValues[i] = strings.TrimSpace(v)
+		}
+		postFilter := func(message *amqp.Message) bool {
+			var val any
+			if message.ApplicationProperties != nil {
+				val = message.ApplicationProperties["x-stream-filter-value"]
+			}
+			if val == nil && message.Annotations != nil {
+				val = message.Annotations["x-stream-filter-value"]
+			}
+			if val == nil {
+				return false
+			}
+			valStr, ok := val.(string)
+			if !ok {
+				return false
+			}
+			for _, fv := range filterValues {
+				if fv == valStr {
+					return true
+				}
+			}
+			return false
+		}
+		filter := stream.NewConsumerFilter(filterValues, false, postFilter)
+		consumerOpts.SetFilter(filter)
 	}
 
 	consumer, err := c.Environment.NewConsumer(c.Topic, handleMessages, consumerOpts)

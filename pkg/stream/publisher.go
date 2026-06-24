@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"crypto/tls"
 	"math/rand/v2"
 	"os"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/amqp"
+	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/message"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 )
 
@@ -29,7 +31,6 @@ type StreamPublisher struct {
 	msgSent          atomic.Uint64
 	sem              chan struct{}
 	wg               sync.WaitGroup
-	confirmsChan     chan bool
 	publishTimes     map[int64]time.Time
 	publishTimesLock sync.Mutex
 	basePublishingId int64
@@ -59,13 +60,24 @@ func (p *StreamPublisher) Connect() {
 		uriStr = "rabbitmq-stream://guest:guest@localhost:5552"
 	}
 
-	parsedUri := utils.ParseURI(uriStr, "rabbitmq-stream", "5552")
+	defaultPort := "5552"
+	if strings.HasPrefix(uriStr, "rabbitmq-stream+tls") {
+		defaultPort = "5551"
+	}
+	parsedUri := utils.ParseURI(uriStr, "rabbitmq-stream", defaultPort)
 
+	isTLS := parsedUri.Scheme == "rabbitmq-stream+tls"
 	opts := stream.NewEnvironmentOptions().
 		SetHost(strings.Split(parsedUri.Broker, ":")[0]).
-		SetPort(5552).
 		SetUser(parsedUri.Username).
-		SetPassword(parsedUri.Password)
+		SetPassword(parsedUri.Password).
+		IsTLS(isTLS)
+
+	if isTLS {
+		opts.SetTLSConfig(&tls.Config{
+			InsecureSkipVerify: p.Config.InsecureSkipTLSVerify,
+		})
+	}
 
 	if parts := strings.Split(parsedUri.Broker, ":"); len(parts) > 1 {
 		if port, err := strconv.Atoi(parts[1]); err == nil {
@@ -82,6 +94,21 @@ func (p *StreamPublisher) Connect() {
 
 	producerOpts := stream.NewProducerOptions()
 	producerOpts.SetProducerName("omq-publisher-" + strconv.Itoa(p.Id))
+
+	if len(p.Config.StreamFilterValueSet) > 0 {
+		producerOpts.SetFilter(stream.NewProducerFilter(func(message message.StreamMessage) string {
+			props := message.GetApplicationProperties()
+			if props != nil {
+				val := props["x-stream-filter-value"]
+				if val != nil {
+					if str, ok := val.(string); ok {
+						return str
+					}
+				}
+			}
+			return ""
+		}))
+	}
 
 	producer, err := env.NewProducer(p.Topic, producerOpts)
 	if err != nil {
@@ -100,18 +127,15 @@ func (p *StreamPublisher) Connect() {
 	}
 
 	chPublishConfirm := producer.NotifyPublishConfirmation()
-	p.confirmsChan = make(chan bool, 1)
-	p.handlePublishConfirm(chPublishConfirm, p.Config.PublishCount, p.confirmsChan)
+	p.handlePublishConfirm(chPublishConfirm)
 }
 
-func (p *StreamPublisher) handlePublishConfirm(confirms stream.ChannelPublishConfirm, messageCount int, ch chan bool) {
+func (p *StreamPublisher) handlePublishConfirm(confirms stream.ChannelPublishConfirm) {
 	go func() {
-		confirmedCount := 0
 		for confirmed := range confirms {
 			for _, msg := range confirmed {
 				publishingId := msg.GetPublishingId()
 				if msg.IsConfirmed() {
-					confirmedCount++
 					metrics.MessagesConfirmed.Inc()
 
 					p.publishTimesLock.Lock()
@@ -130,10 +154,6 @@ func (p *StreamPublisher) handlePublishConfirm(confirms stream.ChannelPublishCon
 					select {
 					case <-p.sem:
 					default:
-					}
-					if confirmedCount == messageCount {
-						ch <- true
-						return
 					}
 				} else {
 					p.publishTimesLock.Lock()
@@ -236,6 +256,17 @@ func (p *StreamPublisher) Send(seq uint64) {
 		}
 	}
 
+	if len(p.Config.StreamFilterValueSet) > 0 {
+		filterValue := p.Config.StreamFilterValueSet[seq%uint64(len(p.Config.StreamFilterValueSet))]
+		if msg.ApplicationProperties == nil {
+			msg.ApplicationProperties = map[string]any{
+				"x-stream-filter-value": filterValue,
+			}
+		} else {
+			msg.ApplicationProperties["x-stream-filter-value"] = filterValue
+		}
+	}
+
 	startTime := time.Now()
 	p.publishTimesLock.Lock()
 	p.publishTimes[publishingId] = startTime
@@ -257,13 +288,15 @@ func (p *StreamPublisher) Send(seq uint64) {
 }
 
 func (p *StreamPublisher) Stop(reason string) {
-	if p.confirmsChan != nil {
-		select {
-		case <-p.confirmsChan:
-			log.Debug("all messages confirmed by broker")
-		case <-time.After(5 * time.Second):
-			log.Error("timeout waiting for publish confirmations")
-		}
-	}
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
+	limit := time.Now().Add(5 * time.Second)
+	for time.Now().Before(limit) {
+		p.publishTimesLock.Lock()
+		empty := len(p.publishTimes) == 0
+		p.publishTimesLock.Unlock()
+		if empty {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }

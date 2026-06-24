@@ -242,6 +242,7 @@ var _ = Describe("OMQ CLI", func() {
 		Entry("amqp", "amqp", "/queues/stream-filter-amqp", "/queues/stream-filter-amqp"),
 		Entry("amqp091", "amqp091", "/queues/stream-filter-amqp091", "/queues/stream-filter-amqp091"),
 		Entry("stomp", "stomp", "/amq/queue/stream-filter-stomp", "/amq/queue/stream-filter-stomp"),
+		Entry("stream", "stream", "stream-filter-stream", "stream-filter-stream"),
 	)
 
 	Describe("supports AMQP Message Annotations", func() {
