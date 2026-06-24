@@ -126,6 +126,31 @@ We publish 100 messages per second with 3 different key values and then consume
 only messages with one of the values. Therefore, the consumption rate is one
 third of the publishing rate.
 
+### Stream Protocol
+
+`omq` supports RabbitMQ's native stream protocol via `rabbitmq-stream-go-client`. Use commands
+with `stream` in the name — `stream` (shorthand for `stream-stream`), `stream-amqp`,
+`amqp-stream`, `stomp-stream`, etc.
+
+Stream URIs use the `rabbitmq-stream://` scheme (or `rabbitmq-stream+tls://` for TLS). The
+default is `rabbitmq-stream://guest:guest@localhost:5552`.
+
+```shell
+# Publish and consume 1000 messages via the stream protocol, declaring the stream first
+$ omq stream --queues stream --publish-to my-stream --consume-from my-stream --pmessages 1000 --cmessages 1000
+```
+
+Stream filtering example — publish with a tag, consume only matching messages:
+
+```shell
+$ omq stream --queues stream -t my-stream -T my-stream \
+    --stream-filter-value-set us,eu,ap \
+    --stream-filter-values us
+```
+
+Each message is stamped with one of `us`, `eu`, `ap` (cycling), and the consumer only receives
+messages tagged `us` — one third of the published messages.
+
 ### Templated Values
 
 Some flags are parsed as Go text templates and provide additional functions from the [Sprig](https://masterminds.github.io/sprig/) library.
