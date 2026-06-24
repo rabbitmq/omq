@@ -27,8 +27,8 @@ type StreamConsumer struct {
 }
 
 func NewConsumer(ctx context.Context, cfg config.Config, id int) *StreamConsumer {
-	topic := strings.TrimPrefix(cfg.ConsumeFrom, "/queues/")
-	topic = utils.InjectId(topic, id)
+	topic := utils.ResolveTerminus(cfg.ConsumeFromTemplate, id)
+	topic = strings.TrimPrefix(topic, "/queues/")
 
 	return &StreamConsumer{
 		Id:     id,

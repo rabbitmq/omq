@@ -37,8 +37,8 @@ type StreamPublisher struct {
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *StreamPublisher {
-	topic := strings.TrimPrefix(cfg.PublishTo, "/queues/")
-	topic = utils.InjectId(topic, id)
+	topic := utils.ResolveTerminus(cfg.PublishToTemplate, id)
+	topic = strings.TrimPrefix(topic, "/queues/")
 
 	return &StreamPublisher{
 		Id:           id,
