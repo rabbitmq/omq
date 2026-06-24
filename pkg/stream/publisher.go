@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"math/rand/v2"
 	"os"
 	"strconv"
@@ -17,9 +18,32 @@ import (
 	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/amqp"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/ha"
+	streamLogs "github.com/rabbitmq/rabbitmq-stream-go-client/pkg/logs"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/message"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 )
+
+func init() {
+	streamLogs.SetLogger(streamLibLogger{})
+}
+
+type streamLibLogger struct{}
+
+func (streamLibLogger) Info(message string, v ...any) {
+	log.Debug(fmt.Sprintf(message, v...))
+}
+
+func (streamLibLogger) Error(message string, v ...any) {
+	log.Error(fmt.Sprintf(message, v...))
+}
+
+func (streamLibLogger) Debug(message string, v ...any) {
+	log.Debug(fmt.Sprintf(message, v...))
+}
+
+func (streamLibLogger) Warn(message string, v ...any) {
+	log.Debug(fmt.Sprintf(message, v...))
+}
 
 type StreamPublisher struct {
 	Id               int
