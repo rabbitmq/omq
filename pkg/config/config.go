@@ -135,9 +135,10 @@ type Config struct {
 	MessageDurability        bool
 	MessagePriorityTemplate  *template.Template
 	MessageTTLTemplate       *template.Template
-	StreamOffset             any
-	StreamFilterValues       string
-	StreamFilterValueSet     []string
+	StreamOffset                any
+	StreamFilterValues          string
+	StreamFilterValueSet        []string
+	StreamSingleActiveConsumer  bool
 	ConsumerPriorityTemplate *template.Template
 	Amqp                     AmqpOptions
 	Amqp091                  Amqp091Options

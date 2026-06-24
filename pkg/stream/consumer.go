@@ -199,6 +199,13 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 		consumerOpts.SetOffset(stream.OffsetSpecification{}.Next())
 	}
 
+	if c.Config.StreamSingleActiveConsumer {
+		sac := stream.NewSingleActiveConsumer(func(streamName string, isActive bool) stream.OffsetSpecification {
+			return stream.OffsetSpecification{}.Next()
+		})
+		consumerOpts.SetSingleActiveConsumer(sac)
+	}
+
 	if c.Config.StreamFilterValues != "" {
 		filterValues := strings.Split(c.Config.StreamFilterValues, ",")
 		for i, v := range filterValues {

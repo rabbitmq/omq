@@ -1491,6 +1491,31 @@ var _ = Describe("OMQ CLI", func() {
 
 			_, _ = rmqc.DeleteQueue("/", "stream-latency-test")
 		})
+
+		It("supports --stream-single-active-consumer", func() {
+			rmqc, err := newRabbitClient()
+			Expect(err).ShouldNot(HaveOccurred())
+			_, _ = rmqc.DeleteQueue("/", "stream-sac-test")
+
+			session := omq([]string{
+				"stream",
+				"--pmessages=10",
+				"--cmessages=10",
+				"--consumers=2",
+				"--publishers=1",
+				"--publish-to=stream-sac-test",
+				"--consume-from=stream-sac-test",
+				"--queues=stream",
+				"--stream-single-active-consumer",
+				"--time=15s",
+				"--print-all-metrics",
+			})
+			Eventually(session).WithTimeout(16 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=10`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=10`))
+
+			_, _ = rmqc.DeleteQueue("/", "stream-sac-test")
+		})
 	})
 })
 
