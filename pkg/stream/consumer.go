@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -62,8 +63,8 @@ func (c *StreamConsumer) Connect() {
 
 	env, err := stream.NewEnvironment(opts)
 	if err != nil {
-		log.Error("failed to create stream environment", "id", c.Id, "error", err)
-		return
+		log.Error("failed to create stream environment", "id", c.Id, "error", err.Error())
+		os.Exit(1)
 	}
 	c.Environment = env
 }
@@ -75,7 +76,9 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 		return
 	}
 
-	_ = c.Environment.DeclareStream(c.Topic, &stream.StreamOptions{})
+	if c.Config.Queues == config.Stream {
+		_ = c.Environment.DeclareStream(c.Topic, &stream.StreamOptions{})
+	}
 
 	var msgsReceived atomic.Int64
 	var oooTracker *utils.OutOfOrderTracker
@@ -162,9 +165,8 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 
 	consumer, err := c.Environment.NewConsumer(c.Topic, handleMessages, consumerOpts)
 	if err != nil {
-		log.Error("failed to create stream consumer", "id", c.Id, "error", err)
-		close(consumerReady)
-		return
+		log.Error("failed to create stream consumer", "id", c.Id, "error", err.Error())
+		os.Exit(1)
 	}
 	c.Consumer = consumer
 

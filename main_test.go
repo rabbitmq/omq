@@ -1319,6 +1319,7 @@ var _ = Describe("OMQ CLI", func() {
 				"--cmessages=5",
 				"--publish-to=my-stream-test",
 				"--consume-from=my-stream-test",
+				"--queues=stream",
 				"--time=5s",
 				"--print-all-metrics",
 			}

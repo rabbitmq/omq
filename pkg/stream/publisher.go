@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"math/rand/v2"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -70,20 +71,22 @@ func (p *StreamPublisher) Connect() {
 
 	env, err := stream.NewEnvironment(opts)
 	if err != nil {
-		log.Error("failed to create stream environment", "id", p.Id, "error", err)
-		return
+		log.Error("failed to create stream environment", "id", p.Id, "error", err.Error())
+		os.Exit(1)
 	}
 	p.Environment = env
 
-	_ = env.DeclareStream(p.Topic, &stream.StreamOptions{})
+	if p.Config.Queues == config.Stream {
+		_ = env.DeclareStream(p.Topic, &stream.StreamOptions{})
+	}
 
 	producerOpts := stream.NewProducerOptions()
 	producerOpts.SetProducerName("omq-publisher-" + strconv.Itoa(p.Id))
 
 	producer, err := env.NewProducer(p.Topic, producerOpts)
 	if err != nil {
-		log.Error("failed to create stream producer", "id", p.Id, "error", err)
-		return
+		log.Error("failed to create stream producer", "id", p.Id, "error", err.Error())
+		os.Exit(1)
 	}
 	p.Producer = producer
 
