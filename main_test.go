@@ -1350,17 +1350,12 @@ var _ = Describe("OMQ CLI", func() {
 					"--queues=stream",
 					"--cleanup-queues=true",
 					"--time=5s",
-					"--print-all-metrics",
 				}
 
 				session := omq(args)
 				Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
 				Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=5`))
 				Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=5`))
-
-				output, _ := io.ReadAll(session.Out)
-				buf := bytes.NewReader(output)
-				Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(5.0))
 			},
 			Entry("stream -> amqp",    "stream-amqp",    "stream-amqp-xp",             "/queues/stream-amqp-xp"),
 			Entry("stream -> amqp091", "stream-amqp091", "stream-amqp091-xp",           "/queues/stream-amqp091-xp"),

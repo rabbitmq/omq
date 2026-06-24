@@ -166,6 +166,16 @@ func RootCmd() *cobra.Command {
 	amqp091PublisherFlags.StringArrayVar(&amqp091Headers, "amqp091-header", []string{},
 		"AMQP 0.9.1 message header, eg. 'key=val1,val2' to cycle values per message. Use multiple flags for multiple headers.")
 
+	streamConsumerFlags := pflag.NewFlagSet("stream-consumer", pflag.ContinueOnError)
+	streamConsumerFlags.BoolVar(&cfg.StreamSingleActiveConsumer, "stream-single-active-consumer", false,
+		"Enable single active consumer on a stream")
+
+	streamFlags := pflag.NewFlagSet("stream", pflag.ContinueOnError)
+	streamFlags.BoolVar(&cfg.StreamSuperStream, "stream-super-stream", false,
+		"Use a super stream (partitioned stream)")
+	streamFlags.IntVar(&cfg.StreamSuperStreamPartitions, "stream-super-stream-partitions", 3,
+		"Number of partitions for super streams")
+
 	amqp_amqp = &cobra.Command{
 		Use:     "amqp-amqp",
 		Aliases: []string{"amqp"},
@@ -347,6 +357,8 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
+	stream_stream.Flags().AddFlagSet(streamConsumerFlags)
+	stream_stream.Flags().AddFlagSet(streamFlags)
 
 	stream_amqp = &cobra.Command{
 		Use: "stream-amqp",
@@ -357,6 +369,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	stream_amqp.Flags().AddFlagSet(amqpConsumerFlags)
+	stream_amqp.Flags().AddFlagSet(streamFlags)
 
 	stream_amqp091 = &cobra.Command{
 		Use: "stream-amqp091",
@@ -367,6 +380,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	stream_amqp091.Flags().AddFlagSet(amqp091ConsumerFlags)
+	stream_amqp091.Flags().AddFlagSet(streamFlags)
 
 	stream_stomp = &cobra.Command{
 		Use: "stream-stomp",
@@ -376,6 +390,7 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
+	stream_stomp.Flags().AddFlagSet(streamFlags)
 
 	stream_mqtt = &cobra.Command{
 		Use: "stream-mqtt",
@@ -386,6 +401,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	stream_mqtt.Flags().AddFlagSet(mqttConsumerFlags)
+	stream_mqtt.Flags().AddFlagSet(streamFlags)
 
 	amqp_stream = &cobra.Command{
 		Use: "amqp-stream",
@@ -396,6 +412,8 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	amqp_stream.Flags().AddFlagSet(amqpPublisherFlags)
+	amqp_stream.Flags().AddFlagSet(streamConsumerFlags)
+	amqp_stream.Flags().AddFlagSet(streamFlags)
 
 	amqp091_stream = &cobra.Command{
 		Use: "amqp091-stream",
@@ -406,6 +424,8 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	amqp091_stream.Flags().AddFlagSet(amqp091PublisherFlags)
+	amqp091_stream.Flags().AddFlagSet(streamConsumerFlags)
+	amqp091_stream.Flags().AddFlagSet(streamFlags)
 
 	stomp_stream = &cobra.Command{
 		Use: "stomp-stream",
@@ -415,6 +435,8 @@ func RootCmd() *cobra.Command {
 			start(cfg)
 		},
 	}
+	stomp_stream.Flags().AddFlagSet(streamConsumerFlags)
+	stomp_stream.Flags().AddFlagSet(streamFlags)
 
 	mqtt_stream = &cobra.Command{
 		Use: "mqtt-stream",
@@ -425,6 +447,8 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	mqtt_stream.Flags().AddFlagSet(mqttPublisherFlags)
+	mqtt_stream.Flags().AddFlagSet(streamConsumerFlags)
+	mqtt_stream.Flags().AddFlagSet(streamFlags)
 
 	versionCmd = &cobra.Command{
 		Use: "version",
@@ -501,12 +525,6 @@ func RootCmd() *cobra.Command {
 		"Stream consumer filter value(s)")
 	rootCmd.PersistentFlags().StringSliceVar(&cfg.StreamFilterValueSet, "stream-filter-value-set", []string{},
 		"Stream filter value(s) set on published messages (cycled per message)")
-	rootCmd.PersistentFlags().BoolVar(&cfg.StreamSingleActiveConsumer, "stream-single-active-consumer", false,
-		"Enable single active consumer on a stream")
-	rootCmd.PersistentFlags().BoolVar(&cfg.StreamSuperStream, "stream-super-stream", false,
-		"Use a super stream (partitioned stream)")
-	rootCmd.PersistentFlags().IntVar(&cfg.StreamSuperStreamPartitions, "stream-super-stream-partitions", 3,
-		"Number of partitions for super streams")
 	rootCmd.PersistentFlags().StringVar(&consumerPriorityStr, "consumer-priority", "", "Consumer priority (supports templates")
 	rootCmd.PersistentFlags().IntVar(&cfg.ConsumerCredits, "consumer-credits", 1,
 		"AMQP-1.0 consumer credits / STOMP prefetch count")
