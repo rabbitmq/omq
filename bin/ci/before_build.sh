@@ -28,6 +28,6 @@ $CTL set_cluster_name rabbitmq@localhost
 $CTL enable_feature_flag all
 
 # Enable shovel plugin
-$PLUGINS enable rabbitmq_prometheus rabbitmq_amqp1_0 rabbitmq_mqtt rabbitmq_stomp
+$PLUGINS enable rabbitmq_prometheus rabbitmq_amqp1_0 rabbitmq_mqtt rabbitmq_stomp rabbitmq_stream
 
 true
