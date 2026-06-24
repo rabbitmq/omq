@@ -184,8 +184,14 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 		}
 	}
 
+	consumerName := utils.InjectId(c.Config.ConsumerId, c.Id)
+	if c.Config.StreamSingleActiveConsumer {
+		// All consumers must share the same name to form a single SAC group.
+		// Use ID 0 so the default "omq-consumer-%d" resolves to a fixed name.
+		consumerName = utils.InjectId(c.Config.ConsumerId, 0)
+	}
 	consumerOpts := stream.NewConsumerOptions().
-		SetConsumerName("omq-consumer-" + strconv.Itoa(c.Id)).
+		SetConsumerName(consumerName).
 		SetCRCCheck(false)
 
 	if c.Config.ConsumerCredits > 0 {
@@ -251,8 +257,8 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 
 	if c.Config.StreamSuperStream {
 		superConsumerOpts := stream.NewSuperStreamConsumerOptions().
-			SetClientProvidedName("omq-consumer-" + strconv.Itoa(c.Id)).
-			SetConsumerName("omq-consumer-" + strconv.Itoa(c.Id))
+			SetClientProvidedName(consumerName).
+			SetConsumerName(consumerName)
 		if c.Config.StreamOffset != nil && c.Config.StreamOffset != "" {
 			switch v := c.Config.StreamOffset.(type) {
 			case string:

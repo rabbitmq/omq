@@ -1502,10 +1502,9 @@ var _ = Describe("OMQ CLI", func() {
 				"--consume-from=stream-sac-test",
 				"--queues=stream",
 				"--stream-single-active-consumer",
-				"--time=15s",
-				"--print-all-metrics",
+				"--time=5s",
 			})
-			Eventually(session).WithTimeout(16 * time.Second).Should(gexec.Exit(0))
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=10`))
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=10`))
 
@@ -1515,9 +1514,11 @@ var _ = Describe("OMQ CLI", func() {
 		It("supports --stream-super-stream", func() {
 			rmqc, err := newRabbitClient()
 			Expect(err).ShouldNot(HaveOccurred())
+			// Delete partitions AND the exchange so DeclareSuperStream re-creates them cleanly
 			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-0")
 			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-1")
 			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-2")
+			_, _ = rmqc.DeleteExchange("/", "omq-super-stream-test")
 
 			session := omq([]string{
 				"stream",
@@ -1525,18 +1526,19 @@ var _ = Describe("OMQ CLI", func() {
 				"--cmessages=10",
 				"--publish-to=omq-super-stream-test",
 				"--consume-from=omq-super-stream-test",
+				"--queues=stream",
 				"--stream-super-stream",
 				"--stream-super-stream-partitions=3",
-				"--time=15s",
-				"--print-all-metrics",
+				"--time=5s",
 			})
-			Eventually(session).WithTimeout(16 * time.Second).Should(gexec.Exit(0))
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=10`))
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=10`))
 
 			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-0")
 			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-1")
 			_, _ = rmqc.DeleteQueue("/", "omq-super-stream-test-2")
+			_, _ = rmqc.DeleteExchange("/", "omq-super-stream-test")
 		})
 	})
 })
