@@ -14,13 +14,14 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/amqp"
+	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/ha"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 )
 
 type StreamConsumer struct {
 	Id          int
 	Environment *stream.Environment
-	Consumer    *stream.Consumer
+	Consumer    *ha.ReliableConsumer
 	Topic       string
 	Config      config.Config
 	ctx         context.Context
@@ -91,10 +92,6 @@ func (c *StreamConsumer) Connect() {
 
 func (c *StreamConsumer) Start(consumerReady chan bool) {
 	c.Connect()
-	if c.Environment == nil {
-		close(consumerReady)
-		return
-	}
 
 	var msgsReceived atomic.Int64
 	var oooTracker *utils.OutOfOrderTracker
@@ -163,13 +160,16 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 			}
 		}
 
-		if consumerLatency > 0 {
-			log.Debug("consumer latency", "id", c.Id, "latency", consumerLatency)
-			time.Sleep(consumerLatency)
-		}
-
-		msgsReceived.Add(1)
 		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency)
+		if consumerLatency > 0 {
+			go func() {
+				log.Debug("consumer latency", "id", c.Id, "latency", consumerLatency)
+				time.Sleep(consumerLatency)
+				msgsReceived.Add(1)
+			}()
+		} else {
+			msgsReceived.Add(1)
+		}
 	}
 
 	consumerOpts := stream.NewConsumerOptions().
@@ -230,7 +230,7 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 		consumerOpts.SetFilter(filter)
 	}
 
-	consumer, err := c.Environment.NewConsumer(c.Topic, handleMessages, consumerOpts)
+	consumer, err := ha.NewReliableConsumer(c.Environment, c.Topic, consumerOpts, handleMessages)
 	if err != nil {
 		log.Error("failed to create stream consumer", "id", c.Id, "error", err.Error())
 		os.Exit(1)

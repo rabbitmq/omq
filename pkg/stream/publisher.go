@@ -16,6 +16,7 @@ import (
 	"github.com/rabbitmq/omq/pkg/metrics"
 	"github.com/rabbitmq/omq/pkg/utils"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/amqp"
+	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/ha"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/message"
 	"github.com/rabbitmq/rabbitmq-stream-go-client/pkg/stream"
 )
@@ -23,14 +24,12 @@ import (
 type StreamPublisher struct {
 	Id               int
 	Environment      *stream.Environment
-	Producer         *stream.Producer
+	Producer         *ha.ReliableProducer
 	Topic            string
 	Config           config.Config
 	ctx              context.Context
 	msg              []byte
-	msgSent          atomic.Uint64
 	sem              chan struct{}
-	wg               sync.WaitGroup
 	publishTimes     map[int64]time.Time
 	publishTimesLock sync.Mutex
 	basePublishingId int64
@@ -100,8 +99,9 @@ func (p *StreamPublisher) Connect() {
 	}
 	p.Environment = env
 
+	producerName := "omq-publisher-" + strconv.Itoa(p.Id)
 	producerOpts := stream.NewProducerOptions()
-	producerOpts.SetProducerName("omq-publisher-" + strconv.Itoa(p.Id))
+	producerOpts.SetProducerName(producerName)
 
 	if len(p.Config.StreamFilterValueSet) > 0 {
 		producerOpts.SetFilter(stream.NewProducerFilter(func(message message.StreamMessage) string {
@@ -118,14 +118,7 @@ func (p *StreamPublisher) Connect() {
 		}))
 	}
 
-	producer, err := env.NewProducer(p.Topic, producerOpts)
-	if err != nil {
-		log.Error("failed to create stream producer", "id", p.Id, "error", err.Error())
-		os.Exit(1)
-	}
-	p.Producer = producer
-
-	lastId, err := producer.GetLastPublishingId()
+	lastId, err := env.QuerySequence(producerName, p.Topic)
 	if err != nil {
 		log.Debug("failed to query last publishing ID, starting from 0", "id", p.Id, "error", err.Error())
 		p.basePublishingId = 0
@@ -134,44 +127,46 @@ func (p *StreamPublisher) Connect() {
 		log.Debug("queried last publishing ID", "id", p.Id, "lastId", lastId)
 	}
 
-	chPublishConfirm := producer.NotifyPublishConfirmation()
-	p.handlePublishConfirm(chPublishConfirm)
-}
+	producer, err := ha.NewReliableProducer(env, p.Topic, producerOpts, func(confirms []*stream.ConfirmationStatus) {
+		for _, msg := range confirms {
+			publishingId := msg.GetPublishingId()
+			if msg.IsConfirmed() {
+				metrics.MessagesConfirmed.Inc()
 
-func (p *StreamPublisher) handlePublishConfirm(confirms stream.ChannelPublishConfirm) {
-	go func() {
-		for confirmed := range confirms {
-			for _, msg := range confirmed {
-				publishingId := msg.GetPublishingId()
-				if msg.IsConfirmed() {
-					metrics.MessagesConfirmed.Inc()
-
-					p.publishTimesLock.Lock()
-					startTime, exists := p.publishTimes[publishingId]
-					if exists {
-						delete(p.publishTimes, publishingId)
-					}
-					p.publishTimesLock.Unlock()
-
-					if exists {
-						latency := time.Since(startTime)
-						metrics.RecordPublishingLatency(latency)
-						log.Debug("message confirmed", "id", p.Id, "publishing_id", publishingId, "latency", latency)
-					}
-
-					select {
-					case <-p.sem:
-					default:
-					}
-				} else {
-					p.publishTimesLock.Lock()
+				p.publishTimesLock.Lock()
+				startTime, exists := p.publishTimes[publishingId]
+				if exists {
 					delete(p.publishTimes, publishingId)
-					p.publishTimesLock.Unlock()
-					log.Debug("message not confirmed by the broker", "id", p.Id, "publishing_id", publishingId)
 				}
+				p.publishTimesLock.Unlock()
+
+				if exists {
+					latency := time.Since(startTime)
+					metrics.RecordPublishingLatency(latency)
+					log.Debug("message confirmed", "id", p.Id, "publishing_id", publishingId, "latency", latency)
+				}
+
+				select {
+				case <-p.sem:
+				default:
+				}
+			} else {
+				p.publishTimesLock.Lock()
+				delete(p.publishTimes, publishingId)
+				p.publishTimesLock.Unlock()
+				select {
+				case <-p.sem:
+				default:
+				}
+				log.Debug("message not confirmed by the broker", "id", p.Id, "publishing_id", publishingId)
 			}
 		}
-	}()
+	})
+	if err != nil {
+		log.Error("failed to create stream producer", "id", p.Id, "error", err.Error())
+		os.Exit(1)
+	}
+	p.Producer = producer
 }
 
 func (p *StreamPublisher) Start(publisherReady chan bool, startPublishing chan bool) {
@@ -285,6 +280,10 @@ func (p *StreamPublisher) Send(seq uint64) {
 		p.publishTimesLock.Lock()
 		delete(p.publishTimes, publishingId)
 		p.publishTimesLock.Unlock()
+		select {
+		case <-p.sem:
+		default:
+		}
 		if !strings.Contains(err.Error(), "use of closed network connection") &&
 			!strings.Contains(err.Error(), "context canceled") {
 			log.Error("message sending failure", "id", p.Id, "error", err)

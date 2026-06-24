@@ -953,6 +953,8 @@ func defaultUri(proto string) string {
 		uri = "stomp://localhost:61613"
 	case "mqtt":
 		uri = "mqtt://localhost:1883"
+	case "stream":
+		uri = "rabbitmq-stream://localhost:5552"
 	}
 	return uri
 }
@@ -1206,8 +1208,7 @@ func parseStreamOffset(offset string) (any, error) {
 			return timestamp, nil
 		}
 	}
-	// return "", fmt.Errorf("invalid stream offset: %s", offset)
-	return offset, nil //, fmt.Errorf("invalid stream offset: %s", offset)
+	return "", fmt.Errorf("invalid stream offset: %s", offset)
 }
 
 func parseKeyValue(s string, context string) (string, string, error) {
