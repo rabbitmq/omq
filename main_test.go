@@ -1338,6 +1338,159 @@ var _ = Describe("OMQ CLI", func() {
 			// Cleanup
 			_, _ = rmqc.DeleteQueue("/", "my-stream-test")
 		})
+
+		DescribeTable("cross-protocol combinations with stream",
+			func(command, publishTo, consumeFrom string) {
+				args := []string{
+					command,
+					"--pmessages=5",
+					"--cmessages=5",
+					"--publish-to=" + publishTo,
+					"--consume-from=" + consumeFrom,
+					"--queues=stream",
+					"--cleanup-queues=true",
+					"--time=5s",
+					"--print-all-metrics",
+				}
+
+				session := omq(args)
+				Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+				Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=5`))
+				Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=5`))
+
+				output, _ := io.ReadAll(session.Out)
+				buf := bytes.NewReader(output)
+				Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(5.0))
+			},
+			Entry("stream -> amqp",    "stream-amqp",    "stream-amqp-xp",             "/queues/stream-amqp-xp"),
+			Entry("stream -> amqp091", "stream-amqp091", "stream-amqp091-xp",           "/queues/stream-amqp091-xp"),
+			Entry("stream -> stomp",   "stream-stomp",   "stream-stomp-xp",             "/amq/queue/stream-stomp-xp"),
+			Entry("amqp -> stream",    "amqp-stream",    "/queues/amqp-stream-xp",      "amqp-stream-xp"),
+			Entry("amqp091 -> stream", "amqp091-stream", "/queues/amqp091-stream-xp",   "amqp091-stream-xp"),
+			Entry("stomp -> stream",   "stomp-stream",   "/amq/queue/stomp-stream-xp",  "stomp-stream-xp"),
+		)
+
+		It("replays messages from the beginning with --stream-offset=first", func() {
+			rmqc, err := newRabbitClient()
+			Expect(err).ShouldNot(HaveOccurred())
+			_, _ = rmqc.DeleteQueue("/", "stream-offset-first-test")
+
+			publishSession := omq([]string{
+				"stream",
+				"--pmessages=5",
+				"--consumers=0",
+				"--publish-to=stream-offset-first-test",
+				"--queues=stream",
+				"--time=5s",
+			})
+			Eventually(publishSession).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+			Eventually(publishSession.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=5`))
+
+			consumeSession := omq([]string{
+				"stream",
+				"--publishers=0",
+				"--cmessages=5",
+				"--consume-from=stream-offset-first-test",
+				"--queues=predeclared",
+				"--stream-offset=first",
+				"--time=5s",
+			})
+			Eventually(consumeSession).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+			Eventually(consumeSession.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=5`))
+
+			_, _ = rmqc.DeleteQueue("/", "stream-offset-first-test")
+		})
+
+		It("detects out-of-order messages and gaps", func() {
+			rmqc, err := newRabbitClient()
+			Expect(err).ShouldNot(HaveOccurred())
+			_, _ = rmqc.DeleteQueue("/", "stream-ooo-test")
+
+			session := omq([]string{
+				"stream",
+				"--pmessages=10",
+				"--cmessages=10",
+				"--publish-to=stream-ooo-test",
+				"--consume-from=stream-ooo-test",
+				"--queues=stream",
+				"--detect-out-of-order-messages",
+				"--detect-gaps-in-messages",
+				"--time=5s",
+				"--print-all-metrics",
+			})
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+
+			stderrOutput, _ := io.ReadAll(session.Err)
+			stderrStr := string(stderrOutput)
+			Expect(stderrStr).To(ContainSubstring("TOTAL PUBLISHED messages=10"))
+			Expect(stderrStr).To(ContainSubstring("TOTAL CONSUMED messages=10"))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			ooo := metricValue(buf, `omq_messages_consumed_out_of_order`)
+			if ooo == -1 {
+				ooo = 0
+			}
+			Expect(ooo).Should(Equal(0.0))
+			buf.Reset(output)
+			gaps := metricValue(buf, `omq_messages_consumed_gaps`)
+			if gaps == -1 {
+				gaps = 0
+			}
+			Expect(gaps).Should(Equal(0.0))
+
+			_, _ = rmqc.DeleteQueue("/", "stream-ooo-test")
+		})
+
+		It("supports --consumer-credits for flow control", func() {
+			rmqc, err := newRabbitClient()
+			Expect(err).ShouldNot(HaveOccurred())
+			_, _ = rmqc.DeleteQueue("/", "stream-credits-test")
+
+			session := omq([]string{
+				"stream",
+				"--pmessages=10",
+				"--cmessages=10",
+				"--publish-to=stream-credits-test",
+				"--consume-from=stream-credits-test",
+				"--queues=stream",
+				"--consumer-credits=5",
+				"--time=5s",
+				"--print-all-metrics",
+			})
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=10`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=10`))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_messages_consumed_total{priority="0"}`)).Should(Equal(10.0))
+
+			_, _ = rmqc.DeleteQueue("/", "stream-credits-test")
+		})
+
+		It("supports --consumer-latency to simulate processing time", func() {
+			rmqc, err := newRabbitClient()
+			Expect(err).ShouldNot(HaveOccurred())
+			_, _ = rmqc.DeleteQueue("/", "stream-latency-test")
+
+			session := omq([]string{
+				"stream",
+				"--pmessages=5",
+				"--cmessages=5",
+				"--publish-to=stream-latency-test",
+				"--consume-from=stream-latency-test",
+				"--queues=stream",
+				"--consumer-latency=50ms",
+				"--time=10s",
+				"--print-all-metrics",
+			})
+			Eventually(session).WithTimeout(11 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=5`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=5`))
+
+			_, _ = rmqc.DeleteQueue("/", "stream-latency-test")
+		})
 	})
 })
 
