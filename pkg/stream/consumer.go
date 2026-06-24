@@ -41,9 +41,17 @@ func NewConsumer(ctx context.Context, cfg config.Config, id int) *StreamConsumer
 func (c *StreamConsumer) Connect() {
 	var uriStr string
 	if len(c.Config.ConsumerUri) > 0 {
-		uriStr = c.Config.ConsumerUri[c.Id%len(c.Config.ConsumerUri)]
+		idx := 0
+		if c.Config.SpreadConnections {
+			idx = c.Id % len(c.Config.ConsumerUri)
+		}
+		uriStr = c.Config.ConsumerUri[idx]
 	} else if len(c.Config.Uri) > 0 {
-		uriStr = c.Config.Uri[c.Id%len(c.Config.Uri)]
+		idx := 0
+		if c.Config.SpreadConnections {
+			idx = c.Id % len(c.Config.Uri)
+		}
+		uriStr = c.Config.Uri[idx]
 	} else {
 		uriStr = "rabbitmq-stream://guest:guest@localhost:5552"
 	}
@@ -144,6 +152,22 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 			}
 		}
 
+		var consumerLatency time.Duration
+		if c.Config.ConsumerLatencyTemplate != nil {
+			latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, c.Id)
+			if parsedLatency, err := time.ParseDuration(latencyStr); err == nil {
+				consumerLatency = parsedLatency
+			} else {
+				log.Error("failed to parse template-generated latency", "value", latencyStr, "error", err)
+				os.Exit(1)
+			}
+		}
+
+		if consumerLatency > 0 {
+			log.Debug("consumer latency", "id", c.Id, "latency", consumerLatency)
+			time.Sleep(consumerLatency)
+		}
+
 		msgsReceived.Add(1)
 		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency)
 	}
@@ -151,6 +175,10 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 	consumerOpts := stream.NewConsumerOptions().
 		SetConsumerName("omq-consumer-" + strconv.Itoa(c.Id)).
 		SetCRCCheck(false)
+
+	if c.Config.ConsumerCredits > 0 {
+		consumerOpts.SetInitialCredits(int16(c.Config.ConsumerCredits))
+	}
 
 	if c.Config.StreamOffset != nil && c.Config.StreamOffset != "" {
 		switch v := c.Config.StreamOffset.(type) {

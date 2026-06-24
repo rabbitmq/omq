@@ -53,9 +53,17 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *StreamPublish
 func (p *StreamPublisher) Connect() {
 	var uriStr string
 	if len(p.Config.PublisherUri) > 0 {
-		uriStr = p.Config.PublisherUri[p.Id%len(p.Config.PublisherUri)]
+		idx := 0
+		if p.Config.SpreadConnections {
+			idx = p.Id % len(p.Config.PublisherUri)
+		}
+		uriStr = p.Config.PublisherUri[idx]
 	} else if len(p.Config.Uri) > 0 {
-		uriStr = p.Config.Uri[p.Id%len(p.Config.Uri)]
+		idx := 0
+		if p.Config.SpreadConnections {
+			idx = p.Id % len(p.Config.Uri)
+		}
+		uriStr = p.Config.Uri[idx]
 	} else {
 		uriStr = "rabbitmq-stream://guest:guest@localhost:5552"
 	}
