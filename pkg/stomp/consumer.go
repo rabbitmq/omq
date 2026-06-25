@@ -280,6 +280,10 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 
 func (c *StompConsumer) Stop(reason string) {
 	if c.Subscription != nil {
+		go func(sub *stomp.Subscription) {
+			for range sub.C {
+			}
+		}(c.Subscription)
 		err := c.Subscription.Unsubscribe()
 		if err != nil {
 			log.Info("failed to unsubscribe", "id", c.Id, "error", err.Error())
