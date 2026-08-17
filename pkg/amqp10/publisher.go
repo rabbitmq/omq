@@ -121,7 +121,11 @@ func (p *Amqp10Publisher) Connect() {
 				return
 			case <-time.After(config.ReconnectDelay):
 			}
+			// Connect() already re-establishes the session and sender (or bails
+			// out on ctx cancellation); looping here would reuse a Connection
+			// that Connect() may have already closed and reset to nil.
 			p.Connect()
+			return
 		} else {
 			p.Session = session
 		}
@@ -161,7 +165,11 @@ func (p *Amqp10Publisher) CreateSender() {
 			case <-p.ctx.Done():
 				return
 			case <-time.After(config.ReconnectDelay):
+				// Connect() already re-establishes the sender (or bails out on
+				// ctx cancellation); looping here would reuse a Session that
+				// Connect() may have already closed and reset to nil.
 				p.Connect()
+				return
 			}
 		} else {
 			p.Sender = sender
