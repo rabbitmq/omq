@@ -74,7 +74,7 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 			}
 		}
 
-		logArgs := []any{"id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency}
+		logArgs := []any{"id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency, "retained", rcv.Packet.Retain}
 		if rcv.Packet.Properties != nil && len(rcv.Packet.Properties.User) > 0 {
 			propPairs := make([]string, 0, len(rcv.Packet.Properties.User))
 			for _, prop := range rcv.Packet.Properties.User {

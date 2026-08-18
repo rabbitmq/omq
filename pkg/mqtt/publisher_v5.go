@@ -171,8 +171,11 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 	}
 	utils.UpdatePayload(p.Config.UseMillis, &body)
 
+	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
+
 	pub := &paho.Publish{
 		QoS:     byte(p.Config.MqttPublisher.QoS),
+		Retain:  retained,
 		Topic:   p.Topic,
 		Payload: body,
 	}

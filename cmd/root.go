@@ -126,6 +126,8 @@ func RootCmd() *cobra.Command {
 		"MQTT publisher session expiry interval")
 	mqttPublisherFlags.StringArrayVar(&mqttUserProperties, "mqtt-user-property", []string{},
 		"MQTT v5 user property, eg. key1=val1")
+	mqttPublisherFlags.BoolSliceVar(&cfg.MqttPublisher.Retained, "mqtt-retained", []bool{false},
+		"Whether published messages should be retained; accepts a list to cycle through, eg. \"true,false\"")
 
 	amqpPublisherFlags := pflag.NewFlagSet("amqp-publisher", pflag.ContinueOnError)
 

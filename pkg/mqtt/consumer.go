@@ -47,7 +47,7 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 		metrics.RecordEndToEndLatency(latency)
 
 		msgsReceived.Add(1)
-		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency)
+		log.Debug("message received", "id", c.Id, "topic", c.Topic, "size", len(payload), "latency", latency, "retained", msg.Retained())
 	}
 
 	opts := mqtt.NewClientOptions().

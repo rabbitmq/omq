@@ -157,18 +157,18 @@ func (p *MqttPublisher) StartPublishing() string {
 				return "context cancelled"
 			}
 			p.wg.Add(1)
-			go func() {
+			go func(s uint64) {
 				defer func() {
 					<-p.sem
 					p.wg.Done()
 				}()
-				p.Send()
-			}()
+				p.Send(s)
+			}(seq)
 		}
 	}
 }
 
-func (p *MqttPublisher) Send() {
+func (p *MqttPublisher) Send(seq uint64) {
 	if !p.Connection.IsConnected() {
 		time.Sleep(config.ReconnectDelay)
 		return
@@ -183,8 +183,10 @@ func (p *MqttPublisher) Send() {
 	}
 	utils.UpdatePayload(p.Config.UseMillis, &body)
 
+	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
+
 	startTime := time.Now()
-	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), false, body)
+	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), retained, body)
 	token.Wait()
 	latency := time.Since(startTime)
 	if token.Error() != nil {
