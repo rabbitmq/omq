@@ -83,6 +83,8 @@ type AmqpOptions struct {
 	Browse                 bool
 	ModifyOptions          AmqpModifyOptions
 	ModifyRate             int
+	SoleConnection         bool
+	SoleConnectionPolicy   string
 }
 
 type MqttOptions struct {

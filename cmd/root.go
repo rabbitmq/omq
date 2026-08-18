@@ -139,6 +139,13 @@ func RootCmd() *cobra.Command {
 	amqpPublisherFlags.BoolVar(&cfg.Amqp.SendSettled, "amqp-send-settled", false,
 		"Send settled messages (fire and forget)")
 
+	amqpConnectionFlags := pflag.NewFlagSet("amqp-connection", pflag.ContinueOnError)
+
+	amqpConnectionFlags.BoolVar(&cfg.Amqp.SoleConnection, "amqp-sole-connection", false,
+		"Request the AMQP 1.0 sole connection capability for the container ID")
+	amqpConnectionFlags.StringVar(&cfg.Amqp.SoleConnectionPolicy, "amqp-sole-connection-policy", "refuse-connection",
+		"AMQP 1.0 sole connection enforcement policy: refuse-connection or close-existing")
+
 	amqpConsumerFlags := pflag.NewFlagSet("amqp-consumer", pflag.ContinueOnError)
 
 	amqpConsumerFlags.StringArrayVar(&amqpAppPropertyFilters, "amqp-app-property-filter", []string{},
@@ -187,6 +194,7 @@ func RootCmd() *cobra.Command {
 	}
 	amqp_amqp.Flags().AddFlagSet(amqpPublisherFlags)
 	amqp_amqp.Flags().AddFlagSet(amqpConsumerFlags)
+	amqp_amqp.Flags().AddFlagSet(amqpConnectionFlags)
 
 	amqp_amqp091 = &cobra.Command{
 		Use: "amqp-amqp091",
@@ -198,6 +206,7 @@ func RootCmd() *cobra.Command {
 	}
 	amqp_amqp091.Flags().AddFlagSet(amqpPublisherFlags)
 	amqp_amqp091.Flags().AddFlagSet(amqp091ConsumerFlags)
+	amqp_amqp091.Flags().AddFlagSet(amqpConnectionFlags)
 
 	amqp_stomp = &cobra.Command{
 		Use: "amqp-stomp",
@@ -208,6 +217,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	amqp_stomp.Flags().AddFlagSet(amqpPublisherFlags)
+	amqp_stomp.Flags().AddFlagSet(amqpConnectionFlags)
 
 	amqp_mqtt = &cobra.Command{
 		Use: "amqp-mqtt",
@@ -219,6 +229,7 @@ func RootCmd() *cobra.Command {
 	}
 	amqp_mqtt.Flags().AddFlagSet(amqpPublisherFlags)
 	amqp_mqtt.Flags().AddFlagSet(mqttConsumerFlags)
+	amqp_mqtt.Flags().AddFlagSet(amqpConnectionFlags)
 
 	stomp_stomp = &cobra.Command{
 		Use:     "stomp-stomp",
@@ -239,6 +250,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	stomp_amqp.Flags().AddFlagSet(amqpConsumerFlags)
+	stomp_amqp.Flags().AddFlagSet(amqpConnectionFlags)
 
 	stomp_amqp091 = &cobra.Command{
 		Use: "stomp-amqp091",
@@ -282,6 +294,7 @@ func RootCmd() *cobra.Command {
 	}
 	mqtt_amqp.Flags().AddFlagSet(mqttPublisherFlags)
 	mqtt_amqp.Flags().AddFlagSet(amqpConsumerFlags)
+	mqtt_amqp.Flags().AddFlagSet(amqpConnectionFlags)
 
 	mqtt_amqp091 = &cobra.Command{
 		Use: "mqtt-amqp091",
@@ -326,6 +339,7 @@ func RootCmd() *cobra.Command {
 	}
 	amqp091_amqp.Flags().AddFlagSet(amqp091PublisherFlags)
 	amqp091_amqp.Flags().AddFlagSet(amqpConsumerFlags)
+	amqp091_amqp.Flags().AddFlagSet(amqpConnectionFlags)
 
 	amqp091_mqtt = &cobra.Command{
 		Use: "amqp091-mqtt",
@@ -369,6 +383,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	stream_amqp.Flags().AddFlagSet(amqpConsumerFlags)
+	stream_amqp.Flags().AddFlagSet(amqpConnectionFlags)
 	stream_amqp.Flags().AddFlagSet(streamFlags)
 
 	stream_amqp091 = &cobra.Command{
@@ -412,6 +427,7 @@ func RootCmd() *cobra.Command {
 		},
 	}
 	amqp_stream.Flags().AddFlagSet(amqpPublisherFlags)
+	amqp_stream.Flags().AddFlagSet(amqpConnectionFlags)
 	amqp_stream.Flags().AddFlagSet(streamConsumerFlags)
 	amqp_stream.Flags().AddFlagSet(streamFlags)
 
@@ -1037,6 +1053,10 @@ func sanitizeConfig(cfg *config.Config) error {
 			return err
 		}
 		cfg.Amqp.ModifyOptions = opts
+	}
+
+	if cfg.Amqp.SoleConnectionPolicy != "refuse-connection" && cfg.Amqp.SoleConnectionPolicy != "close-existing" {
+		return fmt.Errorf("invalid --amqp-sole-connection-policy %s: must be refuse-connection or close-existing", cfg.Amqp.SoleConnectionPolicy)
 	}
 
 	if cfg.MaxInFlight < 1 {

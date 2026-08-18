@@ -70,7 +70,7 @@ func (c *Amqp10Consumer) Connect() {
 	utils.Retry(c.ctx, config.ReconnectDelay, func() bool {
 		uri := utils.NextURI(c.Config.ConsumerUri, &c.whichUri)
 		hostname, vhost := hostAndVHost(uri)
-		conn, err := amqp.Dial(c.ctx, uri, &amqp.ConnOptions{
+		connOptions := &amqp.ConnOptions{
 			ContainerID:     utils.InjectId(c.Config.ConsumerId, c.Id),
 			SASLType:        amqp.SASLTypeAnonymous(),
 			HostName:        vhost,
@@ -79,7 +79,9 @@ func (c *Amqp10Consumer) Connect() {
 				ServerName:         hostname,
 				InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
 			},
-		})
+		}
+		applySoleConnectionOptions(connOptions, c.Config.Amqp)
+		conn, err := amqp.Dial(c.ctx, uri, connOptions)
 		if err != nil {
 			log.Error("consumer failed to connect", "id", c.Id, "error", err.Error())
 			return false

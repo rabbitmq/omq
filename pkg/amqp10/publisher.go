@@ -85,7 +85,7 @@ func (p *Amqp10Publisher) Connect() {
 	for p.Connection == nil {
 		uri := utils.NextURI(p.Config.PublisherUri, &p.whichUri)
 		hostname, vhost := hostAndVHost(uri)
-		conn, err = amqp.Dial(p.ctx, uri, &amqp.ConnOptions{
+		connOptions := &amqp.ConnOptions{
 			WriteQueueDepth: 10,
 			ContainerID:     utils.InjectId(p.Config.PublisherId, p.Id),
 			SASLType:        amqp.SASLTypeAnonymous(),
@@ -94,7 +94,9 @@ func (p *Amqp10Publisher) Connect() {
 				ServerName:         hostname,
 				InsecureSkipVerify: p.Config.InsecureSkipTLSVerify,
 			},
-		})
+		}
+		applySoleConnectionOptions(connOptions, p.Config.Amqp)
+		conn, err = amqp.Dial(p.ctx, uri, connOptions)
 
 		if err != nil {
 			log.Error("connection failed", "id", p.Id, "error", err.Error())
