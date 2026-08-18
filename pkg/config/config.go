@@ -70,21 +70,24 @@ type AmqpModifyOptions struct {
 }
 
 type AmqpOptions struct {
-	Subjects               []string
-	To                     []string
-	SendSettled            bool
-	ConsumeSettled         bool
-	PropertyFilters        map[string]string
-	AppPropertyTemplates   map[string]*template.Template
-	MsgAnnotationTemplates map[string]*template.Template
-	AppPropertyFilters     map[string]string
-	SQLFilter              string
-	JMSSelectorFilter      string
-	Browse                 bool
-	ModifyOptions          AmqpModifyOptions
-	ModifyRate             int
-	SoleConnection         bool
-	SoleConnectionPolicy   string
+	Subjects                      []string
+	To                            []string
+	SendSettled                   bool
+	ConsumeSettled                bool
+	PropertyFilters               map[string]string
+	AppPropertyTemplates          map[string]*template.Template
+	MsgAnnotationTemplates        map[string]*template.Template
+	AppPropertyFilters            map[string]string
+	SQLFilter                     string
+	JMSSelectorFilter             string
+	Browse                        bool
+	ModifyOptions                 AmqpModifyOptions
+	ModifyRate                    int
+	RequestDeferredTokenTemplates []*template.Template
+	RequestDeferredCredit         int
+	RequestDeferredTimeout        time.Duration
+	SoleConnection                bool
+	SoleConnectionPolicy          string
 }
 
 type MqttOptions struct {

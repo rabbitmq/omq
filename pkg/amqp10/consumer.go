@@ -143,6 +143,11 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 	if c.Config.Amqp.Browse {
 		receiverOpts.SourceDistributionMode = "copy"
 	}
+	if len(c.Config.Amqp.RequestDeferredTokenTemplates) > 0 {
+		// Deferred-message retrieval grants credit explicitly per request
+		// (see retrieveDeferred), so --consumer-credits doesn't apply here.
+		receiverOpts.Credit = -1
+	}
 
 	utils.Retry(ctx, config.ReconnectDelay, func() bool {
 		if c.Session == nil {
@@ -162,6 +167,13 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 	c.CreateReceiver(c.ctx)
 	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "terminus", c.Terminus)
+
+	if len(c.Config.Amqp.RequestDeferredTokenTemplates) > 0 {
+		c.retrieveDeferred()
+		c.Stop("deferred retrieval finished")
+		return
+	}
+
 	var oooTracker *utils.OutOfOrderTracker
 	if c.Config.DetectOutOfOrder || c.Config.DetectGaps {
 		oooTracker = utils.NewOutOfOrderTracker()
@@ -283,6 +295,47 @@ func (c *Amqp10Consumer) Start(consumerReady chan bool) {
 
 	c.Stop("--cmessages value reached")
 	log.Debug("consumer finished", "id", c.Id)
+}
+
+// retrieveDeferred requests only the messages parked under the configured
+// deferral token(s), via a single FLOW frame carrying the
+// rabbitmq:deferral-tokens property (RabbitMQ supports an array of tokens in
+// one request, so all tokens are requested together).
+func (c *Amqp10Consumer) retrieveDeferred() {
+	tokens := make([]string, len(c.Config.Amqp.RequestDeferredTokenTemplates))
+	for i, tmpl := range c.Config.Amqp.RequestDeferredTokenTemplates {
+		tokens[i] = utils.ExecuteTemplate(tmpl, c.Id)
+	}
+
+	credit := uint32(c.Config.Amqp.RequestDeferredCredit)
+	log.Info("requesting deferred messages", "id", c.Id, "terminus", c.Terminus, "tokens", tokens, "credit", credit)
+
+	if err := c.Receiver.IssueCreditWithProperties(credit, map[string]any{
+		"rabbitmq:deferral-tokens": tokens,
+	}); err != nil {
+		log.Error("failed to request deferred messages", "id", c.Id, "tokens", tokens, "error", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.ctx, c.Config.Amqp.RequestDeferredTimeout)
+	defer cancel()
+
+	var received uint32
+	for received < credit {
+		msg, err := c.Receiver.Receive(ctx, nil)
+		if err != nil {
+			// Timeout, context cancellation, or connection loss: some of the
+			// requested tokens had no matching parked message.
+			break
+		}
+		received++
+		metrics.MessagesConsumedMetric(0).Inc()
+		if err := c.Receiver.AcceptMessage(c.ctx, msg); err != nil {
+			log.Error("failed to accept deferred message", "id", c.Id, "terminus", c.Terminus, "error", err)
+		}
+	}
+
+	log.Info("deferred retrieval finished", "id", c.Id, "terminus", c.Terminus, "tokens", tokens, "requested", credit, "received", received)
 }
 
 func (c *Amqp10Consumer) modifyMessage(ctx context.Context, msg *amqp.Message) (string, error) {

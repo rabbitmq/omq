@@ -126,6 +126,14 @@ We publish 100 messages per second with 3 different key values and then consume
 only messages with one of the values. Therefore, the consumption rate is one
 third of the publishing rate.
 
+### Requesting Deferred Messages by Token
+
+Quorum queues support parking an AMQP 1.0 message under a client-chosen deferral token
+and later pulling it back on demand by token, instead of waiting for normal redelivery.
+`omq` can request messages back by token (`--amqp-request-deferred-token`, repeatable for
+multiple tokens); see [docs/deferred-messages.md](docs/deferred-messages.md) for details
+and examples.
+
 ### Stream Protocol
 
 `omq` supports RabbitMQ's native stream protocol via `rabbitmq-stream-go-client`. Use commands

@@ -64,25 +64,26 @@ var (
 )
 
 var (
-	metricTags             []string
-	amqpAppProperties      []string
-	amqpMsgAnnotations     []string
-	amqpAppPropertyFilters []string
-	amqpPropertyFilters    []string
-	amqpModifyStr          string
-	amqp091Headers         []string
-	mqttUserProperties     []string
-	queueArgs              []string
-	streamOffset           string
-	consumerLatencyStr     string
-	consumerPriorityStr    string
-	messagePriorityStr     string
-	messageTTLStr          string
-	publishToStr           string
-	consumeFromStr         string
-	sizeStr                string
-	requeueWhenPriority    []int
-	discardWhenPriority    []int
+	metricTags                []string
+	amqpAppProperties         []string
+	amqpMsgAnnotations        []string
+	amqpAppPropertyFilters    []string
+	amqpPropertyFilters       []string
+	amqpModifyStr             string
+	amqpRequestDeferredTokens []string
+	amqp091Headers            []string
+	mqttUserProperties        []string
+	queueArgs                 []string
+	streamOffset              string
+	consumerLatencyStr        string
+	consumerPriorityStr       string
+	messagePriorityStr        string
+	messageTTLStr             string
+	publishToStr              string
+	consumeFromStr            string
+	sizeStr                   string
+	requeueWhenPriority       []int
+	discardWhenPriority       []int
 )
 
 var (
@@ -164,6 +165,12 @@ func RootCmd() *cobra.Command {
 		"Rate of messages to settle with the modified outcome (0-100%)")
 	amqpConsumerFlags.StringVar(&amqpModifyStr, "amqp-modify", "",
 		"Modified outcome options (e.g. delivery-failed=true,undeliverable-here=true,x-opt-delay=5000); unknown keys are sent as message annotations")
+	amqpConsumerFlags.StringArrayVar(&amqpRequestDeferredTokens, "amqp-request-deferred-token", []string{},
+		"Request only messages deferred under this token (rabbitmq:deferral-tokens); repeat the flag for multiple tokens. Quorum queues only.")
+	amqpConsumerFlags.IntVar(&cfg.Amqp.RequestDeferredCredit, "amqp-request-deferred-credit", 1,
+		"Link credit granted when requesting deferred messages; size it to the number of messages expected under the token(s)")
+	amqpConsumerFlags.DurationVar(&cfg.Amqp.RequestDeferredTimeout, "amqp-request-deferred-timeout", 5*time.Second,
+		"How long to wait for deferred messages after requesting token(s) before giving up")
 
 	amqp091PublisherFlags := pflag.NewFlagSet("amqp091-publisher", pflag.ContinueOnError)
 	amqp091ConsumerFlags := pflag.NewFlagSet("amqp091-consumer", pflag.ContinueOnError)
@@ -1055,8 +1062,21 @@ func sanitizeConfig(cfg *config.Config) error {
 		cfg.Amqp.ModifyOptions = opts
 	}
 
+	cfg.Amqp.RequestDeferredTokenTemplates = nil
+	for _, val := range amqpRequestDeferredTokens {
+		tmpl, err := config.ParseTemplateValue(val)
+		if err != nil {
+			return fmt.Errorf("invalid template in --amqp-request-deferred-token %s: %v", val, err)
+		}
+		cfg.Amqp.RequestDeferredTokenTemplates = append(cfg.Amqp.RequestDeferredTokenTemplates, tmpl)
+	}
+
 	if cfg.Amqp.SoleConnectionPolicy != "refuse-connection" && cfg.Amqp.SoleConnectionPolicy != "close-existing" {
 		return fmt.Errorf("invalid --amqp-sole-connection-policy %s: must be refuse-connection or close-existing", cfg.Amqp.SoleConnectionPolicy)
+	}
+
+	if cfg.Amqp.RequestDeferredCredit < 1 {
+		return fmt.Errorf("--amqp-request-deferred-credit must be at least 1")
 	}
 
 	if cfg.MaxInFlight < 1 {
