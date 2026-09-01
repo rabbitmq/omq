@@ -9,11 +9,6 @@ redelivery. See RabbitMQ's own documentation of the protocol for the full detail
 This only works against **quorum queues**; the broker advertises support for it via the
 `rabbitmq:deferral-tokens` symbol in the `offered-capabilities` of the ATTACH response.
 
-`omq` doesn't create deferral tokens itself - parking a message under a token is just a
-MODIFIED outcome with two annotations, so the existing `--amqp-modify` flag already
-covers it (see below). What `omq` adds is the *retrieval* side: requesting back only the
-messages parked under given token(s).
-
 ## Parking a message under a token
 
 Use `--amqp-modify-rate 100` so every consumed message is settled with the MODIFIED
