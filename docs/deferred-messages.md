@@ -75,12 +75,3 @@ actually received:
 ```
 INFO deferred retrieval finished id=0 terminus=/queues/deferred-demo tokens=[unknown-token] requested=1 received=0
 ```
-
-## Caveat: credit is shared with normal delivery
-
-The credit granted alongside `rabbitmq:deferral-tokens` is ordinary link credit - it is
-also available for the broker to dispatch normal, non-deferred ready messages on the same
-link. If the queue has other ready messages competing for that credit, they can consume it
-before the deferred assignment runs, and the retrieval will appear to return fewer
-messages than expected. For predictable results, point this at a queue where the only
-outstanding messages are the ones parked under the requested token(s).
