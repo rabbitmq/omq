@@ -99,7 +99,7 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 		CleanStartOnInitialConnection: c.Config.MqttConsumer.CleanSession,
 		SessionExpiryInterval:         uint32(c.Config.MqttConsumer.SessionExpiryInterval.Seconds()),
 		KeepAlive:                     20,
-		ConnectRetryDelay:             1 * time.Second,
+		ReconnectBackoff:              autopaho.NewConstantBackoff(1 * time.Second),
 		ConnectTimeout:                30 * time.Second,
 		TlsCfg: &tls.Config{
 			InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,

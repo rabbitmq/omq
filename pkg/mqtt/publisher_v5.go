@@ -68,7 +68,7 @@ func (p *Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 		CleanStartOnInitialConnection: p.Config.MqttPublisher.CleanSession,
 		SessionExpiryInterval:         uint32(p.Config.MqttPublisher.SessionExpiryInterval.Seconds()),
 		KeepAlive:                     20,
-		ConnectRetryDelay:             1 * time.Second,
+		ReconnectBackoff:              autopaho.NewConstantBackoff(1 * time.Second),
 		ConnectTimeout:                30 * time.Second,
 		TlsCfg: &tls.Config{
 			InsecureSkipVerify: p.Config.InsecureSkipTLSVerify,
