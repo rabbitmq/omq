@@ -4,6 +4,8 @@ go 1.27.0
 
 replace github.com/Azure/go-amqp => github.com/mkuratczyk/go-amqp v0.0.0-20260818071438-088b569071c5
 
+replace github.com/go-stomp/stomp/v3 => github.com/mkuratczyk/stomp/v3 v3.0.0-20260901134010-45302c0f2b51
+
 require (
 	github.com/Azure/go-amqp v1.7.0
 	github.com/Masterminds/sprig/v3 v3.3.0
