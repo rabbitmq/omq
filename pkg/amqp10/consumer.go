@@ -80,7 +80,7 @@ func (c *Amqp10Consumer) Connect() {
 				InsecureSkipVerify: c.Config.InsecureSkipTLSVerify,
 			},
 		}
-		applySoleConnectionOptions(connOptions, c.Config.Amqp)
+		applyConnectionOptions(connOptions, c.Config.Amqp)
 		conn, err := amqp.Dial(c.ctx, uri, connOptions)
 		if err != nil {
 			log.Error("consumer failed to connect", "id", c.Id, "error", err.Error())
@@ -108,6 +108,7 @@ func (c *Amqp10Consumer) Connect() {
 
 func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 	var durability amqp.Durability
+	var expiryPolicy amqp.ExpiryPolicy
 	switch c.Config.QueueDurability {
 	case config.None:
 		durability = amqp.DurabilityNone
@@ -116,10 +117,20 @@ func (c *Amqp10Consumer) CreateReceiver(ctx context.Context) {
 	case config.UnsettledState:
 		durability = amqp.DurabilityUnsettledState
 	}
+	// A durable JMS topic subscription requires terminus-durability together
+	// with expiry-policy=never; see rabbit_jms_topic:is_durable_subscription/1.
+	// Only opt into this for JMS topic subscriptions
+	if c.Config.Amqp.JMSClient && durability != amqp.DurabilityNone &&
+		slices.Contains(c.Config.Amqp.SourceCapabilities, "topic") {
+		expiryPolicy = amqp.ExpiryPolicyNever
+	}
 
 	linkProperties := buildLinkProperties(c.Config, c.Id)
 	receiverOpts := &amqp.ReceiverOptions{
+		Name:                      utils.InjectId(c.Config.Amqp.LinkName, c.Id),
+		SourceCapabilities:        c.Config.Amqp.SourceCapabilities,
 		SourceDurability:          durability,
+		SourceExpiryPolicy:        expiryPolicy,
 		Credit:                    int32(c.Config.ConsumerCredits),
 		Properties:                linkProperties,
 		Filters:                   c.buildLinkFilters(),
@@ -531,6 +542,12 @@ func (c *Amqp10Consumer) buildLinkFilters() []amqp.LinkFilter {
 	if c.Config.Amqp.JMSSelectorFilter != "" {
 		filters = append(filters, amqp.NewLinkFilter("jms-selector", 0x0000468C00000004,
 			c.Config.Amqp.JMSSelectorFilter))
+	}
+	if c.Config.Amqp.NoLocal {
+		// apache.org:no-local-filter:list; the descriptor is what the broker
+		// checks, the (empty) list value itself is ignored.
+		filters = append(filters, amqp.NewLinkFilter("no-local", 0x0000468C00000003,
+			[]any{}))
 	}
 	return filters
 }

@@ -29,20 +29,28 @@ func hostAndVHost(connectionString string) (string, string) {
 	return uri.Hostname(), "vhost:" + vhost
 }
 
-// applySoleConnectionOptions requests the AMQP 1.0 sole connection
-// capability on the Open frame, if enabled via --amqp-sole-connection.
-func applySoleConnectionOptions(connOptions *amqp.ConnOptions, amqpCfg config.AmqpOptions) {
-	if !amqpCfg.SoleConnection {
+func applyConnectionOptions(connOptions *amqp.ConnOptions, amqpCfg config.AmqpOptions) {
+	if !amqpCfg.SoleConnection && !amqpCfg.JMSClient {
 		return
 	}
 
-	var policy uint32 // 0 == refuse-connection
-	if amqpCfg.SoleConnectionPolicy == "close-existing" {
-		policy = 1
+	if connOptions.Properties == nil {
+		connOptions.Properties = map[string]any{}
 	}
 
-	connOptions.DesiredCapabilities = []string{soleConnectionCapability}
-	connOptions.Properties = map[string]any{
-		"sole-connection-enforcement-policy": policy,
+	if amqpCfg.SoleConnection {
+		var policy uint32 // 0 == refuse-connection
+		if amqpCfg.SoleConnectionPolicy == "close-existing" {
+			policy = 1
+		}
+
+		connOptions.DesiredCapabilities = []string{soleConnectionCapability}
+		connOptions.Properties["sole-connection-enforcement-policy"] = policy
+	}
+
+	if amqpCfg.JMSClient {
+		// The broker identifies a JMS client by the "product" connection
+		// property that Qpid JMS advertises; see rabbit_amqp_reader:is_jms_client/1.
+		connOptions.Properties["product"] = "QpidJMS"
 	}
 }

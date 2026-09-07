@@ -88,6 +88,11 @@ type AmqpOptions struct {
 	RequestDeferredTimeout        time.Duration
 	SoleConnection                bool
 	SoleConnectionPolicy          string
+	JMSClient                     bool
+	SourceCapabilities            []string
+	TargetCapabilities            []string
+	NoLocal                       bool
+	LinkName                      string
 }
 
 type MqttOptions struct {

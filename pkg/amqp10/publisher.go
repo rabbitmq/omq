@@ -95,7 +95,7 @@ func (p *Amqp10Publisher) Connect() {
 				InsecureSkipVerify: p.Config.InsecureSkipTLSVerify,
 			},
 		}
-		applySoleConnectionOptions(connOptions, p.Config.Amqp)
+		applyConnectionOptions(connOptions, p.Config.Amqp)
 		conn, err = amqp.Dial(p.ctx, uri, connOptions)
 
 		if err != nil {
@@ -157,9 +157,10 @@ func (p *Amqp10Publisher) CreateSender() {
 		sender, err := p.Session.NewSender(p.ctx, p.Terminus, &amqp.SenderOptions{
 			SettlementQueueDepth: 10,
 
-			SettlementMode:   settleMode,
-			TargetDurability: durability,
-			Settlements:      p.settlements,
+			SettlementMode:     settleMode,
+			TargetDurability:   durability,
+			TargetCapabilities: p.Config.Amqp.TargetCapabilities,
+			Settlements:        p.settlements,
 		})
 		if err != nil {
 			log.Error("publisher failed to create a sender", "id", p.Id, "error", err.Error())

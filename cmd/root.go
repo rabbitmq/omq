@@ -141,6 +141,8 @@ func RootCmd() *cobra.Command {
 		"AMQP 1.0 message To field (required for the anonymous terminus)")
 	amqpPublisherFlags.BoolVar(&cfg.Amqp.SendSettled, "amqp-send-settled", false,
 		"Send settled messages (fire and forget)")
+	amqpPublisherFlags.StringArrayVar(&cfg.Amqp.TargetCapabilities, "amqp-target-capability", []string{},
+		"AMQP 1.0 target capabilities for the publisher link, eg. topic, temporary-topic (JMS topic producers)")
 
 	amqpConnectionFlags := pflag.NewFlagSet("amqp-connection", pflag.ContinueOnError)
 
@@ -148,6 +150,8 @@ func RootCmd() *cobra.Command {
 		"Request the AMQP 1.0 sole connection capability for the container ID")
 	amqpConnectionFlags.StringVar(&cfg.Amqp.SoleConnectionPolicy, "amqp-sole-connection-policy", "refuse-connection",
 		"AMQP 1.0 sole connection enforcement policy: refuse-connection or close-existing")
+	amqpConnectionFlags.BoolVar(&cfg.Amqp.JMSClient, "amqp-jms-client", false,
+		"Advertise the connection as a JMS client (sets the connection 'product' property to 'QpidJMS')")
 
 	amqpConsumerFlags := pflag.NewFlagSet("amqp-consumer", pflag.ContinueOnError)
 
@@ -159,6 +163,12 @@ func RootCmd() *cobra.Command {
 		"AMQP SQL Filter expression eg 'proprties.subject LIKE 'foo-%'")
 	amqpConsumerFlags.StringVar(&cfg.Amqp.JMSSelectorFilter, "amqp-jms-selector", "",
 		"JMS message selector expression for JMS queues, eg. \"color = 'red' AND price > 10\"")
+	amqpConsumerFlags.StringArrayVar(&cfg.Amqp.SourceCapabilities, "amqp-source-capability", []string{},
+		"AMQP 1.0 source capabilities for the consumer link, eg. topic, temporary-topic, shared, global (JMS topic subscriptions)")
+	amqpConsumerFlags.BoolVar(&cfg.Amqp.NoLocal, "amqp-no-local", false,
+		"Add the JMS no-local filter to the consumer link")
+	amqpConsumerFlags.StringVar(&cfg.Amqp.LinkName, "amqp-link-name", "",
+		"Explicit AMQP 1.0 link name for the consumer (%d => consumer's id)")
 	amqpConsumerFlags.BoolVar(&cfg.Amqp.Browse, "amqp-browse", false,
 		"Browse messages without consuming them (sets distribution-mode to 'copy')")
 	amqpConsumerFlags.BoolVar(&cfg.Amqp.ConsumeSettled, "amqp-consume-settled", false,
@@ -1075,6 +1085,14 @@ func sanitizeConfig(cfg *config.Config) error {
 
 	if cfg.Amqp.SoleConnectionPolicy != "refuse-connection" && cfg.Amqp.SoleConnectionPolicy != "close-existing" {
 		return fmt.Errorf("invalid --amqp-sole-connection-policy %s: must be refuse-connection or close-existing", cfg.Amqp.SoleConnectionPolicy)
+	}
+
+	if slices.Contains(cfg.Amqp.SourceCapabilities, "shared") && cfg.Amqp.LinkName == "" {
+		return fmt.Errorf("--amqp-source-capability shared requires --amqp-link-name to identify the subscription group")
+	}
+
+	if cfg.Amqp.NoLocal && slices.Contains(cfg.Amqp.SourceCapabilities, "shared") {
+		return fmt.Errorf("--amqp-no-local only applies to unshared subscriptions (--amqp-source-capability shared is set)")
 	}
 
 	if cfg.Amqp.RequestDeferredCredit < 1 {
