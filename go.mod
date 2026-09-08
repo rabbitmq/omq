@@ -4,8 +4,6 @@ go 1.27.0
 
 replace github.com/Azure/go-amqp => github.com/mkuratczyk/go-amqp v0.0.0-20260818071438-088b569071c5
 
-replace github.com/go-stomp/stomp/v3 => github.com/mkuratczyk/stomp/v3 v3.0.0-20260901134010-45302c0f2b51
-
 require (
 	github.com/Azure/go-amqp v1.7.0
 	github.com/Masterminds/sprig/v3 v3.3.0
@@ -14,7 +12,7 @@ require (
 	github.com/eclipse/paho.golang v0.23.0
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/felixge/fgprof v0.9.5
-	github.com/go-stomp/stomp/v3 v3.1.5
+	github.com/go-stomp/stomp/v3 v3.1.6-0.20260908092919-0fdb58513874
 	github.com/hashicorp/memberlist v0.6.0
 	github.com/michaelklishin/rabbit-hole v1.5.0
 	github.com/onsi/ginkgo/v2 v2.32.1

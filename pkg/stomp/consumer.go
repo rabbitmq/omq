@@ -345,7 +345,7 @@ func (c *StompConsumer) buildSubscribeOpts(destination string) []func(*frame.Fra
 	}
 
 	subscribeOpts = append(subscribeOpts,
-		stomp.SubscribeOpt.Receipt,
+		stomp.SubscribeOpt.Receipt(""),
 		stomp.SubscribeOpt.Header("x-stream-offset", offsetHeader),
 		stomp.SubscribeOpt.Header("prefetch-count", strconv.Itoa(c.Config.ConsumerCredits)))
 
