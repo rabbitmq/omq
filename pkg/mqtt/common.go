@@ -5,8 +5,12 @@ import (
 	"net/url"
 	"strings"
 	"text/template"
+	"time"
 
+	"github.com/eclipse/paho.golang/autopaho"
+	"github.com/eclipse/paho.golang/paho"
 	"github.com/rabbitmq/omq/pkg/config"
+	"github.com/rabbitmq/omq/pkg/log"
 	"github.com/rabbitmq/omq/pkg/utils"
 )
 
@@ -31,6 +35,43 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) Publisher {
 		return NewMqtt5Publisher(ctx, cfg, id)
 	} else {
 		return NewMqttPublisher(ctx, cfg, id)
+	}
+}
+
+// subscribeWithRetry subscribes to the given topics and, on failure, keeps retrying
+// in the background until it succeeds or ctx is cancelled. `subscribed` is a buffered
+// (size 1) channel that gets signalled (non-blocking) once the subscription succeeds,
+// so it's safe to call this from within OnConnectionUp.
+func subscribeWithRetry(ctx context.Context, cm *autopaho.ConnectionManager, subscriptions []paho.SubscribeOptions, subscribed chan struct{}, role string, id int) {
+	logSubscribed := func() {
+		for _, sub := range subscriptions {
+			log.Info(role+" subscribed", "id", id, "topic", sub.Topic)
+		}
+		select {
+		case subscribed <- struct{}{}:
+		default:
+		}
+	}
+
+	if _, err := cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: subscriptions}); err != nil {
+		log.Error("failed to subscribe, retrying", "id", id, "error", err)
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(config.ReconnectDelay):
+				}
+				if _, retryErr := cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: subscriptions}); retryErr == nil {
+					logSubscribed()
+					return
+				} else {
+					log.Error("failed to subscribe, retrying", "id", id, "error", retryErr)
+				}
+			}
+		}()
+	} else {
+		logSubscribed()
 	}
 }
 

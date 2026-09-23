@@ -47,6 +47,8 @@ var (
 	PublishingLatency         *vmetrics.Summary
 	EndToEndLatency           *vmetrics.Summary
 	DelayAccuracy             *vmetrics.Summary
+	RoundTripLatency          *vmetrics.Summary
+	RpcTimeouts               *vmetrics.Counter
 	globalLabels              map[string]string
 )
 
@@ -117,6 +119,8 @@ func registerMetrics(labels map[string]string, publishers int, rate float32) {
 	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
 	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
 	DelayAccuracy = vmetrics.GetOrCreateSummaryExt(`omq_delay_accuracy_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
+	RoundTripLatency = vmetrics.GetOrCreateSummaryExt(`omq_roundtrip_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
+	RpcTimeouts = vmetrics.GetOrCreateCounter(`omq_rpc_timeouts_total` + labelsToString(globalLabels))
 }
 
 func registerCommandLineMetric(cfg config.Config, globalLabels map[string]string) {
@@ -234,6 +238,10 @@ func RecordEndToEndLatency(latency time.Duration) {
 	}
 	EndToEndLatency.Update(latency.Seconds())
 	e2eLatencyTracker.record(latency)
+}
+
+func RecordRoundTripLatency(latency time.Duration) {
+	RoundTripLatency.Update(latency.Seconds())
 }
 
 func RecordDelayAccuracy(accuracy time.Duration) {

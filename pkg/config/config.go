@@ -106,6 +106,13 @@ type MqttOptions struct {
 	ReceiveMaximum           uint16
 }
 
+type MqttRpcOptions struct {
+	ResponseTopicTemplate *template.Template
+	ReplySize             int
+	ReplySizeTemplate     *template.Template
+	Timeout               time.Duration
+}
+
 type Amqp091Options struct {
 	Mandatory       bool
 	HeaderTemplates map[string]*template.Template
@@ -158,6 +165,7 @@ type Config struct {
 	Amqp091                     Amqp091Options
 	MqttPublisher               MqttOptions
 	MqttConsumer                MqttOptions
+	MqttRpc                     MqttRpcOptions
 	MetricTags                  map[string]string
 	DetectOutOfOrder            bool
 	DetectGaps                  bool
