@@ -27,7 +27,6 @@ type Mqtt5Publisher struct {
 	Config     config.Config
 	ctx        context.Context
 	msg        []byte
-	sem        chan struct{}
 	wg         sync.WaitGroup
 	bodyPool   sync.Pool
 }
@@ -40,7 +39,6 @@ func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Pub
 		Topic:      topic,
 		Config:     cfg,
 		ctx:        ctx,
-		sem:        make(chan struct{}, cfg.MaxInFlight),
 	}
 }
 
@@ -143,31 +141,67 @@ func (p *Mqtt5Publisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent atomic.Int64
+	nextSeq := func() (seq uint64, stopReason string, ok bool) {
+		seq = uint64(msgSent.Add(1) - 1)
+		if seq >= uint64(p.Config.PublishCount) {
+			return 0, "--pmessages value reached", false
+		}
+		if p.Config.Rate > 0 {
+			_ = limiter.Wait(p.ctx)
+		}
+		return seq, "", true
+	}
+
+	// MaxInFlight == 1 (the default) means sends are already fully sequential, so a
+	// dedicated worker goroutine would do nothing but relay each sequence number
+	// through a channel before calling Send - call it directly instead. At scale
+	// (thousands of publishers) that's thousands of goroutines, each with its own
+	// stack, saved for doing no useful concurrent work.
+	if p.Config.MaxInFlight == 1 {
+		for {
+			select {
+			case <-p.ctx.Done():
+				return "time limit reached"
+			default:
+				seq, stopReason, ok := nextSeq()
+				if !ok {
+					return stopReason
+				}
+				p.Send(seq)
+			}
+		}
+	}
+
+	// A fixed pool of MaxInFlight long-lived workers, rather than spawning (and
+	// scheduling, and stack-allocating) a fresh goroutine per message. work is
+	// unbuffered, so handing a sequence number to it blocks until a worker is free,
+	// reproducing the previous semaphore's "at most MaxInFlight in flight" behaviour.
+	work := make(chan uint64)
+	p.wg.Add(p.Config.MaxInFlight)
+	for range p.Config.MaxInFlight {
+		go func() {
+			defer p.wg.Done()
+			for seq := range work {
+				p.Send(seq)
+			}
+		}()
+	}
+	defer close(work)
+
 	for {
 		select {
 		case <-p.ctx.Done():
 			return "time limit reached"
 		default:
-			seq := uint64(msgSent.Add(1) - 1)
-			if seq >= uint64(p.Config.PublishCount) {
-				return "--pmessages value reached"
-			}
-			if p.Config.Rate > 0 {
-				_ = limiter.Wait(p.ctx)
+			seq, stopReason, ok := nextSeq()
+			if !ok {
+				return stopReason
 			}
 			select {
-			case p.sem <- struct{}{}:
+			case work <- seq:
 			case <-p.ctx.Done():
 				return "context cancelled"
 			}
-			p.wg.Add(1)
-			go func(s uint64) {
-				defer func() {
-					<-p.sem
-					p.wg.Done()
-				}()
-				p.Send(s)
-			}(seq)
 		}
 	}
 }
