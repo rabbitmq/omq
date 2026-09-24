@@ -114,6 +114,8 @@ func RootCmd() *cobra.Command {
 		"MQTT consumer session expiry interval")
 	mqttConsumerFlags.IntVar(&cfg.MqttConsumer.SubscriptionsPerConsumer, "mqtt-subscriptions-per-consumer", 1,
 		"Number of subscriptions per MQTT consumer (appends /N to the topic; 0 = connect but don't subscribe)")
+	mqttConsumerFlags.Uint16Var(&cfg.MqttConsumer.ReceiveMaximum, "mqtt-consumer-receive-maximum", 8,
+		"MQTT v5 Receive Maximum sent in CONNECT (max concurrent QoS 1/2 in-flight publishes); also sizes an internal per-connection buffer, so large values increase memory usage significantly")
 
 	mqttPublisherFlags := pflag.NewFlagSet("mqtt-publisher", pflag.ContinueOnError)
 	mqttPublisherFlags.IntVar(&cfg.MqttPublisher.Version, "mqtt-publisher-version", 5,

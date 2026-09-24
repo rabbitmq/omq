@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -165,6 +166,16 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 		},
 		OnConnectError: func(err error) {
 			log.Info("consumer failed to connect ", "id", c.Id, "error", err)
+		},
+		// paho.Client.Connect() defaults ReceiveMaximum to 65535, which sizes an internal
+		// channel buffer accordingly (~512KB per connection); cap it explicitly instead.
+		ConnectPacketBuilder: func(cp *paho.Connect, _ *url.URL) (*paho.Connect, error) {
+			if cp.Properties == nil {
+				cp.Properties = &paho.ConnectProperties{}
+			}
+			receiveMaximum := c.Config.MqttConsumer.ReceiveMaximum
+			cp.Properties.ReceiveMaximum = &receiveMaximum
+			return cp, nil
 		},
 		ClientConfig: paho.ClientConfig{
 			ClientID: utils.InjectId(c.Config.ConsumerId, c.Id),

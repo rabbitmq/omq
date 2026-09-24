@@ -103,6 +103,7 @@ type MqttOptions struct {
 	SubscriptionsPerConsumer int
 	UserPropertyTemplates    map[string]*template.Template
 	Retained                 []bool
+	ReceiveMaximum           uint16
 }
 
 type Amqp091Options struct {

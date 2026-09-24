@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"math/rand/v2"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -78,6 +79,19 @@ func (p *Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 		},
 		OnConnectError: func(err error) {
 			log.Info("publisher failed to connect ", "id", p.Id, "error", err)
+		},
+		// paho.Client.Connect() defaults ReceiveMaximum to 65535, which sizes an internal
+		// channel buffer accordingly (~512KB per connection). Publishers never subscribe or
+		// register OnPublishReceived, so no PUBLISH is ever routed through that buffer -
+		// pin ReceiveMaximum to the protocol minimum (not user-configurable, since any value
+		// would be equally inert).
+		ConnectPacketBuilder: func(cp *paho.Connect, _ *url.URL) (*paho.Connect, error) {
+			if cp.Properties == nil {
+				cp.Properties = &paho.ConnectProperties{}
+			}
+			receiveMaximum := uint16(1)
+			cp.Properties.ReceiveMaximum = &receiveMaximum
+			return cp, nil
 		},
 		ClientConfig: paho.ClientConfig{
 			ClientID: utils.InjectId(p.Config.PublisherId, p.Id),
