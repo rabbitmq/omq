@@ -29,6 +29,7 @@ type Mqtt5Publisher struct {
 	msg        []byte
 	sem        chan struct{}
 	wg         sync.WaitGroup
+	bodyPool   sync.Pool
 }
 
 func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Publisher {
@@ -176,11 +177,24 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 		return
 	}
 
+	qos0 := p.Config.MqttPublisher.QoS == 0
+
 	var body []byte
 	if p.Config.SizeTemplate != nil {
 		body = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	} else {
-		body = make([]byte, len(p.msg))
+		// QoS 0 publishes are written to the wire synchronously by paho (see
+		// PublishWithOptions), so once Publish() below returns the buffer is no
+		// longer referenced and can be recycled. QoS 1/2 publishes are instead kept
+		// in the client's session store for retransmission, so must not be reused.
+		if qos0 {
+			if pooled, ok := p.bodyPool.Get().(*[]byte); ok && cap(*pooled) >= len(p.msg) {
+				body = (*pooled)[:len(p.msg)]
+			}
+		}
+		if body == nil {
+			body = make([]byte, len(p.msg))
+		}
 		copy(body, p.msg)
 	}
 	utils.UpdatePayload(p.Config.UseMillis, &body)
@@ -227,6 +241,9 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 
 	startTime := time.Now()
 	_, err := p.Connection.Publish(p.ctx, pub)
+	if qos0 && p.Config.SizeTemplate == nil {
+		p.bodyPool.Put(&body)
+	}
 	if err != nil {
 		// I couldn't find any way to prevent publishing just after omq
 		// initiated the shutdown procedure, so we have to ignore this
