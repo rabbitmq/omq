@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime/pprof"
 
@@ -12,7 +13,10 @@ import (
 )
 
 func main() {
-	if os.Getenv("OMQ_PPROF") == "true" {
+	pprofEnabled := os.Getenv("OMQ_PPROF") == "true"
+	fgprofEnabled := os.Getenv("OMQ_FGPROF") == "true"
+
+	if pprofEnabled {
 		cpuFile, err := os.Create("omq-cpu.pprof")
 		if err != nil {
 			log.Error("can't create omq-cpu.pprof", "error", err)
@@ -20,8 +24,11 @@ func main() {
 		defer pprof.StopCPUProfile()
 		_ = pprof.StartCPUProfile(cpuFile)
 	}
-	if os.Getenv("OMQ_FGPROF") == "true" {
+	if fgprofEnabled {
 		http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
+	}
+	// importing net/http/pprof registers the /debug/pprof/ handlers on DefaultServeMux
+	if pprofEnabled || fgprofEnabled {
 		go func() {
 			_ = http.ListenAndServe(":6060", nil)
 		}()
@@ -29,7 +36,7 @@ func main() {
 
 	cmd.Execute()
 
-	if os.Getenv("OMQ_PPROF") == "true" {
+	if pprofEnabled {
 		memFile, err := os.Create("omq-memory.pprof")
 		if err != nil {
 			log.Error("can't create omq-memory.pprof", "error", err)
