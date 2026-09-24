@@ -135,7 +135,8 @@ func RootCmd() *cobra.Command {
 		"Whether published messages should be retained; accepts a list to cycle through, eg. \"true,false\"")
 
 	mqttRpcFlags := pflag.NewFlagSet("mqtt-rpc", pflag.ContinueOnError)
-	mqttRpcFlags.StringVar(&mqttResponseTopicStr, "mqtt-response-topic", "/topic/omq-rpc-response-%d",
+	mqttRpcFlags.StringVar(&mqttResponseTopicStr, "mqtt-response-topic",
+		fmt.Sprintf("/topic/omq-rpc-response-%%d-%s", cfg.MqttRpc.InstanceID),
 		"MQTT5 response topic template for requesters (%d => requester's id; supports Go templates)")
 	mqttRpcFlags.StringVar(&mqttReplySizeStr, "mqtt-reply-size", "12",
 		"Reply payload size for responders (same format as --size: units, templates and comma-separated values)")
@@ -538,6 +539,11 @@ func RootCmd() *cobra.Command {
 				fmt.Printf("ERROR: %s\n", err)
 				os.Exit(1)
 			}
+			if err := validateMqttRpcCommand(cmd, &cfg); err != nil {
+				fmt.Printf("ERROR: %s\n", err)
+				os.Exit(1)
+			}
+			setMqttRpcClientIDs(cmd, &cfg)
 
 			if strings.Contains(cmd.Use, "-") {
 				// "mqtt-rpc" isn't a "<publisher-proto>-<consumer-proto>" pair like every
@@ -1315,6 +1321,34 @@ func sanitizeConfig(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+func validateMqttRpcCommand(cmd *cobra.Command, cfg *config.Config) error {
+	if cmd.Name() != "mqtt-rpc" {
+		return nil
+	}
+	if cfg.MqttPublisher.Version != 5 {
+		return fmt.Errorf("--mqtt-publisher-version must be 5 for mqtt-rpc")
+	}
+	if cfg.MqttConsumer.Version != 5 {
+		return fmt.Errorf("--mqtt-consumer-version must be 5 for mqtt-rpc")
+	}
+	if cmd.Flags().Changed("mqtt-retained") {
+		return fmt.Errorf("--mqtt-retained is not supported for mqtt-rpc")
+	}
+	return nil
+}
+
+func setMqttRpcClientIDs(cmd *cobra.Command, cfg *config.Config) {
+	if cmd.Name() != "mqtt-rpc" {
+		return
+	}
+	if !cmd.Flags().Changed("publisher-id") {
+		cfg.PublisherId += "-" + cfg.MqttRpc.InstanceID
+	}
+	if !cmd.Flags().Changed("consumer-id") {
+		cfg.ConsumerId += "-" + cfg.MqttRpc.InstanceID
+	}
 }
 
 // parseSizeFlag parses a --size-style flag value: a static size (with optional unit,

@@ -502,6 +502,44 @@ var _ = Describe("OMQ CLI", func() {
 		Entry("default to MQTT v5.0", "", "MQTT 5-0"),
 	)
 
+	Describe("MQTT RPC", func() {
+		It("sends requests and receives matching replies", func() {
+			session := omq([]string{
+				"mqtt-rpc",
+				"--publish-to=omq-rpc-test",
+				"--consume-from=omq-rpc-test",
+				"--publisher-id=omq-rpc-test-requester",
+				"--consumer-id=omq-rpc-test-responder",
+				"--pmessages=2",
+				"--cmessages=2",
+				"--max-in-flight=2",
+				"--time=5s",
+				"--print-all-metrics",
+			})
+
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=4`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=4`))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_roundtrip_latency_seconds_count`)).Should(Equal(2.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_rpc_timeouts_total`)).Should(Equal(0.0))
+		})
+
+		DescribeTable("rejects unsupported options",
+			func(args []string, expectedError string) {
+				session := omq(append([]string{"mqtt-rpc"}, args...))
+				Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(1))
+				Eventually(session.Out).Should(gbytes.Say(expectedError))
+			},
+			Entry("retained requests", []string{"--mqtt-retained=true"}, "--mqtt-retained is not supported for mqtt-rpc"),
+			Entry("MQTT 3 publisher", []string{"--mqtt-publisher-version=3"}, "--mqtt-publisher-version must be 5 for mqtt-rpc"),
+			Entry("MQTT 3 consumer", []string{"--mqtt-consumer-version=3"}, "--mqtt-consumer-version must be 5 for mqtt-rpc"),
+		)
+	})
+
 	Describe("declares queues for AMQP and STOMP clients", func() {
 		It("declares queues for AMQP consumers with /queues/ address", func() {
 			args := []string{

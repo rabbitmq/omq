@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"math/rand/v2"
 	"text/template"
 	"time"
 
@@ -108,6 +110,7 @@ type MqttOptions struct {
 
 type MqttRpcOptions struct {
 	ResponseTopicTemplate *template.Template
+	InstanceID            string
 	ReplySize             int
 	ReplySizeTemplate     *template.Template
 	Timeout               time.Duration
@@ -188,6 +191,9 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		QueueDurability: Configuration,
+		MqttRpc: MqttRpcOptions{
+			InstanceID: fmt.Sprintf("%x", rand.Uint64()),
+		},
 	}
 }
 

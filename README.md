@@ -134,6 +134,29 @@ and later pulling it back on demand by token, instead of waiting for normal rede
 multiple tokens); see [docs/deferred-messages.md](docs/deferred-messages.md) for details
 and examples.
 
+### MQTT 5 Request/Response (RPC)
+
+`mqtt-rpc` runs MQTT 5 requesters and responders together. Each requester publishes a
+request with an MQTT Response Topic and Correlation Data; responders reply to that topic
+with the same Correlation Data. For example:
+
+```shell
+$ omq mqtt-rpc --publish-to rpc/request --consume-from rpc/request \
+                --pmessages 100 --cmessages 100 --max-in-flight 10
+```
+
+Default response topics and client IDs include a unique per-invocation token, so
+independently running `omq` processes do not disconnect or consume each other's replies.
+Override the topic with `--mqtt-response-topic` when an application requires a specific
+response topic.
+
+`omq_roundtrip_latency_seconds` records request-to-reply latency and
+`omq_rpc_timeouts_total` counts requests without a reply before `--mqtt-rpc-timeout`
+(five seconds by default). Published and consumed message totals include both requests and
+replies. MQTT RPC requires MQTT 5; `--mqtt-publisher-version` and
+`--mqtt-consumer-version` must therefore remain set to `5`. Retained request publishing is
+not supported.
+
 ### Stream Protocol
 
 `omq` supports RabbitMQ's native stream protocol via `rabbitmq-stream-go-client`. Use commands
