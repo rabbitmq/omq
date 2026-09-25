@@ -3,6 +3,7 @@ package mqtt
 import (
 	"context"
 	"crypto/tls"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -35,7 +36,7 @@ func NewMqtt5Responder(ctx context.Context, cfg config.Config, id int) Mqtt5Resp
 }
 
 func (c Mqtt5Responder) Start(consumerReady chan bool) {
-	var msgsReceived atomic.Int64
+	var msgsHandled atomic.Int64
 	subscribed := make(chan struct{}, 1)
 
 	// set inside OnConnectionUp, before subscribing -- guaranteed to be populated
@@ -45,11 +46,29 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 	replyMsg := utils.MessageBody(c.Config.MqttRpc.ReplySize, c.Config.MqttRpc.ReplySizeTemplate, c.Id)
 
 	handler := func(rcv paho.PublishReceived) (bool, error) {
+		// incremented on return, i.e. only once the reply (if any) has actually been
+		// sent -- otherwise a slow --consumer-latency could let Start's shutdown loop
+		// disconnect while a reply is still in flight.
+		defer msgsHandled.Add(1)
+
 		payload := rcv.Packet.Payload
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 		metrics.RecordEndToEndLatency(latency)
 		metrics.MessagesConsumedMetric(0).Inc()
-		msgsReceived.Add(1)
+
+		// Consumer latency: simulate processing time before the reply is sent.
+		if c.Config.ConsumerLatencyTemplate != nil {
+			latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, c.Id)
+			consumerLatency, err := time.ParseDuration(latencyStr)
+			if err != nil {
+				log.Error("failed to parse template-generated latency", "value", latencyStr, "error", err)
+				os.Exit(1)
+			}
+			if consumerLatency > 0 {
+				log.Debug("consumer latency", "id", c.Id, "latency", consumerLatency)
+				time.Sleep(consumerLatency)
+			}
+		}
 
 		if rcv.Packet.Properties == nil || rcv.Packet.Properties.ResponseTopic == "" {
 			log.Debug("request without a response topic, dropping", "id", c.Id, "topic", c.Topic, "timeSent", timeSent)
@@ -156,7 +175,7 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 		return
 	}
 
-	for msgsReceived.Load() < int64(c.Config.ConsumeCount) {
+	for msgsHandled.Load() < int64(c.Config.ConsumeCount) {
 		select {
 		case <-c.ctx.Done():
 			c.stop(connection, "time limit reached")

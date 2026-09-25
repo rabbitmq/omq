@@ -528,6 +528,33 @@ var _ = Describe("OMQ CLI", func() {
 			Expect(metricValue(buf, `omq_rpc_timeouts_total`)).Should(Equal(0.0))
 		})
 
+		It("supports --consumer-latency to simulate processing time before the reply is sent", func() {
+			session := omq([]string{
+				"mqtt-rpc",
+				"--publish-to=omq-rpc-latency-test",
+				"--consume-from=omq-rpc-latency-test",
+				"--publisher-id=omq-rpc-latency-test-requester",
+				"--consumer-id=omq-rpc-latency-test-responder",
+				"--pmessages=2",
+				"--cmessages=2",
+				"--consumer-latency=50ms",
+				"--time=5s",
+				"--print-all-metrics",
+			})
+
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=4`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=4`))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_roundtrip_latency_seconds_count`)).Should(Equal(2.0))
+			buf.Reset(output)
+			// with --max-in-flight=1 (default), the round trips are serialized, so a 50ms
+			// consumer latency on each of the 2 requests must show up in the total duration.
+			Expect(metricValue(buf, `omq_roundtrip_latency_seconds_sum`)).Should(BeNumerically(">", 0.1))
+		})
+
 		DescribeTable("rejects unsupported options",
 			func(args []string, expectedError string) {
 				session := omq(append([]string{"mqtt-rpc"}, args...))

@@ -710,7 +710,10 @@ func start(cfg config.Config) {
 		}
 	}
 
-	if cfg.ConsumerLatencyTemplate != nil && (cfg.ConsumerProto == config.MQTT || cfg.ConsumerProto == config.MQTT5) {
+	// mqtt-rpc reuses PublisherProto/ConsumerProto == MQTT5 like a plain mqtt5 run, but it's
+	// the only MQTT mode where consumer latency (the responder's reply-processing time) is supported.
+	isMqttRpc := cfg.MqttRpc.ResponseTopicTemplate != nil
+	if cfg.ConsumerLatencyTemplate != nil && (cfg.ConsumerProto == config.MQTT || cfg.ConsumerProto == config.MQTT5) && !isMqttRpc {
 		fmt.Println("Consumer latency is not supported for MQTT consumers")
 		os.Exit(1)
 	}
