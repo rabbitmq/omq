@@ -411,7 +411,23 @@ var _ = Describe("OMQ CLI", func() {
 				}
 
 				session := omq(args)
-				Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+				select {
+				case <-session.Exited:
+					Expect(session.ExitCode()).Should(Equal(0))
+				case <-time.After(5 * time.Second):
+					GinkgoWriter.Printf(
+						"omq did not exit within 5s; requesting shutdown for diagnostics\nstderr:\n%s\n",
+						session.Err.Contents(),
+					)
+					session.Signal(os.Interrupt)
+					select {
+					case <-session.Exited:
+						GinkgoWriter.Printf("stdout after diagnostic shutdown:\n%s\n", session.Out.Contents())
+					case <-time.After(5 * time.Second):
+						GinkgoWriter.Printf("omq did not exit after diagnostic shutdown\n")
+					}
+					Fail("omq did not exit within 5 seconds")
+				}
 				return session
 			}
 
@@ -424,6 +440,13 @@ var _ = Describe("OMQ CLI", func() {
 			Expect(publishedWithMaxInFlight1).Should(BeNumerically(">", 0))
 			Expect(publishedWithMaxInFlight8).Should(BeNumerically(">", 0))
 			// we don't expect 8x the throughput, but at least 2x
+			if publishedWithMaxInFlight8 <= publishedWithMaxInFlight1*2 {
+				GinkgoWriter.Printf(
+					"published messages: max-in-flight=1: %.0f, max-in-flight=8: %.0f\n",
+					publishedWithMaxInFlight1,
+					publishedWithMaxInFlight8,
+				)
+			}
 			Expect(publishedWithMaxInFlight8).Should(BeNumerically(">", publishedWithMaxInFlight1*2))
 		})
 	})
