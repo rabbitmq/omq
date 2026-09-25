@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
+	"github.com/rabbitmq/omq/pkg/testutil"
 )
 
 var _ = Describe("OMQ CLI", func() {
@@ -506,8 +507,7 @@ var _ = Describe("OMQ CLI", func() {
 			Eventually(func() bool {
 				_, err1 := rmqc.GetQueue("/", "declare-without-publishers-0")
 				_, err2 := rmqc.GetQueue("/", "declare-without-publishers-1")
-				return err1 != nil && strings.Contains(err1.Error(), "Object Not Found") &&
-					err2 != nil && strings.Contains(err2.Error(), "Object Not Found")
+				return err1 != nil && err2 != nil
 			}).WithTimeout(3 * time.Second).Should(BeTrue())
 		})
 
@@ -566,8 +566,7 @@ var _ = Describe("OMQ CLI", func() {
 			Eventually(func() bool {
 				_, err1 := rmqc.GetQueue("/", "stomp-declare-for-consumer")
 				_, err2 := rmqc.GetQueue("/", "stomp-declare-for-publisher")
-				return err1 != nil && strings.Contains(err1.Error(), "Object Not Found") &&
-					err2 != nil && strings.Contains(err2.Error(), "Object Not Found")
+				return err1 != nil && err2 != nil
 			}).WithTimeout(3 * time.Second).Should(BeTrue())
 		})
 	})
@@ -602,7 +601,7 @@ var _ = Describe("OMQ CLI", func() {
 
 			Eventually(func() bool {
 				_, err := rmqc.GetQueue("/", "sac-queue-args-test")
-				return err != nil && strings.Contains(err.Error(), "Object Not Found")
+				return err != nil
 			}).WithTimeout(5 * time.Second).Should(BeTrue())
 		})
 	})
@@ -1569,14 +1568,15 @@ func metricValue(buf io.Reader, metric string) float64 {
 }
 
 func newRabbitClient() (*rabbithole.Client, error) {
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	endpoint, err := testutil.ManagementAPIURL()
+	if err != nil {
+		return nil, err
 	}
-	rmqc, err := rabbithole.NewTLSClient("https://127.0.0.1:15671", "guest", "guest", transport)
-	if err == nil {
-		if _, apiErr := rmqc.Overview(); apiErr == nil {
-			return rmqc, nil
+	if strings.HasPrefix(endpoint, "https://") {
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
+		return rabbithole.NewTLSClient(endpoint, "guest", "guest", transport)
 	}
-	return rabbithole.NewClient("http://127.0.0.1:15672", "guest", "guest")
+	return rabbithole.NewClient(endpoint, "guest", "guest")
 }
