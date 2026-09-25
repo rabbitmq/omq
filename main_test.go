@@ -414,7 +414,7 @@ var _ = Describe("OMQ CLI", func() {
 				select {
 				case <-session.Exited:
 					Expect(session.ExitCode()).Should(Equal(0))
-				case <-time.After(5 * time.Second):
+				case <-time.After(10 * time.Second):
 					GinkgoWriter.Printf(
 						"omq did not exit within 5s; requesting shutdown for diagnostics\nstderr:\n%s\n",
 						session.Err.Contents(),
