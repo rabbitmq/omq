@@ -3,7 +3,7 @@ package mqtt
 import (
 	"context"
 	"crypto/tls"
-	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,6 +37,10 @@ func NewMqtt5Responder(ctx context.Context, cfg config.Config, id int) Mqtt5Resp
 
 func (c Mqtt5Responder) Start(consumerReady chan bool) {
 	var msgsHandled atomic.Int64
+	var replyWg sync.WaitGroup
+	// paho Publish writes the connection without a lock. Reply goroutines must
+	// not call it concurrently.
+	var publishMu sync.Mutex
 	subscribed := make(chan struct{}, 1)
 
 	// set inside OnConnectionUp, before subscribing -- guaranteed to be populated
@@ -45,69 +49,31 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 
 	replyMsg := utils.MessageBody(c.Config.MqttRpc.ReplySize, c.Config.MqttRpc.ReplySizeTemplate, c.Id)
 
+	// Return immediately. paho delivers publishes and acks them on one goroutine;
+	// sleeping or publishing a QoS>0 reply here stalls that goroutine and can
+	// deadlock (router blocked in Publish waiting for PUBACK, reader blocked on a
+	// full receive buffer and unable to read the PUBACK).
 	handler := func(rcv paho.PublishReceived) (bool, error) {
-		// incremented on return, i.e. only once the reply (if any) has actually been
-		// sent -- otherwise a slow --consumer-latency could let Start's shutdown loop
-		// disconnect while a reply is still in flight.
-		defer msgsHandled.Add(1)
-
 		payload := rcv.Packet.Payload
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
 		metrics.RecordEndToEndLatency(latency)
 		metrics.MessagesConsumedMetric(0).Inc()
 
-		// Consumer latency: simulate processing time before the reply is sent.
-		if c.Config.ConsumerLatencyTemplate != nil {
-			latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, c.Id)
-			consumerLatency, err := time.ParseDuration(latencyStr)
-			if err != nil {
-				log.Error("failed to parse template-generated latency", "value", latencyStr, "error", err)
-				os.Exit(1)
-			}
-			if consumerLatency > 0 {
-				log.Debug("consumer latency", "id", c.Id, "latency", consumerLatency)
-				time.Sleep(consumerLatency)
-			}
-		}
-
 		if rcv.Packet.Properties == nil || rcv.Packet.Properties.ResponseTopic == "" {
 			log.Debug("request without a response topic, dropping", "id", c.Id, "topic", c.Topic, "timeSent", timeSent)
+			msgsHandled.Add(1)
 			return true, nil
 		}
 
-		cm := connMgr.Load()
-		if cm == nil {
-			log.Error("responder not connected, can't send reply", "id", c.Id)
-			return true, nil
-		}
-
-		var replyBody []byte
-		if c.Config.MqttRpc.ReplySizeTemplate != nil {
-			replyBody = utils.MessageBody(c.Config.MqttRpc.ReplySize, c.Config.MqttRpc.ReplySizeTemplate, c.Id)
-		} else {
-			replyBody = make([]byte, len(replyMsg))
-			copy(replyBody, replyMsg)
-		}
-
-		reply := &paho.Publish{
-			QoS:     byte(c.Config.MqttConsumer.QoS),
-			Topic:   rcv.Packet.Properties.ResponseTopic,
-			Payload: replyBody,
-			Properties: &paho.PublishProperties{
-				CorrelationData: rcv.Packet.Properties.CorrelationData,
-			},
-		}
-
-		startTime := time.Now()
-		_, err := cm.Publish(c.ctx, reply)
-		if err != nil {
-			log.Error("reply sending failure", "id", c.Id, "error", err)
-			return true, nil
-		}
-		metrics.MessagesPublished.Inc()
-		metrics.RecordPublishingLatency(time.Since(startTime))
-		log.Debug("reply sent", "id", c.Id, "topic", reply.Topic, "latency", time.Since(startTime))
-
+		// Copy before returning: the packet buffer can be reused once the handler returns.
+		responseTopic := rcv.Packet.Properties.ResponseTopic
+		correlationData := append([]byte(nil), rcv.Packet.Properties.CorrelationData...)
+		replyWg.Add(1)
+		go func() {
+			defer replyWg.Done()
+			defer msgsHandled.Add(1)
+			c.sendReply(&connMgr, &publishMu, replyMsg, responseTopic, correlationData)
+		}()
 		return true, nil
 	}
 
@@ -169,7 +135,7 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 	if err != nil {
 		// AwaitConnection only returns an error if the context is cancelled
 		close(consumerReady)
-		c.stop(connection, "context cancelled")
+		c.stop(connection, nil, "context cancelled")
 		return
 	}
 
@@ -179,23 +145,84 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 		close(consumerReady)
 	case <-c.ctx.Done():
 		close(consumerReady)
-		c.stop(connection, "context cancelled")
+		c.stop(connection, &replyWg, "context cancelled")
 		return
 	}
 
 	for msgsHandled.Load() < int64(c.Config.ConsumeCount) {
 		select {
 		case <-c.ctx.Done():
-			c.stop(connection, "time limit reached")
+			c.stop(connection, &replyWg, "time limit reached")
 			return
 		case <-time.After(100 * time.Millisecond):
 			// Check more frequently to respond to context cancellation faster
 		}
 	}
-	c.stop(connection, "--cmessages value reached")
+	c.stop(connection, &replyWg, "--cmessages value reached")
 }
 
-func (c Mqtt5Responder) stop(connection *autopaho.ConnectionManager, reason string) {
+func (c Mqtt5Responder) sendReply(connMgr *atomic.Pointer[autopaho.ConnectionManager], publishMu *sync.Mutex, replyMsg []byte, responseTopic string, correlationData []byte) {
+	if c.Config.ConsumerLatencyTemplate != nil {
+		latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, c.Id)
+		consumerLatency, err := time.ParseDuration(latencyStr)
+		if err != nil {
+			log.Error("failed to parse template-generated latency", "value", latencyStr, "error", err)
+		} else if consumerLatency > 0 {
+			log.Debug("consumer latency", "id", c.Id, "latency", consumerLatency)
+			timer := time.NewTimer(consumerLatency)
+			select {
+			case <-timer.C:
+			case <-c.ctx.Done():
+				// Shutdown should not wait out the simulated processing time, but
+				// the request was already received, so still send the reply.
+				timer.Stop()
+			}
+		}
+	}
+
+	cm := connMgr.Load()
+	if cm == nil {
+		log.Error("responder not connected, can't send reply", "id", c.Id)
+		return
+	}
+
+	var replyBody []byte
+	if c.Config.MqttRpc.ReplySizeTemplate != nil {
+		replyBody = utils.MessageBody(c.Config.MqttRpc.ReplySize, c.Config.MqttRpc.ReplySizeTemplate, c.Id)
+	} else {
+		replyBody = make([]byte, len(replyMsg))
+		copy(replyBody, replyMsg)
+	}
+
+	reply := &paho.Publish{
+		QoS:     byte(c.Config.MqttConsumer.QoS),
+		Topic:   responseTopic,
+		Payload: replyBody,
+		Properties: &paho.PublishProperties{
+			CorrelationData: correlationData,
+		},
+	}
+
+	// Detached from c.ctx so a reply already in flight still goes out on shutdown.
+	pubCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	startTime := time.Now()
+	publishMu.Lock()
+	_, err := cm.Publish(pubCtx, reply)
+	publishMu.Unlock()
+	if err != nil {
+		log.Error("reply sending failure", "id", c.Id, "error", err)
+		return
+	}
+	metrics.MessagesPublished.Inc()
+	metrics.RecordPublishingLatency(time.Since(startTime))
+	log.Debug("reply sent", "id", c.Id, "topic", reply.Topic, "latency", time.Since(startTime))
+}
+
+func (c Mqtt5Responder) stop(connection *autopaho.ConnectionManager, replyWg *sync.WaitGroup, reason string) {
+	if replyWg != nil {
+		replyWg.Wait()
+	}
 	log.Debug("closing responder connection", "id", c.Id, "reason", reason)
 	if connection != nil {
 		disconnectCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
