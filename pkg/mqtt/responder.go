@@ -37,10 +37,6 @@ func NewMqtt5Responder(ctx context.Context, cfg config.Config, id int) Mqtt5Resp
 
 func (c Mqtt5Responder) Start(consumerReady chan bool) {
 	var msgsHandled atomic.Int64
-	var replyWg sync.WaitGroup
-	// paho Publish writes the connection without a lock. Reply goroutines must
-	// not call it concurrently.
-	var publishMu sync.Mutex
 	subscribed := make(chan struct{}, 1)
 
 	// set inside OnConnectionUp, before subscribing -- guaranteed to be populated
@@ -48,11 +44,29 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 	var connMgr atomic.Pointer[autopaho.ConnectionManager]
 
 	replyMsg := utils.MessageBody(c.Config.MqttRpc.ReplySize, c.Config.MqttRpc.ReplySizeTemplate, c.Id)
+	// One worker for every reply. The handler must not publish: paho acks on the
+	// router goroutine, and a QoS>0 Publish waits for a PUBACK that incoming()
+	// cannot read if that goroutine is blocked. The queue does not block the
+	// handler, so it cannot fill the receive buffer either.
+	replies := newReplyQueue()
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		for {
+			job, ok := replies.pop()
+			if !ok {
+				return
+			}
+			c.sendReply(&connMgr, replyMsg, job.responseTopic, job.correlationData)
+			msgsHandled.Add(1)
+			replies.finished()
+		}
+	}()
+	defer func() {
+		replies.close()
+		<-workerDone
+	}()
 
-	// Return immediately. paho delivers publishes and acks them on one goroutine;
-	// sleeping or publishing a QoS>0 reply here stalls that goroutine and can
-	// deadlock (router blocked in Publish waiting for PUBACK, reader blocked on a
-	// full receive buffer and unable to read the PUBACK).
 	handler := func(rcv paho.PublishReceived) (bool, error) {
 		payload := rcv.Packet.Payload
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
@@ -68,14 +82,10 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 		}
 
 		// Copy before returning: the packet buffer can be reused once the handler returns.
-		responseTopic := rcv.Packet.Properties.ResponseTopic
-		correlationData := append([]byte(nil), rcv.Packet.Properties.CorrelationData...)
-		replyWg.Add(1)
-		go func() {
-			defer replyWg.Done()
-			defer msgsHandled.Add(1)
-			c.sendReply(&connMgr, &publishMu, replyMsg, responseTopic, correlationData)
-		}()
+		replies.push(replyJob{
+			responseTopic:   rcv.Packet.Properties.ResponseTopic,
+			correlationData: append([]byte(nil), rcv.Packet.Properties.CorrelationData...),
+		})
 		return true, nil
 	}
 
@@ -141,7 +151,7 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 	if err != nil {
 		// AwaitConnection only returns an error if the context is cancelled
 		close(consumerReady)
-		c.stop(connection, nil, "context cancelled")
+		c.stop(connection, replies, "context cancelled")
 		return
 	}
 
@@ -151,23 +161,23 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 		close(consumerReady)
 	case <-c.ctx.Done():
 		close(consumerReady)
-		c.stop(connection, &replyWg, "context cancelled")
+		c.stop(connection, replies, "context cancelled")
 		return
 	}
 
 	for msgsHandled.Load() < int64(c.Config.ConsumeCount) {
 		select {
 		case <-c.ctx.Done():
-			c.stop(connection, &replyWg, "time limit reached")
+			c.stop(connection, replies, "time limit reached")
 			return
 		case <-time.After(100 * time.Millisecond):
 			// Check more frequently to respond to context cancellation faster
 		}
 	}
-	c.stop(connection, &replyWg, "--cmessages value reached")
+	c.stop(connection, replies, "--cmessages value reached")
 }
 
-func (c Mqtt5Responder) sendReply(connMgr *atomic.Pointer[autopaho.ConnectionManager], publishMu *sync.Mutex, replyMsg []byte, responseTopic string, correlationData []byte) {
+func (c Mqtt5Responder) sendReply(connMgr *atomic.Pointer[autopaho.ConnectionManager], replyMsg []byte, responseTopic string, correlationData []byte) {
 	if c.Config.ConsumerLatencyTemplate != nil {
 		latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, c.Id)
 		consumerLatency, err := time.ParseDuration(latencyStr)
@@ -212,14 +222,12 @@ func (c Mqtt5Responder) sendReply(connMgr *atomic.Pointer[autopaho.ConnectionMan
 	// Detached from c.ctx so a reply already in flight still goes out on shutdown.
 	pubCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	publishMu.Lock()
-	// Stamp after the publish lock so reply latency is broker transit, not time
-	// queued behind another reply and not --consumer-latency.
+	// One worker publishes, so no publish lock. Stamp immediately before Publish
+	// so reply latency is broker transit, not --consumer-latency.
 	utils.UpdatePayload(c.Config.UseMillis, &replyBody)
 	reply.Payload = replyBody
 	startTime := time.Now()
 	_, err := cm.Publish(pubCtx, reply)
-	publishMu.Unlock()
 	if err != nil {
 		log.Error("reply sending failure", "id", c.Id, "error", err)
 		return
@@ -229,9 +237,9 @@ func (c Mqtt5Responder) sendReply(connMgr *atomic.Pointer[autopaho.ConnectionMan
 	log.Debug("reply sent", "id", c.Id, "topic", reply.Topic, "latency", time.Since(startTime))
 }
 
-func (c Mqtt5Responder) stop(connection *autopaho.ConnectionManager, replyWg *sync.WaitGroup, reason string) {
-	if replyWg != nil {
-		replyWg.Wait()
+func (c Mqtt5Responder) stop(connection *autopaho.ConnectionManager, replies *replyQueue, reason string) {
+	if replies != nil {
+		replies.waitIdle()
 	}
 	log.Debug("closing responder connection", "id", c.Id, "reason", reason)
 	if connection != nil {
@@ -239,4 +247,82 @@ func (c Mqtt5Responder) stop(connection *autopaho.ConnectionManager, replyWg *sy
 		defer cancel()
 		_ = connection.Disconnect(disconnectCtx)
 	}
+}
+
+// replyJob is one response to publish. correlationData is already copied out of
+// the packet buffer.
+type replyJob struct {
+	responseTopic   string
+	correlationData []byte
+}
+
+// replyQueue is an unbounded queue drained by one worker. push must not block:
+// it runs on paho's router goroutine.
+type replyQueue struct {
+	mu       sync.Mutex
+	cond     *sync.Cond
+	jobs     []replyJob
+	inFlight bool
+	closed   bool
+}
+
+func newReplyQueue() *replyQueue {
+	q := &replyQueue{}
+	q.cond = sync.NewCond(&q.mu)
+	return q
+}
+
+func (q *replyQueue) push(job replyJob) {
+	q.mu.Lock()
+	if q.closed {
+		q.mu.Unlock()
+		return
+	}
+	q.jobs = append(q.jobs, job)
+	q.mu.Unlock()
+	q.cond.Signal()
+}
+
+func (q *replyQueue) pop() (replyJob, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for len(q.jobs) == 0 && !q.closed {
+		q.cond.Wait()
+	}
+	if len(q.jobs) == 0 {
+		return replyJob{}, false
+	}
+	job := q.jobs[0]
+	q.jobs[0] = replyJob{}
+	q.jobs = q.jobs[1:]
+	if len(q.jobs) == 0 {
+		q.jobs = nil
+	}
+	q.inFlight = true
+	return job, true
+}
+
+func (q *replyQueue) finished() {
+	q.mu.Lock()
+	q.inFlight = false
+	idle := len(q.jobs) == 0
+	q.mu.Unlock()
+	if idle {
+		q.cond.Broadcast()
+	}
+}
+
+func (q *replyQueue) waitIdle() {
+	q.mu.Lock()
+	for len(q.jobs) > 0 || q.inFlight {
+		q.cond.Wait()
+	}
+	q.mu.Unlock()
+}
+
+func (q *replyQueue) close() {
+	q.mu.Lock()
+	q.closed = true
+	q.mu.Unlock()
+	q.cond.Broadcast()
 }

@@ -176,30 +176,75 @@ func (r *Mqtt5Requester) StartRequesting() string {
 	limiter := utils.RateLimiter(r.Config.Rate)
 
 	var msgSent atomic.Int64
-	for {
+	next := func() (seq uint64, stop string, ok bool) {
 		select {
 		case <-r.ctx.Done():
-			return "time limit reached"
+			return 0, "time limit reached", false
 		default:
-			seq := uint64(msgSent.Add(1) - 1)
-			if seq >= uint64(r.Config.PublishCount) {
-				return "--pmessages value reached"
+		}
+		seq = uint64(msgSent.Add(1) - 1)
+		if seq >= uint64(r.Config.PublishCount) {
+			return 0, "--pmessages value reached", false
+		}
+		if r.Config.Rate > 0 {
+			_ = limiter.Wait(r.ctx)
+		}
+		return seq, "", true
+	}
+	// The slot stays taken until the matching reply or timeout, not when Publish
+	// returns. Acquiring it here is what caps outstanding RPCs.
+	acquire := func() bool {
+		select {
+		case r.sem <- struct{}{}:
+			return true
+		case <-r.ctx.Done():
+			return false
+		}
+	}
+
+	// One in-flight request means the next publish cannot start until this one is
+	// answered, so a worker would only add a goroutine. Call send directly.
+	if r.Config.MaxInFlight == 1 {
+		for {
+			seq, stop, ok := next()
+			if !ok {
+				return stop
 			}
-			if r.Config.Rate > 0 {
-				_ = limiter.Wait(r.ctx)
-			}
-			select {
-			case r.sem <- struct{}{}:
-			case <-r.ctx.Done():
+			if !acquire() {
 				return "context cancelled"
 			}
-			r.wg.Add(1)
-			// unlike a plain publisher, the in-flight slot (r.sem) is deliberately NOT
-			// released here: it's held until handleReply or expireRequest releases it.
-			go func(s uint64) {
-				defer r.wg.Done()
-				r.sendRequest(s)
-			}(seq)
+			r.sendRequest(seq)
+		}
+	}
+
+	// Fixed pool, not a goroutine per request. work is unbuffered, so a sequence
+	// is handed off only when a worker is free to publish. The semaphore, not the
+	// pool, is what waits for the reply.
+	work := make(chan uint64)
+	r.wg.Add(r.Config.MaxInFlight)
+	for range r.Config.MaxInFlight {
+		go func() {
+			defer r.wg.Done()
+			for seq := range work {
+				r.sendRequest(seq)
+			}
+		}()
+	}
+	defer close(work)
+
+	for {
+		seq, stop, ok := next()
+		if !ok {
+			return stop
+		}
+		if !acquire() {
+			return "context cancelled"
+		}
+		select {
+		case work <- seq:
+		case <-r.ctx.Done():
+			<-r.sem
+			return "context cancelled"
 		}
 	}
 }

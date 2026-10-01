@@ -156,7 +156,8 @@ separately and are the latencies to watch. `omq_rpc_request_latency_seconds` is
 requester to responder (the timestamp in the request payload until the responder
 receives it). `omq_rpc_reply_latency_seconds` is responder to requester (the
 timestamp written into the reply just before it is published, until the requester
-receives it). Neither includes `--consumer-latency`. The per-second log prints
+receives it). Neither includes `--consumer-latency`. Each responder applies that
+latency on one worker, so it is serial per responder. The per-second log prints
 those ranges as `request_min`/`request_max` and `reply_min`/`reply_max`.
 
 `omq_roundtrip_latency_seconds` remains the full call, from a successful request
