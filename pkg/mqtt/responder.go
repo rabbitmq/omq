@@ -165,12 +165,14 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 		return
 	}
 
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for msgsHandled.Load() < int64(c.Config.ConsumeCount) {
 		select {
 		case <-c.ctx.Done():
 			c.stop(connection, replies, "time limit reached")
 			return
-		case <-time.After(100 * time.Millisecond):
+		case <-ticker.C:
 			// Check more frequently to respond to context cancellation faster
 		}
 	}

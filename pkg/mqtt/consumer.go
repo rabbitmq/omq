@@ -145,12 +145,14 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 	}
 
 	// TODO: currently we can consume more than ConsumerCount messages
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for msgsReceived.Load() < int64(c.Config.ConsumeCount) {
 		select {
 		case <-c.ctx.Done():
 			c.Stop("time limit reached")
 			return
-		case <-time.After(100 * time.Millisecond):
+		case <-ticker.C:
 			// Check more frequently to respond to context cancellation faster
 		}
 	}
