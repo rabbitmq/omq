@@ -565,6 +565,12 @@ var _ = Describe("OMQ CLI", func() {
 			Entry("MQTT 3 publisher", []string{"--mqtt-publisher-version=3"}, "--mqtt-publisher-version must be 5 for mqtt-rpc"),
 			Entry("MQTT 3 consumer", []string{"--mqtt-consumer-version=3"}, "--mqtt-consumer-version must be 5 for mqtt-rpc"),
 		)
+
+		It("still rejects --consumer-latency for plain MQTT consumers", func() {
+			session := omq([]string{"mqtt", "--consumer-latency=1ms", "--time=1s", "--publishers=0", "--consumers=0"})
+			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(1))
+			Eventually(session.Out).Should(gbytes.Say("Consumer latency is not supported for MQTT consumers"))
+		})
 	})
 
 	Describe("declares queues for AMQP and STOMP clients", func() {

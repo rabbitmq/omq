@@ -710,15 +710,17 @@ func start(cfg config.Config) {
 		}
 	}
 
-	// mqtt-rpc reuses PublisherProto/ConsumerProto == MQTT5 like a plain mqtt5 run, but it's
-	// the only MQTT mode where consumer latency (the responder's reply-processing time) is supported.
-	isMqttRpc := cfg.MqttRpc.ResponseTopicTemplate != nil
+	// mqtt-rpc is the only command that sets both sides to MQTT5. Plain MQTT stays on
+	// config.MQTT even at protocol version 5. Don't infer RPC from
+	// MqttRpc.ResponseTopicTemplate: that flag's default is applied for every command,
+	// so the template is always parsed and a nil-check would disable this guard.
+	isMqttRpc := cfg.PublisherProto == config.MQTT5 && cfg.ConsumerProto == config.MQTT5
 	if cfg.ConsumerLatencyTemplate != nil && (cfg.ConsumerProto == config.MQTT || cfg.ConsumerProto == config.MQTT5) && !isMqttRpc {
 		fmt.Println("Consumer latency is not supported for MQTT consumers")
 		os.Exit(1)
 	}
 
-	if cfg.ConsumerProto == config.MQTT5 && cfg.MqttConsumer.SubscriptionsPerConsumer != 1 {
+	if isMqttRpc && cfg.MqttConsumer.SubscriptionsPerConsumer != 1 {
 		log.Info("WARNING: --mqtt-subscriptions-per-consumer is ignored for mqtt-rpc (a responder always makes exactly one subscription)")
 	}
 
@@ -736,7 +738,7 @@ func start(cfg config.Config) {
 			fmt.Println("--detect-out-of-order-messages/--detect-gaps-in-messages are not supported with MQTT v3 consumers (use --mqtt-consumer-version 5)")
 			os.Exit(1)
 		}
-		if cfg.PublisherProto == config.MQTT5 || cfg.ConsumerProto == config.MQTT5 {
+		if isMqttRpc {
 			fmt.Println("--detect-out-of-order-messages/--detect-gaps-in-messages are not supported with mqtt-rpc")
 			os.Exit(1)
 		}
