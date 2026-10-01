@@ -169,6 +169,20 @@ contain `+` or `#`.
 The requester subscribes to the response topic at the reply QoS, and the responder
 subscribes to the request topic at the request QoS, so the two legs are independent.
 
+RabbitMQ does not support MQTT shared subscriptions, so `--consumers` greater than 1
+on one request topic does not load-balance: every responder receives every request and
+sends its own reply. Shard on the client instead. Give each responder its own topic and
+pin publishers to a responder (publisher `id` modulo the responder count):
+
+```shell
+$ omq mqtt-rpc --consumers 2 --publishers 10 \
+                --consume-from 'rpc/request/%d' \
+                --publish-to 'rpc/request/{{ mod .id 2 }}'
+```
+
+Topics that expand `%d` or `{{.id}}` already pair publisher N with consumer N. Those
+counts need to match, or the extra publishers time out and the extra responders sit idle.
+
 ### Stream Protocol
 
 `omq` supports RabbitMQ's native stream protocol via `rabbitmq-stream-go-client`. Use commands

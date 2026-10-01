@@ -587,6 +587,21 @@ var _ = Describe("OMQ CLI", func() {
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=4`))
 		})
 
+		It("warns when several responders share one request topic", func() {
+			session := omq([]string{
+				"mqtt-rpc",
+				"--publish-to=omq-rpc-fanout",
+				"--consume-from=omq-rpc-fanout",
+				"--consumers=2",
+				"--publishers=1",
+				"--pmessages=1",
+				"--time=3s",
+			})
+			Eventually(session.Err).WithTimeout(5 * time.Second).Should(gbytes.Say("responders share one request topic"))
+			session.Signal(os.Signal(os.Interrupt))
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+		})
+
 		It("still rejects --consumer-latency for plain MQTT consumers", func() {
 			session := omq([]string{"mqtt", "--consumer-latency=1ms", "--time=1s", "--publishers=0", "--consumers=0"})
 			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(1))

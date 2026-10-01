@@ -723,6 +723,9 @@ func start(cfg config.Config) {
 	if isMqttRpc && cfg.MqttConsumer.SubscriptionsPerConsumer != 1 {
 		log.Info("WARNING: --mqtt-subscriptions-per-consumer is ignored for mqtt-rpc (a responder always makes exactly one subscription)")
 	}
+	if isMqttRpc {
+		warnMqttRpcTopology(cfg)
+	}
 
 	if cfg.MaxInFlight > 1 && cfg.PublisherProto != config.AMQP && cfg.PublisherProto != config.AMQP091 && cfg.PublisherProto != config.MQTT && cfg.PublisherProto != config.MQTT5 && cfg.PublisherProto != config.STREAM {
 		fmt.Println("max-in-flight > 1 is only supported for AMQP, AMQP 0.9.1, MQTT, MQTT RPC, and STREAM publishers")
@@ -1326,6 +1329,30 @@ func sanitizeConfig(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+// warnMqttRpcTopology warns when the request topics cannot scale responders without
+// shared subscriptions, which RabbitMQ MQTT does not support. The workaround is
+// client-side sharding: one request topic per responder, publishers pinned to a
+// responder with {{ mod .id N }}.
+func warnMqttRpcTopology(cfg config.Config) {
+	if cfg.ConsumeFromTemplate == nil {
+		return
+	}
+	sameRequestTopic := utils.ResolveTerminus(cfg.ConsumeFromTemplate, 0) == utils.ResolveTerminus(cfg.ConsumeFromTemplate, 1)
+	if cfg.Consumers > 1 && sameRequestTopic {
+		log.Info("WARNING: mqtt-rpc responders share one request topic, so each request is delivered to every responder and each sends a reply. RabbitMQ does not support MQTT shared subscriptions; give each responder its own topic and pin publishers to one, for example --consume-from 'rpc/request/%d' --publish-to 'rpc/request/{{ mod .id "+strconv.Itoa(cfg.Consumers)+" }}'",
+			"consumers", cfg.Consumers)
+	}
+	if cfg.PublishToTemplate == nil {
+		return
+	}
+	publishersPairedByID := utils.ResolveTerminus(cfg.PublishToTemplate, 0) != utils.ResolveTerminus(cfg.PublishToTemplate, 1)
+	consumersPairedByID := !sameRequestTopic
+	if publishersPairedByID && consumersPairedByID && cfg.Publishers != cfg.Consumers {
+		log.Info("WARNING: mqtt-rpc request topics vary by client id, but publisher and consumer counts differ; unpaired clients will time out or sit idle. Use the same count, or pin publishers onto responder topics with --publish-to 'rpc/request/{{ mod .id N }}' and --consume-from 'rpc/request/%d'",
+			"publishers", cfg.Publishers, "consumers", cfg.Consumers)
+	}
 }
 
 func validateMqttRpcCommand(cmd *cobra.Command, cfg *config.Config) error {
