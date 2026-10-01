@@ -120,6 +120,9 @@ func RootCmd() *cobra.Command {
 	mqttConsumerFlags.Uint16Var(&cfg.MqttConsumer.ReceiveMaximum, "mqtt-consumer-receive-maximum", 8,
 		"MQTT v5 Receive Maximum sent in CONNECT (max concurrent QoS 1/2 in-flight publishes); also sizes an internal per-connection buffer, so large values increase memory usage significantly")
 
+	mqttConsumerFlags.DurationVar(&cfg.MqttConsumer.KeepAlive, "mqtt-consumer-keep-alive", 20*time.Second,
+		"MQTT consumer keep alive interval, in whole seconds (0 disables keep alive)")
+
 	mqttPublisherFlags := pflag.NewFlagSet("mqtt-publisher", pflag.ContinueOnError)
 	mqttPublisherFlags.IntVar(&cfg.MqttPublisher.Version, "mqtt-publisher-version", 5,
 		"MQTT consumer protocol version (3, 4 or 5; default=5)")
@@ -129,6 +132,8 @@ func RootCmd() *cobra.Command {
 		"MQTT publisher clean session")
 	mqttPublisherFlags.DurationVar(&cfg.MqttPublisher.SessionExpiryInterval, "mqtt-publisher-session-expiry-interval", 0,
 		"MQTT publisher session expiry interval")
+	mqttPublisherFlags.DurationVar(&cfg.MqttPublisher.KeepAlive, "mqtt-publisher-keep-alive", 20*time.Second,
+		"MQTT publisher keep alive interval, in whole seconds (0 disables keep alive)")
 	mqttPublisherFlags.StringArrayVar(&mqttUserProperties, "mqtt-user-property", []string{},
 		"MQTT v5 user property, eg. key1=val1")
 	mqttPublisherFlags.BoolSliceVar(&cfg.MqttPublisher.Retained, "mqtt-retained", []bool{false},
@@ -1100,6 +1105,18 @@ func sanitizeConfig(cfg *config.Config) error {
 		}
 		cfg.MqttRpc.ReplySize = size
 		cfg.MqttRpc.ReplySizeTemplate = tmpl
+	}
+
+	for _, side := range []struct {
+		flag string
+		d    time.Duration
+	}{
+		{"--mqtt-publisher-keep-alive", cfg.MqttPublisher.KeepAlive},
+		{"--mqtt-consumer-keep-alive", cfg.MqttConsumer.KeepAlive},
+	} {
+		if side.d < 0 || side.d%time.Second != 0 || side.d > math.MaxUint16*time.Second {
+			return fmt.Errorf("%s must be a whole number of seconds between 0 and %d", side.flag, math.MaxUint16)
+		}
 	}
 
 	if cfg.RequeueRate > 100 {

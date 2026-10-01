@@ -54,6 +54,7 @@ func (c MqttConsumer) Start(cosumerReady chan bool) {
 		SetClientID(utils.InjectId(c.Config.ConsumerId, c.Id)).
 		SetAutoReconnect(true).
 		SetCleanSession(c.Config.MqttConsumer.CleanSession).
+		SetKeepAlive(c.Config.MqttConsumer.KeepAlive).
 		SetConnectTimeout(30 * time.Second).
 		SetWriteTimeout(30 * time.Second).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {

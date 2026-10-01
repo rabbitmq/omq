@@ -78,7 +78,7 @@ func (r *Mqtt5Requester) Start(requesterReady chan bool, startRequesting chan bo
 		ConnectPassword:               []byte(pass),
 		CleanStartOnInitialConnection: r.Config.MqttPublisher.CleanSession,
 		SessionExpiryInterval:         uint32(r.Config.MqttPublisher.SessionExpiryInterval.Seconds()),
-		KeepAlive:                     20,
+		KeepAlive:                     uint16(r.Config.MqttPublisher.KeepAlive / time.Second),
 		ReconnectBackoff:              autopaho.NewConstantBackoff(1 * time.Second),
 		ConnectTimeout:                30 * time.Second,
 		TlsCfg: &tls.Config{

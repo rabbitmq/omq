@@ -106,6 +106,7 @@ type MqttOptions struct {
 	UserPropertyTemplates    map[string]*template.Template
 	Retained                 []bool
 	ReceiveMaximum           uint16
+	KeepAlive                time.Duration
 }
 
 type MqttRpcOptions struct {
