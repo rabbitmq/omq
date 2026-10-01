@@ -230,6 +230,14 @@ func (r *Mqtt5Requester) sendRequest(seq uint64) {
 			log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
 		}
 	}
+	if pub.Properties.MessageExpiry == nil {
+		// Drop the request at the broker shortly after the client gives up, so a
+		// responder that reconnects does not answer a request the requester has
+		// already timed out. MQTT expiry is whole seconds and 0 can mean "expire
+		// immediately", so keep the message for at least one second past the timeout.
+		secs := rpcMessageExpiry(r.Config.MqttRpc.Timeout)
+		pub.Properties.MessageExpiry = &secs
+	}
 
 	// Register the request as pending before publishing so a very fast reply
 	// can never race ahead of us recording it.
@@ -300,6 +308,13 @@ func (r *Mqtt5Requester) handleReply(rcv paho.PublishReceived) {
 // correlationDataLen is requester id (uint32) + per-requester sequence (uint64).
 // The responder echoes these bytes unchanged; the id stops publishers that share
 // a response topic from accepting each other's replies.
+// rpcMessageExpiry is the MQTT message expiry (whole seconds) for a request.
+// It is one second longer than the client timeout so the broker does not drop
+// the request before the requester has recorded a timeout, and it is never 0.
+func rpcMessageExpiry(timeout time.Duration) uint32 {
+	return uint32(timeout/time.Second) + 1
+}
+
 const correlationDataLen = 12
 
 func encodeCorrelation(requesterID int, seq uint64) []byte {

@@ -3,6 +3,7 @@ package mqtt
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 func TestCorrelationRoundTrip(t *testing.T) {
@@ -13,6 +14,15 @@ func TestCorrelationRoundTrip(t *testing.T) {
 	id, seq, ok := decodeCorrelation(encoded)
 	if !ok || id != 7 || seq != 42 {
 		t.Fatalf("decode = (%d, %d, %v), want (7, 42, true)", id, seq, ok)
+	}
+}
+
+func TestRpcMessageExpiryOutlivesClientTimeout(t *testing.T) {
+	if got := rpcMessageExpiry(5 * time.Second); got != 6 {
+		t.Fatalf("rpcMessageExpiry(5s) = %d, want 6", got)
+	}
+	if got := rpcMessageExpiry(500 * time.Millisecond); got != 1 {
+		t.Fatalf("rpcMessageExpiry(500ms) = %d, want 1", got)
 	}
 }
 
