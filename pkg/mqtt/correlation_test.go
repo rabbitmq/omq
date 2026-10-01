@@ -1,6 +1,9 @@
 package mqtt
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestCorrelationRoundTrip(t *testing.T) {
 	encoded := encodeCorrelation(7, 42)
@@ -10,6 +13,18 @@ func TestCorrelationRoundTrip(t *testing.T) {
 	id, seq, ok := decodeCorrelation(encoded)
 	if !ok || id != 7 || seq != 42 {
 		t.Fatalf("decode = (%d, %d, %v), want (7, 42, true)", id, seq, ok)
+	}
+}
+
+func TestInFlightReceiveMaximumClampsToUint16(t *testing.T) {
+	if got := inFlightReceiveMaximum(0); got != 1 {
+		t.Fatalf("inFlightReceiveMaximum(0) = %d, want 1", got)
+	}
+	if got := inFlightReceiveMaximum(8); got != 8 {
+		t.Fatalf("inFlightReceiveMaximum(8) = %d, want 8", got)
+	}
+	if got := inFlightReceiveMaximum(math.MaxUint16 + 5); got != math.MaxUint16 {
+		t.Fatalf("inFlightReceiveMaximum(overflow) = %d, want %d", got, uint16(math.MaxUint16))
 	}
 }
 

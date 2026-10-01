@@ -86,6 +86,7 @@ func (r *Mqtt5Requester) Start(requesterReady chan bool, startRequesting chan bo
 		OnConnectError: func(err error) {
 			log.Info("requester failed to connect", "id", r.Id, "error", err)
 		},
+		ConnectPacketBuilder: connectReceiveMaximum(inFlightReceiveMaximum(r.Config.MaxInFlight)),
 		ClientConfig: paho.ClientConfig{
 			ClientID: utils.InjectId(r.Config.PublisherId, r.Id),
 			OnClientError: func(err error) {

@@ -111,6 +111,7 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 		OnConnectError: func(err error) {
 			log.Info("responder failed to connect", "id", c.Id, "error", err)
 		},
+		ConnectPacketBuilder: connectReceiveMaximum(c.Config.MqttConsumer.ReceiveMaximum),
 		ClientConfig: paho.ClientConfig{
 			ClientID: utils.InjectId(c.Config.ConsumerId, c.Id),
 			OnClientError: func(err error) {

@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"context"
+	"math"
 	"net/url"
 	"strings"
 	"text/template"
@@ -42,6 +43,34 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) Publisher {
 // in the background until it succeeds or ctx is cancelled. `subscribed` is a buffered
 // (size 1) channel that gets signalled (non-blocking) once the subscription succeeds,
 // so it's safe to call this from within OnConnectionUp.
+// connectReceiveMaximum caps the CONNECT Receive Maximum. paho otherwise defaults
+// it to 65535 and sizes an internal publish buffer to match (~512KB per connection).
+func connectReceiveMaximum(n uint16) func(*paho.Connect, *url.URL) (*paho.Connect, error) {
+	if n == 0 {
+		n = 1
+	}
+	return func(cp *paho.Connect, _ *url.URL) (*paho.Connect, error) {
+		if cp.Properties == nil {
+			cp.Properties = &paho.ConnectProperties{}
+		}
+		receiveMaximum := n
+		cp.Properties.ReceiveMaximum = &receiveMaximum
+		return cp, nil
+	}
+}
+
+// inFlightReceiveMaximum clamps a publisher in-flight limit to the MQTT uint16
+// Receive Maximum range.
+func inFlightReceiveMaximum(maxInFlight int) uint16 {
+	if maxInFlight < 1 {
+		return 1
+	}
+	if maxInFlight > int(math.MaxUint16) {
+		return math.MaxUint16
+	}
+	return uint16(maxInFlight)
+}
+
 func subscribeWithRetry(ctx context.Context, cm *autopaho.ConnectionManager, subscriptions []paho.SubscribeOptions, subscribed chan struct{}, role string, id int) {
 	logSubscribed := func() {
 		for _, sub := range subscriptions {
