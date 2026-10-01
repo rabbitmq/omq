@@ -192,8 +192,7 @@ func (r *Mqtt5Requester) sendRequest(seq uint64) {
 	}
 	utils.UpdatePayload(r.Config.UseMillis, &body)
 
-	correlationData := make([]byte, 8)
-	binary.BigEndian.PutUint64(correlationData, seq)
+	correlationData := encodeCorrelation(r.Id, seq)
 
 	pub := &paho.Publish{
 		QoS:     byte(r.Config.MqttPublisher.QoS),
@@ -249,11 +248,21 @@ func (r *Mqtt5Requester) sendRequest(seq uint64) {
 }
 
 func (r *Mqtt5Requester) handleReply(rcv paho.PublishReceived) {
-	if rcv.Packet.Properties == nil || len(rcv.Packet.Properties.CorrelationData) != 8 {
+	if rcv.Packet.Properties == nil {
 		log.Debug("reply without valid correlation data, ignoring", "id", r.Id)
 		return
 	}
-	seq := binary.BigEndian.Uint64(rcv.Packet.Properties.CorrelationData)
+	requesterID, seq, ok := decodeCorrelation(rcv.Packet.Properties.CorrelationData)
+	if !ok {
+		log.Debug("reply without valid correlation data, ignoring", "id", r.Id)
+		return
+	}
+	if requesterID != r.Id {
+		// A shared response topic delivers every publisher's replies to every
+		// subscriber. Ignore anything that isn't this requester's own seq.
+		log.Debug("reply for another requester, ignoring", "id", r.Id, "requesterID", requesterID, "seq", seq)
+		return
+	}
 
 	r.pendingMu.Lock()
 	sendTime, ok := r.pending[seq]
@@ -274,6 +283,25 @@ func (r *Mqtt5Requester) handleReply(rcv paho.PublishReceived) {
 	metrics.MessagesConsumedMetric(0).Inc()
 	log.Debug("reply received", "id", r.Id, "seq", seq, "latency", latency)
 	<-r.sem
+}
+
+// correlationDataLen is requester id (uint32) + per-requester sequence (uint64).
+// The responder echoes these bytes unchanged; the id stops publishers that share
+// a response topic from accepting each other's replies.
+const correlationDataLen = 12
+
+func encodeCorrelation(requesterID int, seq uint64) []byte {
+	b := make([]byte, correlationDataLen)
+	binary.BigEndian.PutUint32(b[:4], uint32(requesterID))
+	binary.BigEndian.PutUint64(b[4:], seq)
+	return b
+}
+
+func decodeCorrelation(b []byte) (requesterID int, seq uint64, ok bool) {
+	if len(b) != correlationDataLen {
+		return 0, 0, false
+	}
+	return int(binary.BigEndian.Uint32(b[:4])), binary.BigEndian.Uint64(b[4:]), true
 }
 
 func (r *Mqtt5Requester) expireRequest(seq uint64) {

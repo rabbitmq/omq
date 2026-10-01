@@ -148,7 +148,8 @@ $ omq mqtt-rpc --publish-to rpc/request --consume-from rpc/request \
 Default response topics and client IDs include a unique per-invocation token, so
 independently running `omq` processes do not disconnect or consume each other's replies.
 Override the topic with `--mqtt-response-topic` when an application requires a specific
-response topic.
+response topic. Correlation Data is the requester id plus its sequence number, so several
+publishers can share one response topic without accepting each other's replies.
 
 `omq_roundtrip_latency_seconds` records request-to-reply latency and
 `omq_rpc_timeouts_total` counts requests without a reply before `--mqtt-rpc-timeout`
