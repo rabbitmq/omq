@@ -49,6 +49,11 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 	// cannot read if that goroutine is blocked. The queue does not block the
 	// handler, so it cannot fill the receive buffer either.
 	replies := newReplyQueue()
+	// Detached from c.ctx so a reply already in flight still goes out on shutdown.
+	// One context for every reply: paho bounds QoS 1/2 publishes with its own
+	// packet timeout and QoS 0 never waits, so a per-reply deadline only costs
+	// a context and a timer per message.
+	pubCtx := context.WithoutCancel(c.ctx)
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
@@ -57,7 +62,7 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 			if !ok {
 				return
 			}
-			c.sendReply(&connMgr, replyMsg, job.responseTopic, job.correlationData)
+			c.sendReply(pubCtx, &connMgr, replyMsg, job.responseTopic, job.correlationData)
 			msgsHandled.Add(1)
 			replies.finished()
 		}
@@ -179,7 +184,7 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 	c.stop(connection, replies, "--cmessages value reached")
 }
 
-func (c Mqtt5Responder) sendReply(connMgr *atomic.Pointer[autopaho.ConnectionManager], replyMsg []byte, responseTopic string, correlationData []byte) {
+func (c Mqtt5Responder) sendReply(pubCtx context.Context, connMgr *atomic.Pointer[autopaho.ConnectionManager], replyMsg []byte, responseTopic string, correlationData []byte) {
 	if c.Config.ConsumerLatencyTemplate != nil {
 		latencyStr := utils.ExecuteTemplate(c.Config.ConsumerLatencyTemplate, c.Id)
 		consumerLatency, err := time.ParseDuration(latencyStr)
@@ -221,9 +226,6 @@ func (c Mqtt5Responder) sendReply(connMgr *atomic.Pointer[autopaho.ConnectionMan
 		},
 	}
 
-	// Detached from c.ctx so a reply already in flight still goes out on shutdown.
-	pubCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 	// One worker publishes, so no publish lock. Stamp immediately before Publish
 	// so reply latency is broker transit, not --consumer-latency.
 	utils.UpdatePayload(c.Config.UseMillis, &replyBody)
