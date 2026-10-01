@@ -74,7 +74,10 @@ func (r *Mqtt5Requester) Start(requesterReady chan bool, startRequesting chan bo
 			subscribeWithRetry(r.ctx, cm, []paho.SubscribeOptions{
 				{
 					Topic: r.ResponseTopic,
-					QoS:   byte(r.Config.MqttPublisher.QoS),
+					// Replies are published at the consumer QoS. Subscribing lower
+					// would downgrade them; subscribing at the publisher QoS would
+					// not raise them.
+					QoS: byte(r.Config.MqttConsumer.QoS),
 					// Don't treat our own request as the reply if the request and
 					// response topics are the same, and don't complete seq 0 from a
 					// retained message left on the response topic.

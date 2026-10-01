@@ -567,6 +567,26 @@ var _ = Describe("OMQ CLI", func() {
 			Entry("wildcard response topic", []string{"--mqtt-response-topic=rpc/+/reply"}, "must not contain MQTT wildcards"),
 		)
 
+		It("keeps request QoS and reply QoS independent", func() {
+			session := omq([]string{
+				"mqtt-rpc",
+				"--publish-to=omq-rpc-qos-test",
+				"--consume-from=omq-rpc-qos-test",
+				"--publisher-id=omq-rpc-qos-requester",
+				"--consumer-id=omq-rpc-qos-responder",
+				"--mqtt-publisher-qos=1",
+				"--mqtt-consumer-qos=0",
+				"--pmessages=2",
+				"--cmessages=2",
+				"--time=5s",
+				"--print-all-metrics",
+			})
+
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=4`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=4`))
+		})
+
 		It("still rejects --consumer-latency for plain MQTT consumers", func() {
 			session := omq([]string{"mqtt", "--consumer-latency=1ms", "--time=1s", "--publishers=0", "--consumers=0"})
 			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(1))

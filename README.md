@@ -160,6 +160,10 @@ not supported. Response subscriptions set No Local and do not deliver retained m
 so a requester cannot complete an RPC from its own publish or from a retained message
 left on the response topic. `--mqtt-response-topic` must not contain `+` or `#`.
 
+`--mqtt-publisher-qos` is the request QoS and `--mqtt-consumer-qos` is the reply QoS.
+The requester subscribes to the response topic at the reply QoS, and the responder
+subscribes to the request topic at the request QoS, so the two legs are independent.
+
 ### Stream Protocol
 
 `omq` supports RabbitMQ's native stream protocol via `rabbitmq-stream-go-client`. Use commands

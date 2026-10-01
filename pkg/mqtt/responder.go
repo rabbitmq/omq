@@ -99,7 +99,10 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 			subscribeWithRetry(c.ctx, cm, []paho.SubscribeOptions{
 				{
 					Topic: c.Topic,
-					QoS:   byte(c.Config.MqttConsumer.QoS),
+					// Requests are published at the publisher QoS. Subscribe at that
+					// QoS so --mqtt-publisher-qos and --mqtt-consumer-qos each control
+					// one leg instead of both legs being min(publisher, consumer).
+					QoS: byte(c.Config.MqttPublisher.QoS),
 					// A reply published to the request topic must not be handled as
 					// another request, and a retained request must not be answered
 					// again when this responder subscribes.
