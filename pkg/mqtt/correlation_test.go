@@ -4,6 +4,9 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/rabbitmq/omq/pkg/config"
+	"github.com/rabbitmq/omq/pkg/log"
 )
 
 func TestCorrelationRoundTrip(t *testing.T) {
@@ -14,6 +17,41 @@ func TestCorrelationRoundTrip(t *testing.T) {
 	id, seq, ok := decodeCorrelation(encoded)
 	if !ok || id != 7 || seq != 42 {
 		t.Fatalf("decode = (%d, %d, %v), want (7, 42, true)", id, seq, ok)
+	}
+}
+
+func TestExpireDueSkipsUnpublishedAndReleasesOnce(t *testing.T) {
+	log.Setup()
+	r := &Mqtt5Requester{
+		Id:      1,
+		sem:     make(chan struct{}, 2),
+		pending: make(map[uint64]pendingReq),
+		Config:  config.Config{MqttRpc: config.MqttRpcOptions{Timeout: time.Millisecond}},
+	}
+	r.sem <- struct{}{}
+	r.sem <- struct{}{}
+	r.pending[1] = pendingReq{started: time.Now().Add(-time.Second), published: true}
+	r.pending[2] = pendingReq{started: time.Now().Add(-time.Second), published: false}
+
+	r.expireDue()
+	r.expireDue()
+
+	if _, ok := r.pending[1]; ok {
+		t.Fatal("published request should have expired")
+	}
+	if _, ok := r.pending[2]; !ok {
+		t.Fatal("request still being published should not expire")
+	}
+	select {
+	case r.sem <- struct{}{}:
+	default:
+		t.Fatal("expired request did not release its in-flight slot")
+	}
+	// The second expireDue must not release another slot.
+	select {
+	case r.sem <- struct{}{}:
+		t.Fatal("expireDue released a slot twice")
+	default:
 	}
 }
 

@@ -151,7 +151,9 @@ Override the topic with `--mqtt-response-topic` when an application requires a s
 response topic. Correlation Data is the requester id plus its sequence number, so several
 publishers can share one response topic without accepting each other's replies.
 
-`omq_roundtrip_latency_seconds` records request-to-reply latency and
+`omq_roundtrip_latency_seconds` records latency from a successful request publish
+to the matching reply (the same window as `--mqtt-rpc-timeout`; publish time is
+`omq_publishing_latency_seconds`) and
 `omq_rpc_timeouts_total` counts requests without a reply before `--mqtt-rpc-timeout`
 (five seconds by default). Unless `--message-ttl` is set, requests carry a message
 expiry one second longer than that timeout so a responder that reconnects does not

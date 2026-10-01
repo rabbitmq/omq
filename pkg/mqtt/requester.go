@@ -35,7 +35,16 @@ type Mqtt5Requester struct {
 	sem           chan struct{}
 	wg            sync.WaitGroup
 	pendingMu     sync.Mutex
-	pending       map[uint64]time.Time
+	pending       map[uint64]pendingReq
+}
+
+// pendingReq tracks one outstanding request. started is the timeout and
+// round-trip clock; it is updated once Publish returns so both use the same
+// instant. published is false while Publish is still in flight — those entries
+// must not be expired, or the in-flight slot would be released early.
+type pendingReq struct {
+	started   time.Time
+	published bool
 }
 
 func NewMqtt5Requester(ctx context.Context, cfg config.Config, id int) *Mqtt5Requester {
@@ -46,11 +55,17 @@ func NewMqtt5Requester(ctx context.Context, cfg config.Config, id int) *Mqtt5Req
 		Config:        cfg,
 		ctx:           ctx,
 		sem:           make(chan struct{}, cfg.MaxInFlight),
-		pending:       make(map[uint64]time.Time),
+		pending:       make(map[uint64]pendingReq),
 	}
 }
 
 func (r *Mqtt5Requester) Start(requesterReady chan bool, startRequesting chan bool) {
+	// One sweeper for every in-flight request. Cancelled after Stop returns, so
+	// the drain in Stop can still expire requests that never get a reply.
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	defer sweepCancel()
+	go r.sweepTimeouts(sweepCtx)
+
 	subscribed := make(chan struct{}, 1)
 
 	urls := stringsToUrls(r.Config.PublisherUri)
@@ -240,18 +255,24 @@ func (r *Mqtt5Requester) sendRequest(seq uint64) {
 	}
 
 	// Register the request as pending before publishing so a very fast reply
-	// can never race ahead of us recording it.
+	// can never race ahead of us recording it. The timeout clock starts only
+	// once Publish returns (see below).
 	r.pendingMu.Lock()
-	r.pending[seq] = time.Now()
+	r.pending[seq] = pendingReq{started: time.Now()}
 	r.pendingMu.Unlock()
 
 	startTime := time.Now()
 	_, err := r.Connection.Publish(r.ctx, pub)
 	if err != nil {
 		r.pendingMu.Lock()
-		delete(r.pending, seq)
+		_, stillPending := r.pending[seq]
+		if stillPending {
+			delete(r.pending, seq)
+		}
 		r.pendingMu.Unlock()
-		<-r.sem
+		if stillPending {
+			<-r.sem
+		}
 
 		if !strings.Contains(err.Error(), "use of closed network connection") &&
 			!strings.Contains(err.Error(), "context canceled") {
@@ -264,7 +285,16 @@ func (r *Mqtt5Requester) sendRequest(seq uint64) {
 	metrics.RecordPublishingLatency(latency)
 	log.Debug("request sent", "id", r.Id, "destination", r.RequestTopic, "seq", seq, "latency", latency)
 
-	time.AfterFunc(r.Config.MqttRpc.Timeout, func() { r.expireRequest(seq) })
+	// Same timestamp for the timeout window and the round-trip measurement.
+	// If the reply already arrived, the entry is gone and must not be re-added.
+	sentAt := time.Now()
+	r.pendingMu.Lock()
+	if p, ok := r.pending[seq]; ok {
+		p.started = sentAt
+		p.published = true
+		r.pending[seq] = p
+	}
+	r.pendingMu.Unlock()
 }
 
 func (r *Mqtt5Requester) handleReply(rcv paho.PublishReceived) {
@@ -285,7 +315,7 @@ func (r *Mqtt5Requester) handleReply(rcv paho.PublishReceived) {
 	}
 
 	r.pendingMu.Lock()
-	sendTime, ok := r.pending[seq]
+	pending, ok := r.pending[seq]
 	if ok {
 		delete(r.pending, seq)
 	}
@@ -293,21 +323,18 @@ func (r *Mqtt5Requester) handleReply(rcv paho.PublishReceived) {
 
 	if !ok {
 		// already timed out (or a duplicate/unexpected reply) -- the in-flight slot
-		// was already released by expireRequest, so don't touch r.sem again.
+		// was already released by the sweeper, so don't touch r.sem again.
 		log.Debug("reply for unknown/expired request, ignoring", "id", r.Id, "seq", seq)
 		return
 	}
 
-	latency := time.Since(sendTime)
+	latency := time.Since(pending.started)
 	metrics.RecordRoundTripLatency(latency)
 	metrics.MessagesConsumedMetric(0).Inc()
 	log.Debug("reply received", "id", r.Id, "seq", seq, "latency", latency)
 	<-r.sem
 }
 
-// correlationDataLen is requester id (uint32) + per-requester sequence (uint64).
-// The responder echoes these bytes unchanged; the id stops publishers that share
-// a response topic from accepting each other's replies.
 // rpcMessageExpiry is the MQTT message expiry (whole seconds) for a request.
 // It is one second longer than the client timeout so the broker does not drop
 // the request before the requester has recorded a timeout, and it is never 0.
@@ -315,6 +342,9 @@ func rpcMessageExpiry(timeout time.Duration) uint32 {
 	return uint32(timeout/time.Second) + 1
 }
 
+// correlationDataLen is requester id (uint32) + per-requester sequence (uint64).
+// The responder echoes these bytes unchanged; the id stops publishers that share
+// a response topic from accepting each other's replies.
 const correlationDataLen = 12
 
 func encodeCorrelation(requesterID int, seq uint64) []byte {
@@ -331,16 +361,36 @@ func decodeCorrelation(b []byte) (requesterID int, seq uint64, ok bool) {
 	return int(binary.BigEndian.Uint32(b[:4])), binary.BigEndian.Uint64(b[4:]), true
 }
 
-func (r *Mqtt5Requester) expireRequest(seq uint64) {
+func (r *Mqtt5Requester) sweepTimeouts(ctx context.Context) {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.expireDue()
+		}
+	}
+}
+
+func (r *Mqtt5Requester) expireDue() {
+	now := time.Now()
+	var expired []uint64
 	r.pendingMu.Lock()
-	_, ok := r.pending[seq]
-	if ok {
+	for seq, pending := range r.pending {
+		if !pending.published || now.Sub(pending.started) < r.Config.MqttRpc.Timeout {
+			continue
+		}
+		expired = append(expired, seq)
 		delete(r.pending, seq)
 	}
 	r.pendingMu.Unlock()
 
-	if ok {
-		metrics.RpcTimeouts.Inc()
+	for _, seq := range expired {
+		if metrics.RpcTimeouts != nil {
+			metrics.RpcTimeouts.Inc()
+		}
 		log.Info("request timed out waiting for reply", "id", r.Id, "seq", seq, "timeout", r.Config.MqttRpc.Timeout)
 		<-r.sem
 	}
@@ -353,6 +403,7 @@ func (r *Mqtt5Requester) Stop(reason string) {
 	// (or time out and release their slot) before disconnecting.
 	deadline := time.Now().Add(r.Config.MqttRpc.Timeout + time.Second)
 	for {
+		r.expireDue()
 		r.pendingMu.Lock()
 		remaining := len(r.pending)
 		r.pendingMu.Unlock()
