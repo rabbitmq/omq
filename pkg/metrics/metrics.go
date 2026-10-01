@@ -225,6 +225,7 @@ var (
 	previouslyConsumed  uint64
 	pubLatencyTracker   = newLatencyTracker()
 	e2eLatencyTracker   = newLatencyTracker()
+	rttLatencyTracker   = newLatencyTracker()
 )
 
 func RecordPublishingLatency(latency time.Duration) {
@@ -241,7 +242,11 @@ func RecordEndToEndLatency(latency time.Duration) {
 }
 
 func RecordRoundTripLatency(latency time.Duration) {
+	if latency <= 0 {
+		return
+	}
 	RoundTripLatency.Update(latency.Seconds())
+	rttLatencyTracker.record(latency)
 }
 
 func RecordDelayAccuracy(accuracy time.Duration) {
@@ -311,6 +316,9 @@ func buildRateFields(publishedRate, consumedRate uint64) []any {
 	}
 	if e2eMin, e2eMax, ok := e2eLatencyTracker.reset(); ok {
 		fields = append(fields, "e2e_min", formatLatency(e2eMin), "e2e_max", formatLatency(e2eMax))
+	}
+	if rttMin, rttMax, ok := rttLatencyTracker.reset(); ok {
+		fields = append(fields, "rtt_min", formatLatency(rttMin), "rtt_max", formatLatency(rttMax))
 	}
 	return fields
 }

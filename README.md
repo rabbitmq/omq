@@ -153,16 +153,17 @@ publishers can share one response topic without accepting each other's replies.
 
 `omq_roundtrip_latency_seconds` records latency from a successful request publish
 to the matching reply (the same window as `--mqtt-rpc-timeout`; publish time is
-`omq_publishing_latency_seconds`) and
-`omq_rpc_timeouts_total` counts requests without a reply before `--mqtt-rpc-timeout`
-(five seconds by default). Unless `--message-ttl` is set, requests carry a message
-expiry one second longer than that timeout so a responder that reconnects does not
-answer a request the requester has already given up on. Published and consumed message totals include both requests and
-replies. MQTT RPC requires MQTT 5; `--mqtt-publisher-version` and
-`--mqtt-consumer-version` must therefore remain set to `5`. Retained request publishing is
-not supported. Response subscriptions set No Local and do not deliver retained messages,
-so a requester cannot complete an RPC from its own publish or from a retained message
-left on the response topic. `--mqtt-response-topic` must not contain `+` or `#`.
+`omq_publishing_latency_seconds`). The per-second log line includes that range as
+`rtt_min`/`rtt_max`. `omq_rpc_timeouts_total` counts requests without a reply before
+`--mqtt-rpc-timeout` (five seconds by default). Unless `--message-ttl` is set, requests
+carry a message expiry one second longer than that timeout so a responder that
+reconnects does not answer a request the requester has already given up on. Published
+and consumed message totals include both requests and replies. MQTT RPC requires MQTT 5;
+`--mqtt-publisher-version` and `--mqtt-consumer-version` must therefore remain set to `5`.
+Retained request publishing is not supported. Response subscriptions set No Local and do
+not deliver retained messages, so a requester cannot complete an RPC from its own publish
+or from a retained message left on the response topic. `--mqtt-response-topic` must not
+contain `+` or `#`.
 
 `--mqtt-publisher-qos` is the request QoS and `--mqtt-consumer-qos` is the reply QoS.
 The requester subscribes to the response topic at the reply QoS, and the responder
