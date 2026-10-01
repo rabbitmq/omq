@@ -182,6 +182,7 @@ $ omq mqtt-rpc --consumers 2 --publishers 10 \
 
 Topics that expand `%d` or `{{.id}}` already pair publisher N with consumer N. Those
 counts need to match, or the extra publishers time out and the extra responders sit idle.
+See [docs/mqtt-rpc.md](docs/mqtt-rpc.md).
 
 ### Stream Protocol
 

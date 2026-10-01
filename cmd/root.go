@@ -500,7 +500,17 @@ func RootCmd() *cobra.Command {
 	mqtt_stream.Flags().AddFlagSet(streamFlags)
 
 	mqtt_rpc = &cobra.Command{
-		Use: "mqtt-rpc",
+		Use:   "mqtt-rpc",
+		Short: "MQTT 5 request/response",
+		Long: `MQTT 5 requesters and responders.
+
+RabbitMQ does not support MQTT shared subscriptions, so several responders on one
+request topic each answer every request. Give each responder its own topic and pin
+publishers to one:
+
+    omq mqtt-rpc --consumers 2 --publishers 10 \
+        --consume-from 'rpc/request/%d' \
+        --publish-to 'rpc/request/{{ mod .id 2 }}'`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg.PublisherProto = config.MQTT5
 			cfg.ConsumerProto = config.MQTT5
