@@ -131,7 +131,15 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 			log.Info("responder connected", "id", c.Id, "topic", c.Topic)
 			connMgr.Store(cm)
 			subscribeWithRetry(c.ctx, cm, []paho.SubscribeOptions{
-				{Topic: c.Topic, QoS: byte(c.Config.MqttConsumer.QoS)},
+				{
+					Topic: c.Topic,
+					QoS:   byte(c.Config.MqttConsumer.QoS),
+					// A reply published to the request topic must not be handled as
+					// another request, and a retained request must not be answered
+					// again when this responder subscribes.
+					NoLocal:        true,
+					RetainHandling: 2,
+				},
 			}, subscribed, "responder", c.Id)
 		},
 		OnConnectError: func(err error) {

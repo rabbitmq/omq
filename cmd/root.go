@@ -1341,7 +1341,32 @@ func validateMqttRpcCommand(cmd *cobra.Command, cfg *config.Config) error {
 	if cmd.Flags().Changed("mqtt-retained") {
 		return fmt.Errorf("--mqtt-retained is not supported for mqtt-rpc")
 	}
+	if responseTopicHasWildcard(cfg) {
+		return fmt.Errorf("--mqtt-response-topic must not contain MQTT wildcards (+ or #)")
+	}
 	return nil
+}
+
+// responseTopicHasWildcard reports whether any requester's response topic contains
+// a wildcard. MQTT-3.3.2-14 forbids wildcards in a Response Topic, and a wildcard
+// subscription would also deliver unrelated publishes into the RPC matcher.
+func responseTopicHasWildcard(cfg *config.Config) bool {
+	if cfg.MqttRpc.ResponseTopicTemplate == nil {
+		return false
+	}
+	n := cfg.Publishers
+	if n < 1 {
+		n = 1
+	}
+	for i := 0; i < n; i++ {
+		topic := utils.ExecuteTemplate(cfg.MqttRpc.ResponseTopicTemplate, i)
+		topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
+		topic = strings.TrimPrefix(topic, "/topic/")
+		if strings.ContainsAny(topic, "+#") {
+			return true
+		}
+	}
+	return false
 }
 
 func setMqttRpcClientIDs(cmd *cobra.Command, cfg *config.Config) {

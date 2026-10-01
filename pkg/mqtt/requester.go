@@ -72,7 +72,15 @@ func (r *Mqtt5Requester) Start(requesterReady chan bool, startRequesting chan bo
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
 			log.Info("requester connected", "id", r.Id, "requestTopic", r.RequestTopic, "responseTopic", r.ResponseTopic)
 			subscribeWithRetry(r.ctx, cm, []paho.SubscribeOptions{
-				{Topic: r.ResponseTopic, QoS: byte(r.Config.MqttPublisher.QoS)},
+				{
+					Topic: r.ResponseTopic,
+					QoS:   byte(r.Config.MqttPublisher.QoS),
+					// Don't treat our own request as the reply if the request and
+					// response topics are the same, and don't complete seq 0 from a
+					// retained message left on the response topic.
+					NoLocal:        true,
+					RetainHandling: 2,
+				},
 			}, subscribed, "requester", r.Id)
 		},
 		OnConnectError: func(err error) {

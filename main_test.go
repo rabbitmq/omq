@@ -564,6 +564,7 @@ var _ = Describe("OMQ CLI", func() {
 			Entry("retained requests", []string{"--mqtt-retained=true"}, "--mqtt-retained is not supported for mqtt-rpc"),
 			Entry("MQTT 3 publisher", []string{"--mqtt-publisher-version=3"}, "--mqtt-publisher-version must be 5 for mqtt-rpc"),
 			Entry("MQTT 3 consumer", []string{"--mqtt-consumer-version=3"}, "--mqtt-consumer-version must be 5 for mqtt-rpc"),
+			Entry("wildcard response topic", []string{"--mqtt-response-topic=rpc/+/reply"}, "must not contain MQTT wildcards"),
 		)
 
 		It("still rejects --consumer-latency for plain MQTT consumers", func() {

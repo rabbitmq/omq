@@ -156,7 +156,9 @@ publishers can share one response topic without accepting each other's replies.
 (five seconds by default). Published and consumed message totals include both requests and
 replies. MQTT RPC requires MQTT 5; `--mqtt-publisher-version` and
 `--mqtt-consumer-version` must therefore remain set to `5`. Retained request publishing is
-not supported.
+not supported. Response subscriptions set No Local and do not deliver retained messages,
+so a requester cannot complete an RPC from its own publish or from a retained message
+left on the response topic. `--mqtt-response-topic` must not contain `+` or `#`.
 
 ### Stream Protocol
 
