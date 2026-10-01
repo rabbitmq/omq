@@ -525,7 +525,14 @@ var _ = Describe("OMQ CLI", func() {
 			buf := bytes.NewReader(output)
 			Expect(metricValue(buf, `omq_roundtrip_latency_seconds_count`)).Should(Equal(2.0))
 			buf.Reset(output)
+			Expect(metricValue(buf, `omq_rpc_request_latency_seconds_count`)).Should(Equal(2.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_rpc_reply_latency_seconds_count`)).Should(Equal(2.0))
+			buf.Reset(output)
 			Expect(metricValue(buf, `omq_rpc_timeouts_total`)).Should(Equal(0.0))
+			buf.Reset(output)
+			// Request and reply are different messages; don't mix them into end-to-end.
+			Expect(metricValue(buf, `omq_end_to_end_latency_seconds_count`)).Should(BeNumerically("<=", 0))
 		})
 
 		It("supports --consumer-latency to simulate processing time before the reply is sent", func() {
@@ -552,7 +559,14 @@ var _ = Describe("OMQ CLI", func() {
 			buf.Reset(output)
 			// with --max-in-flight=1 (default), the round trips are serialized, so a 50ms
 			// consumer latency on each of the 2 requests must show up in the total duration.
-			Expect(metricValue(buf, `omq_roundtrip_latency_seconds_sum`)).Should(BeNumerically(">", 0.1))
+			rttSum := metricValue(buf, `omq_roundtrip_latency_seconds_sum`)
+			Expect(rttSum).Should(BeNumerically(">", 0.1))
+			buf.Reset(output)
+			requestSum := metricValue(buf, `omq_rpc_request_latency_seconds_sum`)
+			buf.Reset(output)
+			replySum := metricValue(buf, `omq_rpc_reply_latency_seconds_sum`)
+			// Processing time belongs in the round trip, not in either message's transit.
+			Expect(requestSum + replySum).Should(BeNumerically("<", rttSum))
 		})
 
 		DescribeTable("rejects unsupported options",

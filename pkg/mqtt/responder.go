@@ -56,7 +56,9 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 	handler := func(rcv paho.PublishReceived) (bool, error) {
 		payload := rcv.Packet.Payload
 		timeSent, latency := utils.CalculateEndToEndLatency(&payload)
-		metrics.RecordEndToEndLatency(latency)
+		// Request transit only. Do not fold this into end-to-end latency: the
+		// reply is a different message and is measured on the requester.
+		metrics.RecordRpcRequestLatency(latency)
 		metrics.MessagesConsumedMetric(0).Inc()
 
 		if rcv.Packet.Properties == nil || rcv.Packet.Properties.ResponseTopic == "" {
@@ -210,8 +212,12 @@ func (c Mqtt5Responder) sendReply(connMgr *atomic.Pointer[autopaho.ConnectionMan
 	// Detached from c.ctx so a reply already in flight still goes out on shutdown.
 	pubCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	startTime := time.Now()
 	publishMu.Lock()
+	// Stamp after the publish lock so reply latency is broker transit, not time
+	// queued behind another reply and not --consumer-latency.
+	utils.UpdatePayload(c.Config.UseMillis, &replyBody)
+	reply.Payload = replyBody
+	startTime := time.Now()
 	_, err := cm.Publish(pubCtx, reply)
 	publishMu.Unlock()
 	if err != nil {

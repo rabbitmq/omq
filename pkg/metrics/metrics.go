@@ -48,6 +48,8 @@ var (
 	EndToEndLatency           *vmetrics.Summary
 	DelayAccuracy             *vmetrics.Summary
 	RoundTripLatency          *vmetrics.Summary
+	RpcRequestLatency         *vmetrics.Summary
+	RpcReplyLatency           *vmetrics.Summary
 	RpcTimeouts               *vmetrics.Counter
 	globalLabels              map[string]string
 )
@@ -120,6 +122,10 @@ func registerMetrics(labels map[string]string, publishers int, rate float32) {
 	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
 	DelayAccuracy = vmetrics.GetOrCreateSummaryExt(`omq_delay_accuracy_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
 	RoundTripLatency = vmetrics.GetOrCreateSummaryExt(`omq_roundtrip_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
+	// A request and a reply are different messages. Keep their transit times
+	// apart from omq_end_to_end_latency_seconds, which would otherwise mix them.
+	RpcRequestLatency = vmetrics.GetOrCreateSummaryExt(`omq_rpc_request_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
+	RpcReplyLatency = vmetrics.GetOrCreateSummaryExt(`omq_rpc_reply_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
 	RpcTimeouts = vmetrics.GetOrCreateCounter(`omq_rpc_timeouts_total` + labelsToString(globalLabels))
 }
 
@@ -221,11 +227,13 @@ func (t *latencyTracker) reset() (min, max time.Duration, ok bool) {
 }
 
 var (
-	previouslyPublished uint64
-	previouslyConsumed  uint64
-	pubLatencyTracker   = newLatencyTracker()
-	e2eLatencyTracker   = newLatencyTracker()
-	rttLatencyTracker   = newLatencyTracker()
+	previouslyPublished      uint64
+	previouslyConsumed       uint64
+	pubLatencyTracker        = newLatencyTracker()
+	e2eLatencyTracker        = newLatencyTracker()
+	rttLatencyTracker        = newLatencyTracker()
+	rpcRequestLatencyTracker = newLatencyTracker()
+	rpcReplyLatencyTracker   = newLatencyTracker()
 )
 
 func RecordPublishingLatency(latency time.Duration) {
@@ -247,6 +255,27 @@ func RecordRoundTripLatency(latency time.Duration) {
 	}
 	RoundTripLatency.Update(latency.Seconds())
 	rttLatencyTracker.record(latency)
+}
+
+// RecordRpcRequestLatency records requester→responder transit: the timestamp in
+// the request payload until the responder receives it. It does not include
+// responder processing or the reply.
+func RecordRpcRequestLatency(latency time.Duration) {
+	if latency <= 0 || RpcRequestLatency == nil {
+		return
+	}
+	RpcRequestLatency.Update(latency.Seconds())
+	rpcRequestLatencyTracker.record(latency)
+}
+
+// RecordRpcReplyLatency records responder→requester transit: the timestamp
+// written into the reply just before publish until the requester receives it.
+func RecordRpcReplyLatency(latency time.Duration) {
+	if latency <= 0 || RpcReplyLatency == nil {
+		return
+	}
+	RpcReplyLatency.Update(latency.Seconds())
+	rpcReplyLatencyTracker.record(latency)
 }
 
 func RecordDelayAccuracy(accuracy time.Duration) {
@@ -313,6 +342,14 @@ func buildRateFields(publishedRate, consumedRate uint64) []any {
 	fields = append(fields, "consumed", fmt.Sprintf("%v/s", consumedRate))
 	if pubMin, pubMax, ok := pubLatencyTracker.reset(); ok {
 		fields = append(fields, "pub_min", formatLatency(pubMin), "pub_max", formatLatency(pubMax))
+	}
+	// Directional RPC transit is what to watch. Round-trip stays, but it mixes
+	// both messages plus responder processing, so it is printed after them.
+	if reqMin, reqMax, ok := rpcRequestLatencyTracker.reset(); ok {
+		fields = append(fields, "request_min", formatLatency(reqMin), "request_max", formatLatency(reqMax))
+	}
+	if repMin, repMax, ok := rpcReplyLatencyTracker.reset(); ok {
+		fields = append(fields, "reply_min", formatLatency(repMin), "reply_max", formatLatency(repMax))
 	}
 	if e2eMin, e2eMax, ok := e2eLatencyTracker.reset(); ok {
 		fields = append(fields, "e2e_min", formatLatency(e2eMin), "e2e_max", formatLatency(e2eMax))

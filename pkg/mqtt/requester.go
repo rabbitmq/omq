@@ -330,8 +330,10 @@ func (r *Mqtt5Requester) handleReply(rcv paho.PublishReceived) {
 
 	latency := time.Since(pending.started)
 	metrics.RecordRoundTripLatency(latency)
+	_, replyLatency := utils.CalculateEndToEndLatency(&rcv.Packet.Payload)
+	metrics.RecordRpcReplyLatency(replyLatency)
 	metrics.MessagesConsumedMetric(0).Inc()
-	log.Debug("reply received", "id", r.Id, "seq", seq, "latency", latency)
+	log.Debug("reply received", "id", r.Id, "seq", seq, "latency", latency, "replyLatency", replyLatency)
 	<-r.sem
 }
 
