@@ -4,7 +4,7 @@ go 1.27.0
 
 replace github.com/Azure/go-amqp => github.com/mkuratczyk/go-amqp v0.0.0-20260818071438-088b569071c5
 
-replace github.com/eclipse/paho => github.com/mkuratczyk/paho.golang v0.0.0-20261001133252-a987f14995a3
+replace github.com/eclipse/paho.golang => github.com/mkuratczyk/paho.golang v0.0.0-20261001133252-a987f14995a3
 
 require (
 	github.com/Azure/go-amqp v1.7.0
