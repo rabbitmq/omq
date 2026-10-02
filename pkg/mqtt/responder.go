@@ -146,7 +146,9 @@ func (c Mqtt5Responder) Start(consumerReady chan bool) {
 		},
 	}
 
-	connection, err := autopaho.NewConnection(c.ctx, opts)
+	// Detached from c.ctx like pubCtx: cancelling it would close the connection under
+	// the replies that stop() still has to flush. stop() disconnects explicitly.
+	connection, err := autopaho.NewConnection(context.WithoutCancel(c.ctx), opts)
 	if err != nil {
 		log.Error("responder connection failed", "id", c.Id, "error", err)
 		close(consumerReady)

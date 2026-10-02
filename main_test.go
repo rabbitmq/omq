@@ -601,6 +601,26 @@ var _ = Describe("OMQ CLI", func() {
 			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=4`))
 		})
 
+		It("answers in-flight requests when the time limit is reached", func() {
+			session := omq([]string{
+				"mqtt-rpc",
+				"--publish-to=omq-rpc-shutdown",
+				"--consume-from=omq-rpc-shutdown",
+				"--max-in-flight=5",
+				"--consumer-latency=400ms",
+				"--mqtt-rpc-timeout=10s",
+				"--time=3s",
+				"--print-all-metrics",
+			})
+
+			// Waiting out the 10s timeout for replies that cannot arrive would exceed this.
+			Eventually(session).WithTimeout(8 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_rpc_timeouts_total`)).Should(Equal(0.0))
+		})
+
 		It("warns when several responders share one request topic", func() {
 			session := omq([]string{
 				"mqtt-rpc",
@@ -614,6 +634,43 @@ var _ = Describe("OMQ CLI", func() {
 			Eventually(session.Err).WithTimeout(5 * time.Second).Should(gbytes.Say("responders share one request topic"))
 			session.Signal(os.Signal(os.Interrupt))
 			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+		})
+
+		// Runs every command from docs/mqtt-rpc.md, shortened to a few calls per
+		// requester, so the documented topologies cannot silently stop working.
+		Describe("examples from docs/mqtt-rpc.md", func() {
+			const callsPerRequester = 3
+			examples := docExamples("docs/mqtt-rpc.md")
+
+			It("has examples to run", func() {
+				Expect(len(examples)).Should(BeNumerically(">=", 3))
+			})
+
+			for i, example := range examples {
+				It("completes every call in example "+strconv.Itoa(i+1), func() {
+					Expect(example[0]).Should(Equal("omq"))
+					args := append(slices.Clone(example[1:]),
+						"--pmessages="+strconv.Itoa(callsPerRequester),
+						"--rate=-1",
+						"--time=8s",
+						"--print-all-metrics")
+					requesters := 1
+					for j, a := range args {
+						if a == "--publishers" && j+1 < len(args) {
+							requesters, _ = strconv.Atoi(args[j+1])
+						}
+					}
+
+					session := omq(args)
+					Eventually(session).WithTimeout(20 * time.Second).Should(gexec.Exit(0))
+
+					output, _ := io.ReadAll(session.Out)
+					buf := bytes.NewReader(output)
+					Expect(metricValue(buf, `omq_roundtrip_latency_seconds_count`)).Should(Equal(float64(requesters * callsPerRequester)))
+					buf.Reset(output)
+					Expect(metricValue(buf, `omq_rpc_timeouts_total`)).Should(Equal(0.0))
+				})
+			}
 		})
 
 		It("still rejects --consumer-latency for plain MQTT consumers", func() {
@@ -1685,6 +1742,51 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 })
+
+// docExamples returns the argv of each ```shell block in a markdown file, with line
+// continuations joined and single/double quotes honoured.
+func docExamples(path string) [][]string {
+	content, err := os.ReadFile(path)
+	Expect(err).ShouldNot(HaveOccurred())
+	blocks := regexp.MustCompile("(?s)```shell\\n(.*?)```").FindAllStringSubmatch(string(content), -1)
+
+	var examples [][]string
+	for _, block := range blocks {
+		var args []string
+		var cur strings.Builder
+		var quote rune
+		inWord := false
+		flush := func() {
+			if inWord {
+				args = append(args, cur.String())
+				cur.Reset()
+				inWord = false
+			}
+		}
+		text := strings.ReplaceAll(block[1], "\\\n", " ")
+		for _, r := range text {
+			switch {
+			case quote != 0:
+				if r == quote {
+					quote = 0
+				} else {
+					cur.WriteRune(r)
+				}
+			case r == '\'' || r == '"':
+				quote = r
+				inWord = true
+			case r == ' ' || r == '\n' || r == '\t':
+				flush()
+			default:
+				cur.WriteRune(r)
+				inWord = true
+			}
+		}
+		flush()
+		examples = append(examples, args)
+	}
+	return examples
+}
 
 func omq(args []string) *gexec.Session {
 	GinkgoWriter.Println("omq", strings.Join(args, " "))

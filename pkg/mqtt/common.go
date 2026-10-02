@@ -39,10 +39,6 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) Publisher {
 	}
 }
 
-// subscribeWithRetry subscribes to the given topics and, on failure, keeps retrying
-// in the background until it succeeds or ctx is cancelled. `subscribed` is a buffered
-// (size 1) channel that gets signalled (non-blocking) once the subscription succeeds,
-// so it's safe to call this from within OnConnectionUp.
 // connectReceiveMaximum caps the CONNECT Receive Maximum. paho otherwise defaults
 // it to 65535 and sizes an internal publish buffer to match (~512KB per connection).
 func connectReceiveMaximum(n uint16) func(*paho.Connect, *url.URL) (*paho.Connect, error) {
@@ -71,6 +67,10 @@ func inFlightReceiveMaximum(maxInFlight int) uint16 {
 	return uint16(maxInFlight)
 }
 
+// subscribeWithRetry subscribes to the given topics and, on failure, keeps retrying
+// in the background until it succeeds or ctx is cancelled. `subscribed` is a buffered
+// (size 1) channel that gets signalled (non-blocking) once the subscription succeeds,
+// so it's safe to call this from within OnConnectionUp.
 func subscribeWithRetry(ctx context.Context, cm *autopaho.ConnectionManager, subscriptions []paho.SubscribeOptions, subscribed chan struct{}, role string, id int) {
 	logSubscribed := func() {
 		for _, sub := range subscriptions {

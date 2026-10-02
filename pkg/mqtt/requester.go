@@ -122,7 +122,10 @@ func (r *Mqtt5Requester) Start(requesterReady chan bool, startRequesting chan bo
 		},
 	}
 
-	connection, err := autopaho.NewConnection(r.ctx, opts)
+	// Detached from r.ctx: cancelling it must not tear the connection down before
+	// Stop has drained the requests that are still waiting for a reply. Stop
+	// disconnects explicitly.
+	connection, err := autopaho.NewConnection(context.WithoutCancel(r.ctx), opts)
 	if err != nil {
 		log.Error("requester connection failed", "id", r.Id, "error", err)
 		close(requesterReady)
@@ -134,6 +137,7 @@ func (r *Mqtt5Requester) Start(requesterReady chan bool, startRequesting chan bo
 	if err != nil {
 		// AwaitConnection only returns an error if the context is cancelled
 		close(requesterReady)
+		r.Stop("context cancelled")
 		return
 	}
 
@@ -152,6 +156,7 @@ func (r *Mqtt5Requester) Start(requesterReady chan bool, startRequesting chan bo
 
 	select {
 	case <-r.ctx.Done():
+		r.Stop("context cancelled")
 		return
 	case <-startRequesting:
 		// short random delay to avoid all requesters publishing at the same time
