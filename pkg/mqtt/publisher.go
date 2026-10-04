@@ -22,7 +22,6 @@ type MqttPublisher struct {
 	Config     config.Config
 	ctx        context.Context
 	msg        []byte
-	sem        chan struct{}
 	wg         sync.WaitGroup
 	latency    *metrics.LatencyRecorder
 }
@@ -35,7 +34,6 @@ func NewMqttPublisher(ctx context.Context, cfg config.Config, id int) *MqttPubli
 		Topic:      topic,
 		Config:     cfg,
 		ctx:        ctx,
-		sem:        make(chan struct{}, cfg.MaxInFlight),
 		latency:    metrics.NewLatencyRecorder(),
 	}
 }
@@ -140,32 +138,64 @@ func (p *MqttPublisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
 	var msgSent uint64
+	nextSeq := func() (seq uint64, stopReason string, ok bool) {
+		seq = msgSent
+		msgSent++
+		if seq >= uint64(p.Config.PublishCount) {
+			return 0, "--pmessages value reached", false
+		}
+		if p.Config.Rate > 0 {
+			_ = limiter.Wait(p.ctx)
+		}
+		return seq, "", true
+	}
+
+	// With a single message in flight, publishing is sequential anyway: skip the
+	// hand-off to another goroutine.
+	if p.Config.MaxInFlight == 1 {
+		for {
+			select {
+			case <-p.ctx.Done():
+				return "time limit reached"
+			default:
+				seq, stopReason, ok := nextSeq()
+				if !ok {
+					return stopReason
+				}
+				p.Send(seq)
+			}
+		}
+	}
+
+	// A fixed pool of MaxInFlight long-lived workers instead of a goroutine per
+	// message. work is unbuffered, so handing over a sequence number blocks until
+	// a worker is free: at most MaxInFlight messages are in flight.
+	work := make(chan uint64)
+	p.wg.Add(p.Config.MaxInFlight)
+	for range p.Config.MaxInFlight {
+		go func() {
+			defer p.wg.Done()
+			for seq := range work {
+				p.Send(seq)
+			}
+		}()
+	}
+	defer close(work)
+
 	for {
 		select {
 		case <-p.ctx.Done():
 			return "time limit reached"
 		default:
-			seq := msgSent
-			msgSent++
-			if seq >= uint64(p.Config.PublishCount) {
-				return "--pmessages value reached"
-			}
-			if p.Config.Rate > 0 {
-				_ = limiter.Wait(p.ctx)
+			seq, stopReason, ok := nextSeq()
+			if !ok {
+				return stopReason
 			}
 			select {
-			case p.sem <- struct{}{}:
+			case work <- seq:
 			case <-p.ctx.Done():
 				return "context cancelled"
 			}
-			p.wg.Add(1)
-			go func(s uint64) {
-				defer func() {
-					<-p.sem
-					p.wg.Done()
-				}()
-				p.Send(s)
-			}(seq)
 		}
 	}
 }
@@ -183,6 +213,7 @@ func (p *MqttPublisher) Send(seq uint64) {
 		body = make([]byte, len(p.msg))
 		copy(body, p.msg)
 	}
+
 	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
 
 	startTime := time.Now()
