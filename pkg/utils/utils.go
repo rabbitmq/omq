@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"text/template/parse"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -26,6 +27,8 @@ const (
 	HeaderSequence    = "x-omq-seq"
 )
 
+var sizeRegexp = regexp.MustCompile(`^(\d+(?:\.\d+)?)([a-zA-Z]*)$`)
+
 // ParseSize parses a size string that may include units (e.g., "10mb", "1kb", "100")
 // Supported units: b, kb, mb (case-insensitive)
 // If no unit is specified, assumes bytes
@@ -38,8 +41,7 @@ func ParseSize(sizeStr string) (int, error) {
 	}
 
 	// Regular expression to match number and optional unit (no whitespace allowed)
-	re := regexp.MustCompile(`^(\d+(?:\.\d+)?)([a-zA-Z]*)$`)
-	matches := re.FindStringSubmatch(sizeStr)
+	matches := sizeRegexp.FindStringSubmatch(sizeStr)
 
 	if len(matches) != 3 {
 		return 0, fmt.Errorf("invalid size format: %s", sizeStr)
@@ -302,17 +304,30 @@ func ExecuteTemplate(tmpl *template.Template, id int, seq ...uint64) string {
 		return ""
 	}
 
-	data := map[string]any{
-		"id": id,
+	if ct := compiled(tmpl); ct.static {
+		r := ct.resolve(id)
+		if r.list == nil {
+			return r.value
+		}
+		var index uint64
+		if len(seq) > 0 {
+			index = seq[0] % uint64(len(r.list))
+		} else if metrics.MessagesPublished != nil {
+			index = metrics.MessagesPublished.Get() % uint64(len(r.list))
+		}
+		return r.list[index]
 	}
 
-	var buf bytes.Buffer
-	err := tmpl.Execute(&buf, data)
+	ec := execPool.Get().(*execContext)
+	ec.buf.Reset()
+	ec.data["id"] = id
+	err := tmpl.Execute(&ec.buf, ec.data)
 	if err != nil {
 		log.Error("template execution failed", "error", err)
 		os.Exit(1)
 	}
-	result := buf.String()
+	result := ec.buf.String()
+	execPool.Put(ec)
 
 	// If the result doesn't contain template syntax...
 	if !strings.Contains(result, "{{") {
@@ -333,6 +348,89 @@ func ExecuteTemplate(tmpl *template.Template, id int, seq ...uint64) string {
 	}
 
 	return result
+}
+
+// StaticTemplateValue returns the value of a template that has no actions and
+// no comma-separated list, so it resolves to the same string for every message
+// of the given publisher. Callers can use it to compute (and parse) such values
+// once instead of on every message.
+func StaticTemplateValue(tmpl *template.Template, id int) (string, bool) {
+	if tmpl == nil {
+		return "", false
+	}
+	ct := compiled(tmpl)
+	if !ct.static {
+		return "", false
+	}
+	r := ct.resolve(id)
+	return r.value, r.list == nil
+}
+
+type execContext struct {
+	buf  bytes.Buffer
+	data map[string]any
+}
+
+var execPool = sync.Pool{New: func() any {
+	return &execContext{data: make(map[string]any, 1)}
+}}
+
+// compiledTemplate caches what can be known about a template without executing
+// it: templates made only of text (e.g. "%d", "a,b,c", "42") are resolved once
+// per publisher id and never executed again.
+type compiledTemplate struct {
+	static bool
+	text   string
+	perID  sync.Map // int -> *resolvedTemplate
+}
+
+type resolvedTemplate struct {
+	value string
+	list  []string // non-nil when the value is a comma-separated list to cycle through
+}
+
+var compiledTemplates sync.Map // *template.Template -> *compiledTemplate
+
+func compiled(tmpl *template.Template) *compiledTemplate {
+	if ct, ok := compiledTemplates.Load(tmpl); ok {
+		return ct.(*compiledTemplate)
+	}
+	ct := &compiledTemplate{}
+	if tree := tmpl.Tree; tree != nil && tree.Root != nil {
+		var sb strings.Builder
+		ct.static = true
+		for _, n := range tree.Root.Nodes {
+			tn, ok := n.(*parse.TextNode)
+			if !ok {
+				ct.static = false
+				break
+			}
+			sb.Write(tn.Text)
+		}
+		ct.text = sb.String()
+		// the output of a template that itself looks like a template is returned verbatim
+		if strings.Contains(ct.text, "{{") {
+			ct.static = false
+		}
+	}
+	actual, _ := compiledTemplates.LoadOrStore(tmpl, ct)
+	return actual.(*compiledTemplate)
+}
+
+func (ct *compiledTemplate) resolve(id int) *resolvedTemplate {
+	if r, ok := ct.perID.Load(id); ok {
+		return r.(*resolvedTemplate)
+	}
+	value := InjectId(ct.text, id)
+	r := &resolvedTemplate{value: value}
+	if strings.Contains(value, ",") {
+		r.list = strings.Split(value, ",")
+		for i := range r.list {
+			r.list[i] = strings.TrimSpace(r.list[i])
+		}
+	}
+	actual, _ := ct.perID.LoadOrStore(id, r)
+	return actual.(*resolvedTemplate)
 }
 
 func ResolveTerminus(tmpl *template.Template, id int) string {
