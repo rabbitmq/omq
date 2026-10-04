@@ -2,6 +2,7 @@ package utils_test
 
 import (
 	"text/template"
+	"time"
 
 	"github.com/Masterminds/sprig/v3"
 	. "github.com/onsi/ginkgo/v2"
@@ -38,6 +39,28 @@ var _ = Context("Template evaluation", func() {
 		_, ok := utils.StaticTemplateValue(tmpl, 9)
 		Expect(ok).To(BeFalse())
 		Expect(utils.ExecuteTemplate(parse("{{ add 1 2 }},x"), 1, 0)).To(Equal("3"))
+	})
+})
+
+var _ = Context("TagTimes", func() {
+	It("returns the elapsed time once per tag", func() {
+		tt := utils.NewTagTimes(4)
+		tt.Set(1, time.Now().Add(-time.Second))
+		d, ok := tt.Take(1)
+		Expect(ok).To(BeTrue())
+		Expect(d).To(BeNumerically(">=", time.Second))
+		_, ok = tt.Take(1)
+		Expect(ok).To(BeFalse())
+	})
+
+	It("reports a miss when the slot has been reused", func() {
+		tt := utils.NewTagTimes(1) // 16 slots
+		tt.Set(1, time.Now())
+		tt.Set(17, time.Now())
+		_, ok := tt.Take(1)
+		Expect(ok).To(BeFalse())
+		_, ok = tt.Take(17)
+		Expect(ok).To(BeTrue())
 	})
 })
 

@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	amqp091 "github.com/rabbitmq/amqp091-go"
@@ -19,22 +18,22 @@ import (
 )
 
 type Amqp091Publisher struct {
-	Id               int
-	Connection       *amqp091.Connection
-	Channel          *amqp091.Channel
-	confirms         chan amqp091.Confirmation
-	returns          chan amqp091.Return
-	publishTimes     map[uint64]time.Time
-	publishTimesLock sync.Mutex
-	latency          *metrics.LatencyRecorder
-	sem              chan struct{}
-	exchange         string
-	routingKey       string
-	Config           config.Config
-	msg              []byte
-	whichUri         int
-	msgSent          uint64
-	ctx              context.Context
+	Id           int
+	Connection   *amqp091.Connection
+	Channel      *amqp091.Channel
+	confirms     chan amqp091.Confirmation
+	returns      chan amqp091.Return
+	publishTimes *utils.TagTimes
+	latency      *metrics.LatencyRecorder
+	sem          chan struct{}
+	exchange     string
+	routingKey   string
+	Config       config.Config
+	msg          []byte
+	whichUri     int
+	msgSent      uint64
+	tag          uint64 // delivery tag of the last publish on the current channel
+	ctx          context.Context
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp091Publisher {
@@ -47,7 +46,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp091Publis
 		Config:       cfg,
 		exchange:     exchange,
 		routingKey:   routingKey,
-		publishTimes: make(map[uint64]time.Time),
+		publishTimes: utils.NewTagTimes(cfg.MaxInFlight),
 		latency:      metrics.NewLatencyRecorder(),
 		whichUri:     0,
 		ctx:          ctx,
@@ -107,6 +106,7 @@ func (p *Amqp091Publisher) Connect() {
 		case <-time.After(config.ReconnectDelay):
 		}
 	}
+	p.tag = 0 // delivery tags restart at 1 on every channel
 	p.confirms = make(chan amqp091.Confirmation, p.Config.MaxInFlight)
 	p.returns = make(chan amqp091.Return)
 	_ = p.Channel.Confirm(false)
@@ -190,7 +190,8 @@ func (p *Amqp091Publisher) SendAsync(n uint64) error {
 	now := time.Now()
 	utils.UpdatePayloadAt(now, p.Config.UseMillis, &p.msg)
 
-	p.setPublishTime(n, now)
+	p.tag++
+	p.publishTimes.Set(p.tag, now)
 	err := p.Channel.PublishWithContext(p.ctx, p.exchange, p.routingKey, p.Config.Amqp091.Mandatory, false, msg)
 	return err
 }
@@ -198,9 +199,10 @@ func (p *Amqp091Publisher) SendAsync(n uint64) error {
 func (p *Amqp091Publisher) handleConfirms() {
 	for confirm := range p.confirms {
 		if confirm.Ack {
-			pubTime := p.getPublishTime(confirm.DeliveryTag)
-			latency := time.Since(pubTime)
-			p.latency.Record(latency)
+			latency, ok := p.publishTimes.Take(confirm.DeliveryTag)
+			if ok {
+				p.latency.Record(latency)
+			}
 			metrics.MessagesConfirmed.Inc()
 			if log.IsDebug() {
 				log.Debug("message confirmed", "id", p.Id, "delivery_tag", confirm.DeliveryTag, "latency", latency)
@@ -210,7 +212,7 @@ func (p *Amqp091Publisher) handleConfirms() {
 				log.Debug("handleConfirms completed (channel closed)")
 				return
 			}
-			_ = p.getPublishTime(confirm.DeliveryTag)
+			p.publishTimes.Take(confirm.DeliveryTag)
 			if log.IsDebug() {
 				log.Debug("message not confirmed by the broker", "id", p.Id, "delivery_tag", confirm.DeliveryTag)
 			}
@@ -237,10 +239,7 @@ func (p *Amqp091Publisher) Stop(reason string) {
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	limit := time.Now().Add(2 * time.Second)
 	for time.Now().Before(limit) {
-		p.publishTimesLock.Lock()
-		empty := len(p.publishTimes) == 0
-		p.publishTimesLock.Unlock()
-		if empty {
+		if len(p.sem) == 0 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -310,20 +309,6 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 	}
 
 	return msg
-}
-
-func (p *Amqp091Publisher) setPublishTime(deliveryTag uint64, t time.Time) {
-	p.publishTimesLock.Lock()
-	p.publishTimes[deliveryTag] = t
-	p.publishTimesLock.Unlock()
-}
-
-func (p *Amqp091Publisher) getPublishTime(deliveryTag uint64) time.Time {
-	p.publishTimesLock.Lock()
-	t := p.publishTimes[deliveryTag]
-	delete(p.publishTimes, deliveryTag)
-	p.publishTimesLock.Unlock()
-	return t
 }
 
 func parseExchangeAndRoutingKey(target string) (string, string) {
