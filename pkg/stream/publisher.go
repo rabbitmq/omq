@@ -306,7 +306,7 @@ func (p *StreamPublisher) Send(seq uint64) {
 		body = make([]byte, len(p.msg))
 		copy(body, p.msg)
 	}
-	utils.UpdatePayload(p.Config.UseMillis, &body)
+	utils.UpdatePayloadAt(time.Now(), p.Config.UseMillis, &body)
 
 	msg := amqp.NewMessage(body)
 	publishingId := p.basePublishingId + 1 + int64(seq)

@@ -187,8 +187,10 @@ func (p *Amqp091Publisher) resetConfirmsAndReturns() {
 
 func (p *Amqp091Publisher) SendAsync(n uint64) error {
 	msg := p.prepareMessage()
+	now := time.Now()
+	utils.UpdatePayloadAt(now, p.Config.UseMillis, &p.msg)
 
-	p.setPublishTime(n, time.Now())
+	p.setPublishTime(n, now)
 	err := p.Channel.PublishWithContext(p.ctx, p.exchange, p.routingKey, p.Config.Amqp091.Mandatory, false, msg)
 	return err
 }
@@ -259,8 +261,6 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 	if p.Config.SizeTemplate != nil {
 		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	}
-	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
-
 	msg := amqp091.Publishing{
 		DeliveryMode: amqp091.Persistent,
 		Body:         p.msg,

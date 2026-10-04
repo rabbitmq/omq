@@ -183,11 +183,10 @@ func (p *MqttPublisher) Send(seq uint64) {
 		body = make([]byte, len(p.msg))
 		copy(body, p.msg)
 	}
-	utils.UpdatePayload(p.Config.UseMillis, &body)
-
 	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
 
 	startTime := time.Now()
+	utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &body)
 	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), retained, body)
 	token.Wait()
 	latency := time.Since(startTime)

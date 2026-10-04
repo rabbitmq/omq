@@ -178,8 +178,6 @@ func (p *StompPublisher) Send() error {
 	if p.Config.SizeTemplate != nil {
 		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	}
-	utils.UpdatePayload(p.Config.UseMillis, &p.msg)
-
 	headers := buildHeaders(p.Config, p.Id, seq)
 	if p.Config.DetectOutOfOrder || p.Config.DetectGaps {
 		headers = append(headers,
@@ -188,6 +186,7 @@ func (p *StompPublisher) Send() error {
 	}
 
 	startTime := time.Now()
+	utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &p.msg)
 	err := p.Connection.Send(p.Topic, "", p.msg, headers...)
 	latency := time.Since(startTime)
 	if err != nil {

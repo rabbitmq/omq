@@ -231,6 +231,7 @@ func (p *Amqp10Publisher) publishSettled() string {
 			}
 			msg := p.prepareMessage()
 			startTime := time.Now()
+			utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &msg.Data[0])
 			if p.Sender == nil {
 				p.Connect()
 				continue
@@ -308,6 +309,7 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 				continue
 			}
 			startTime := time.Now()
+			utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &msg.Data[0])
 			receipt, err := p.Sender.SendWithReceipt(p.ctx, msg, nil)
 			if err != nil {
 				<-p.sem
@@ -455,8 +457,6 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 		body = make([]byte, len(p.msg))
 		copy(body, p.msg)
 	}
-	utils.UpdatePayload(p.Config.UseMillis, &body)
-
 	msg := &p.amqpMsg
 	props := &p.amqpProps
 	header := &p.amqpHeader

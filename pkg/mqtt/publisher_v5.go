@@ -233,8 +233,6 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 		}
 		copy(body, p.msg)
 	}
-	utils.UpdatePayload(p.Config.UseMillis, &body)
-
 	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
 
 	pub := &paho.Publish{
@@ -276,6 +274,7 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 	}
 
 	startTime := time.Now()
+	utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &pub.Payload)
 	_, err := p.Connection.Publish(p.ctx, pub)
 	if qos0 && p.Config.SizeTemplate == nil {
 		p.bodyPool.Put(&body)

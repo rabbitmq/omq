@@ -93,6 +93,12 @@ func MessageBody(staticSize int, sizeTemplate *template.Template, id int) []byte
 const minLatencyPayloadLen = 12
 
 func UpdatePayload(useMillis bool, payload *[]byte) *[]byte {
+	return UpdatePayloadAt(time.Now(), useMillis, payload)
+}
+
+// UpdatePayloadAt stamps the payload with the given time, so that the caller can
+// reuse a single clock reading for both the payload and its own latency tracking.
+func UpdatePayloadAt(now time.Time, useMillis bool, payload *[]byte) *[]byte {
 	p := *payload
 	if len(p) < minLatencyPayloadLen {
 		extended := make([]byte, minLatencyPayloadLen)
@@ -101,9 +107,9 @@ func UpdatePayload(useMillis bool, payload *[]byte) *[]byte {
 		*payload = p
 	}
 	if useMillis {
-		binary.BigEndian.PutUint64(p[4:], uint64(time.Now().UnixMilli()))
+		binary.BigEndian.PutUint64(p[4:], uint64(now.UnixMilli()))
 	} else {
-		binary.BigEndian.PutUint64(p[4:], uint64(time.Now().UnixNano()))
+		binary.BigEndian.PutUint64(p[4:], uint64(now.UnixNano()))
 	}
 	return payload
 }
