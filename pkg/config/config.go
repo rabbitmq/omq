@@ -150,6 +150,7 @@ type Config struct {
 	StreamOffset                any
 	StreamFilterValues          string
 	StreamFilterValueSet        []string
+	StreamDeduplication         bool
 	StreamSingleActiveConsumer  bool
 	StreamSuperStream           bool
 	StreamSuperStreamPartitions int

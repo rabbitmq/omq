@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -45,6 +44,8 @@ func (streamLibLogger) Warn(message string, v ...any) {
 	log.Debug(fmt.Sprintf(message, v...))
 }
 
+const minQueueSize = 500 // lowest QueueSize accepted by the library
+
 type StreamPublisher struct {
 	Id               int
 	Environment      *stream.Environment
@@ -55,8 +56,7 @@ type StreamPublisher struct {
 	ctx              context.Context
 	msg              []byte
 	sem              chan struct{}
-	publishTimes     map[int64]time.Time
-	publishTimesLock sync.Mutex
+	inFlight         atomic.Int64
 	basePublishingId int64
 }
 
@@ -64,14 +64,18 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *StreamPublish
 	topic := utils.ResolveTerminus(cfg.PublishToTemplate, id)
 	topic = strings.TrimPrefix(topic, "/queues/")
 
-	return &StreamPublisher{
-		Id:           id,
-		Topic:        topic,
-		Config:       cfg,
-		ctx:          ctx,
-		sem:          make(chan struct{}, cfg.MaxInFlight),
-		publishTimes: make(map[int64]time.Time),
+	p := &StreamPublisher{
+		Id:     id,
+		Topic:  topic,
+		Config: cfg,
+		ctx:    ctx,
 	}
+	// From minQueueSize up, the library's own queue provides the back-pressure.
+	// Super stream producers don't expose QueueSize, so they keep the semaphore.
+	if cfg.MaxInFlight < minQueueSize || cfg.StreamSuperStream {
+		p.sem = make(chan struct{}, cfg.MaxInFlight)
+	}
+	return p
 }
 
 func (p *StreamPublisher) Connect() {
@@ -126,7 +130,12 @@ func (p *StreamPublisher) Connect() {
 
 	producerName := "omq-publisher-" + strconv.Itoa(p.Id)
 	producerOpts := stream.NewProducerOptions()
-	producerOpts.SetProducerName(producerName)
+	// A named producer makes the broker track publishing ids for deduplication,
+	// which is noticeably slower at high rates.
+	if p.Config.StreamDeduplication {
+		producerOpts.SetProducerName(producerName)
+	}
+	producerOpts.SetQueueSize(max(minQueueSize, p.Config.MaxInFlight))
 
 	if len(p.Config.StreamFilterValueSet) > 0 {
 		producerOpts.SetFilter(stream.NewProducerFilter(func(message message.StreamMessage) string {
@@ -145,36 +154,23 @@ func (p *StreamPublisher) Connect() {
 
 	confirmHandler := func(confirms []*stream.ConfirmationStatus) {
 		for _, msg := range confirms {
-			publishingId := msg.GetPublishingId()
+			p.inFlight.Add(-1)
 			if msg.IsConfirmed() {
 				metrics.MessagesConfirmed.Inc()
 
-				p.publishTimesLock.Lock()
-				startTime, exists := p.publishTimes[publishingId]
-				if exists {
-					delete(p.publishTimes, publishingId)
+				if data := msg.GetMessage().GetData(); len(data) > 0 {
+					if _, latency := utils.CalculateEndToEndLatency(&data[0]); latency > 0 {
+						metrics.RecordPublishingLatency(latency)
+					}
 				}
-				p.publishTimesLock.Unlock()
-
-				if exists {
-					latency := time.Since(startTime)
-					metrics.RecordPublishingLatency(latency)
-					log.Debug("message confirmed", "id", p.Id, "publishing_id", publishingId, "latency", latency)
-				}
-
+			} else if log.IsDebug() {
+				log.Debug("message not confirmed by the broker", "id", p.Id, "publishing_id", msg.GetPublishingId())
+			}
+			if p.sem != nil {
 				select {
 				case <-p.sem:
 				default:
 				}
-			} else {
-				p.publishTimesLock.Lock()
-				delete(p.publishTimes, publishingId)
-				p.publishTimesLock.Unlock()
-				select {
-				case <-p.sem:
-				default:
-				}
-				log.Debug("message not confirmed by the broker", "id", p.Id, "publishing_id", publishingId)
 			}
 		}
 	}
@@ -211,13 +207,14 @@ func (p *StreamPublisher) Connect() {
 		return
 	}
 
-	lastId, err := env.QuerySequence(producerName, p.Topic)
-	if err != nil {
-		log.Debug("failed to query last publishing ID, starting from 0", "id", p.Id, "error", err.Error())
-		p.basePublishingId = 0
-	} else {
-		p.basePublishingId = lastId
-		log.Debug("queried last publishing ID", "id", p.Id, "lastId", lastId)
+	if p.Config.StreamDeduplication {
+		lastId, err := env.QuerySequence(producerName, p.Topic)
+		if err != nil {
+			log.Debug("failed to query last publishing ID, starting from 0", "id", p.Id, "error", err.Error())
+		} else {
+			p.basePublishingId = lastId
+			log.Debug("queried last publishing ID", "id", p.Id, "lastId", lastId)
+		}
 	}
 
 	producer, err := ha.NewReliableProducer(env, p.Topic, producerOpts, confirmHandler)
@@ -282,10 +279,12 @@ func (p *StreamPublisher) StartPublishing() string {
 			if p.Config.Rate > 0 {
 				_ = limiter.Wait(p.ctx)
 			}
-			select {
-			case p.sem <- struct{}{}:
-			case <-p.ctx.Done():
-				return "context cancelled"
+			if p.sem != nil {
+				select {
+				case p.sem <- struct{}{}:
+				case <-p.ctx.Done():
+					return "context cancelled"
+				}
 			}
 			p.Send(seq)
 		}
@@ -332,10 +331,7 @@ func (p *StreamPublisher) Send(seq uint64) {
 		}
 	}
 
-	startTime := time.Now()
-	p.publishTimesLock.Lock()
-	p.publishTimes[publishingId] = startTime
-	p.publishTimesLock.Unlock()
+	p.inFlight.Add(1)
 
 	var sendErr error
 	if p.Config.StreamSuperStream {
@@ -344,12 +340,12 @@ func (p *StreamPublisher) Send(seq uint64) {
 		sendErr = p.Producer.Send(msg)
 	}
 	if sendErr != nil {
-		p.publishTimesLock.Lock()
-		delete(p.publishTimes, publishingId)
-		p.publishTimesLock.Unlock()
-		select {
-		case <-p.sem:
-		default:
+		p.inFlight.Add(-1)
+		if p.sem != nil {
+			select {
+			case <-p.sem:
+			default:
+			}
 		}
 		if !strings.Contains(sendErr.Error(), "use of closed network connection") &&
 			!strings.Contains(sendErr.Error(), "context canceled") {
@@ -358,17 +354,16 @@ func (p *StreamPublisher) Send(seq uint64) {
 		return
 	}
 	metrics.MessagesPublished.Inc()
-	log.Debug("message sent", "id", p.Id, "destination", p.Topic)
+	if log.IsDebug() {
+		log.Debug("message sent", "id", p.Id, "destination", p.Topic)
+	}
 }
 
 func (p *StreamPublisher) Stop(reason string) {
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	limit := time.Now().Add(5 * time.Second)
 	for time.Now().Before(limit) {
-		p.publishTimesLock.Lock()
-		empty := len(p.publishTimes) == 0
-		p.publishTimesLock.Unlock()
-		if empty {
+		if p.inFlight.Load() <= 0 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
