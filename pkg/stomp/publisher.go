@@ -3,7 +3,6 @@ package stomp
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"math/rand/v2"
 	"net"
 	"net/url"
@@ -32,6 +31,12 @@ type StompPublisher struct {
 	whichUri   int
 	msgSent    uint64
 	latency    *metrics.LatencyRecorder
+	idStr      string
+	static     []func(*frame.Frame) error // headers that are the same for every message
+	headers    []func(*frame.Frame) error // reused per message: static followed by dynamic
+	filterOpts []func(*frame.Frame) error // one pre-built header per stream filter value
+	priorityOK bool
+	ttlOK      bool
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *StompPublisher {
@@ -42,7 +47,9 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *StompPublishe
 		Config:     cfg,
 		ctx:        ctx,
 		latency:    metrics.NewLatencyRecorder(),
+		idStr:      strconv.Itoa(id),
 	}
+	publisher.buildStaticHeaders()
 
 	if cfg.SpreadConnections {
 		publisher.whichUri = id % len(cfg.PublisherUri)
@@ -178,12 +185,11 @@ func (p *StompPublisher) Send() error {
 	if p.Config.SizeTemplate != nil {
 		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	}
-	headers := buildHeaders(p.Config, p.Id, seq)
-	if p.Config.DetectOutOfOrder || p.Config.DetectGaps {
-		headers = append(headers,
-			stomp.SendOpt.Header(utils.HeaderPublisherID, strconv.Itoa(p.Id)),
-			stomp.SendOpt.Header(utils.HeaderSequence, strconv.FormatUint(seq, 10)))
-	}
+
+	headers := p.headers[:0]
+	headers = append(headers, p.static...)
+	headers = p.appendDynamicHeaders(headers, seq)
+	p.headers = headers
 
 	startTime := time.Now()
 	utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &p.msg)
@@ -206,37 +212,60 @@ func (p *StompPublisher) Stop(reason string) {
 	_ = p.Connection.Disconnect()
 }
 
-func buildHeaders(cfg config.Config, publisherId int, seq uint64) []func(*frame.Frame) error {
-	var headers []func(*frame.Frame) error
+// buildStaticHeaders pre-builds everything that does not depend on the message:
+// the fixed headers, and priority/TTL when their templates have no actions.
+func (p *StompPublisher) buildStaticHeaders() {
+	cfg := p.Config
+	p.static = append(p.static, stomp.SendOpt.Receipt)
 
-	headers = append(headers, stomp.SendOpt.Receipt)
-
-	var msgDurability string
+	msgDurability := "false"
 	if cfg.MessageDurability {
 		msgDurability = "true"
-	} else {
-		msgDurability = "false"
 	}
-	headers = append(headers, stomp.SendOpt.Header("persistent", msgDurability))
+	p.static = append(p.static, stomp.SendOpt.Header("persistent", msgDurability))
 
-	// Handle message priority (always use template)
-	if cfg.MessagePriorityTemplate != nil {
-		priorityStr := utils.ExecuteTemplate(cfg.MessagePriorityTemplate, publisherId)
-		headers = append(headers, stomp.SendOpt.Header("priority", priorityStr))
+	if v, ok := utils.StaticTemplateValue(cfg.MessagePriorityTemplate, p.Id); ok {
+		p.static = append(p.static, stomp.SendOpt.Header("priority", v))
+		p.priorityOK = true
 	}
-	if cfg.MessageTTLTemplate != nil {
-		ttlStr := utils.ExecuteTemplate(cfg.MessageTTLTemplate, publisherId)
+	if v, ok := utils.StaticTemplateValue(cfg.MessageTTLTemplate, p.Id); ok {
+		if ttl, err := time.ParseDuration(v); err == nil {
+			p.ttlOK = true
+			if ttl.Milliseconds() > 0 {
+				p.static = append(p.static, stomp.SendOpt.Header("expiration", strconv.FormatInt(ttl.Milliseconds(), 10)))
+			}
+		}
+	}
+	for _, v := range cfg.StreamFilterValueSet {
+		p.filterOpts = append(p.filterOpts, stomp.SendOpt.Header("x-stream-filter-value", v))
+	}
+}
+
+// appendDynamicHeaders adds the headers that depend on the message sequence or
+// on templates that have to be evaluated for every message.
+func (p *StompPublisher) appendDynamicHeaders(headers []func(*frame.Frame) error, seq uint64) []func(*frame.Frame) error {
+	cfg := p.Config
+
+	if cfg.MessagePriorityTemplate != nil && !p.priorityOK {
+		headers = append(headers, stomp.SendOpt.Header("priority", utils.ExecuteTemplate(cfg.MessagePriorityTemplate, p.Id, seq)))
+	}
+	if cfg.MessageTTLTemplate != nil && !p.ttlOK {
+		ttlStr := utils.ExecuteTemplate(cfg.MessageTTLTemplate, p.Id, seq)
 		if ttl, err := time.ParseDuration(ttlStr); err == nil && ttl.Milliseconds() > 0 {
-			headers = append(headers, stomp.SendOpt.Header("expiration", fmt.Sprint(ttl.Milliseconds())))
+			headers = append(headers, stomp.SendOpt.Header("expiration", strconv.FormatInt(ttl.Milliseconds(), 10)))
 		} else if err != nil {
 			log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
 		}
 	}
 
-	if len(cfg.StreamFilterValueSet) > 0 {
-		filterValue := cfg.StreamFilterValueSet[seq%uint64(len(cfg.StreamFilterValueSet))]
-		headers = append(headers, stomp.SendOpt.Header("x-stream-filter-value", filterValue))
+	if len(p.filterOpts) > 0 {
+		headers = append(headers, p.filterOpts[seq%uint64(len(p.filterOpts))])
 	}
 
+	if cfg.DetectOutOfOrder || cfg.DetectGaps {
+		headers = append(headers,
+			stomp.SendOpt.Header(utils.HeaderPublisherID, p.idStr),
+			stomp.SendOpt.Header(utils.HeaderSequence, strconv.FormatUint(seq, 10)))
+	}
 	return headers
 }
