@@ -216,6 +216,7 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 	qos0 := p.Config.MqttPublisher.QoS == 0
 
 	var body []byte
+	var holder *[]byte
 	if p.Config.SizeTemplate != nil {
 		body = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	} else {
@@ -225,6 +226,7 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 		// in the client's session store for retransmission, so must not be reused.
 		if qos0 {
 			if pooled, ok := p.bodyPool.Get().(*[]byte); ok && cap(*pooled) >= len(p.msg) {
+				holder = pooled
 				body = (*pooled)[:len(p.msg)]
 			}
 		}
@@ -277,7 +279,11 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 	utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &pub.Payload)
 	_, err := p.Connection.Publish(p.ctx, pub)
 	if qos0 && p.Config.SizeTemplate == nil {
-		p.bodyPool.Put(&body)
+		if holder == nil {
+			holder = new([]byte)
+		}
+		*holder = pub.Payload
+		p.bodyPool.Put(holder)
 	}
 	if err != nil {
 		// I couldn't find any way to prevent publishing just after omq
