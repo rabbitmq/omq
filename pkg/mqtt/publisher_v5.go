@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/eclipse/paho.golang/autopaho"
@@ -140,9 +139,10 @@ func (p *Mqtt5Publisher) Start(publisherReady chan bool, startPublishing chan bo
 func (p *Mqtt5Publisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
-	var msgSent atomic.Int64
+	var msgSent uint64
 	nextSeq := func() (seq uint64, stopReason string, ok bool) {
-		seq = uint64(msgSent.Add(1) - 1)
+		seq = msgSent
+		msgSent++
 		if seq >= uint64(p.Config.PublishCount) {
 			return 0, "--pmessages value reached", false
 		}
@@ -290,7 +290,9 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 	latency := time.Since(startTime)
 	metrics.MessagesPublished.Inc()
 	metrics.RecordPublishingLatency(latency)
-	log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+	if log.IsDebug() {
+		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+	}
 }
 
 func (p *Mqtt5Publisher) Stop(reason string) {

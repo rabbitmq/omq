@@ -266,13 +266,14 @@ func (p *StreamPublisher) Start(publisherReady chan bool, startPublishing chan b
 func (p *StreamPublisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
-	var msgSent atomic.Int64
+	var msgSent uint64
 	for {
 		select {
 		case <-p.ctx.Done():
 			return "time limit reached"
 		default:
-			seq := uint64(msgSent.Add(1) - 1)
+			seq := msgSent
+			msgSent++
 			if seq >= uint64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}

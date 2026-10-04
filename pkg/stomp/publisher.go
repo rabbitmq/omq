@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -31,7 +30,7 @@ type StompPublisher struct {
 	ctx        context.Context
 	msg        []byte
 	whichUri   int
-	msgSent    atomic.Uint64
+	msgSent    uint64
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *StompPublisher {
@@ -148,13 +147,14 @@ func (p *StompPublisher) Start(publisherReady chan bool, startPublishing chan bo
 func (p *StompPublisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
-	var msgSent atomic.Int64
+	var msgSent int64
 	for {
 		select {
 		case <-p.ctx.Done():
 			return "context cancelled"
 		default:
-			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+			msgSent++
+			if msgSent > int64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
@@ -170,7 +170,8 @@ func (p *StompPublisher) StartPublishing() string {
 }
 
 func (p *StompPublisher) Send() error {
-	seq := p.msgSent.Add(1) - 1
+	seq := p.msgSent
+	p.msgSent++
 
 	if p.Config.SizeTemplate != nil {
 		p.msg = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
@@ -193,7 +194,9 @@ func (p *StompPublisher) Send() error {
 	}
 	metrics.MessagesPublished.Inc()
 	metrics.RecordPublishingLatency(latency)
-	log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+	if log.IsDebug() {
+		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+	}
 	return nil
 }
 

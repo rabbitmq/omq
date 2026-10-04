@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"math/rand/v2"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -138,13 +137,14 @@ func (p *MqttPublisher) Start(publisherReady chan bool, startPublishing chan boo
 func (p *MqttPublisher) StartPublishing() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
-	var msgSent atomic.Int64
+	var msgSent uint64
 	for {
 		select {
 		case <-p.ctx.Done():
 			return "time limit reached"
 		default:
-			seq := uint64(msgSent.Add(1) - 1)
+			seq := msgSent
+			msgSent++
 			if seq >= uint64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}
@@ -194,7 +194,9 @@ func (p *MqttPublisher) Send(seq uint64) {
 	} else {
 		metrics.MessagesPublished.Inc()
 		metrics.RecordPublishingLatency(latency)
-		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+		if log.IsDebug() {
+			log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+		}
 	}
 }
 

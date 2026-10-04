@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -30,7 +29,7 @@ type Amqp10Publisher struct {
 	Config      config.Config
 	msg         []byte
 	whichUri    int
-	msgSent     atomic.Uint64
+	msgSent     uint64
 	settlements chan amqp.Settlement
 	sem         chan struct{}
 	done        chan struct{}
@@ -215,13 +214,14 @@ func (p *Amqp10Publisher) StartPublishing() string {
 func (p *Amqp10Publisher) publishSettled() string {
 	limiter := utils.RateLimiter(p.Config.Rate)
 
-	var msgSent atomic.Int64
+	var msgSent int64
 	for {
 		select {
 		case <-p.ctx.Done():
 			return "context cancelled"
 		default:
-			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+			msgSent++
+			if msgSent > int64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}
 			if p.Config.Rate > 0 {
@@ -272,14 +272,15 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 		}
 	})
 
-	var msgSent atomic.Int64
+	var msgSent int64
 	for {
 		select {
 		case <-p.ctx.Done():
 			close(p.done)
 			return "context cancelled"
 		default:
-			if msgSent.Add(1) > int64(p.Config.PublishCount) {
+			msgSent++
+			if msgSent > int64(p.Config.PublishCount) {
 				close(p.done)
 				return "--pmessages value reached"
 			}
@@ -442,7 +443,8 @@ func maybeConvertToInt(value string) any {
 }
 
 func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
-	seq := p.msgSent.Add(1) - 1
+	seq := p.msgSent
+	p.msgSent++
 
 	var body []byte
 	if p.Config.SizeTemplate != nil {

@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	amqp091 "github.com/rabbitmq/amqp091-go"
@@ -33,7 +32,7 @@ type Amqp091Publisher struct {
 	Config           config.Config
 	msg              []byte
 	whichUri         int
-	msgSent          atomic.Uint64
+	msgSent          uint64
 	ctx              context.Context
 }
 
@@ -144,13 +143,14 @@ func (p *Amqp091Publisher) StartPublishing() string {
 
 	p.resetConfirmsAndReturns()
 
-	var msgSent atomic.Int64
+	var msgSent uint64
 	for {
 		select {
 		case <-p.ctx.Done():
 			return "context cancelled"
 		default:
-			n := uint64(msgSent.Add(1))
+			msgSent++
+			n := msgSent
 			if n > uint64(p.Config.PublishCount) {
 				return "--pmessages value reached"
 			}
@@ -170,7 +170,9 @@ func (p *Amqp091Publisher) StartPublishing() string {
 				p.resetConfirmsAndReturns()
 			} else {
 				metrics.MessagesPublished.Inc()
-				log.Debug("message sent", "id", p.Id, "deliveryTag", n)
+				if log.IsDebug() {
+					log.Debug("message sent", "id", p.Id, "deliveryTag", n)
+				}
 			}
 		}
 	}
@@ -196,14 +198,18 @@ func (p *Amqp091Publisher) handleConfirms() {
 			latency := time.Since(pubTime)
 			metrics.RecordPublishingLatency(latency)
 			metrics.MessagesConfirmed.Inc()
-			log.Debug("message confirmed", "id", p.Id, "delivery_tag", confirm.DeliveryTag, "latency", latency)
+			if log.IsDebug() {
+				log.Debug("message confirmed", "id", p.Id, "delivery_tag", confirm.DeliveryTag, "latency", latency)
+			}
 		} else {
 			if confirm.DeliveryTag == 0 {
 				log.Debug("handleConfirms completed (channel closed)")
 				return
 			}
 			_ = p.getPublishTime(confirm.DeliveryTag)
-			log.Debug("message not confirmed by the broker", "id", p.Id, "delivery_tag", confirm.DeliveryTag)
+			if log.IsDebug() {
+				log.Debug("message not confirmed by the broker", "id", p.Id, "delivery_tag", confirm.DeliveryTag)
+			}
 		}
 		<-p.sem
 	}
@@ -212,12 +218,14 @@ func (p *Amqp091Publisher) handleConfirms() {
 func (p *Amqp091Publisher) handleReturns() {
 	for returned := range p.returns {
 		metrics.MessagesReturned.Inc()
-		log.Debug("message returned by broker (unroutable)",
-			"id", p.Id,
-			"reply_code", returned.ReplyCode,
-			"reply_text", returned.ReplyText,
-			"exchange", returned.Exchange,
-			"routing_key", returned.RoutingKey)
+		if log.IsDebug() {
+			log.Debug("message returned by broker (unroutable)",
+				"id", p.Id,
+				"reply_code", returned.ReplyCode,
+				"reply_text", returned.ReplyText,
+				"exchange", returned.Exchange,
+				"routing_key", returned.RoutingKey)
+		}
 	}
 }
 
@@ -242,7 +250,8 @@ func (p *Amqp091Publisher) Stop(reason string) {
 }
 
 func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
-	seq := p.msgSent.Add(1) - 1
+	seq := p.msgSent
+	p.msgSent++
 
 	// Regenerate message body on each publish if size template is used
 	if p.Config.SizeTemplate != nil {
