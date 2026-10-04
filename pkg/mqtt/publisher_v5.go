@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/eclipse/paho.golang/autopaho"
@@ -29,11 +30,12 @@ type Mqtt5Publisher struct {
 	wg         sync.WaitGroup
 	bodyPool   sync.Pool
 	latency    *metrics.LatencyRecorder
+	statics    staticFields
 }
 
 func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Publisher {
 	topic := publisherTopic(cfg.PublishToTemplate, id)
-	return &Mqtt5Publisher{
+	p := &Mqtt5Publisher{
 		Id:         id,
 		Connection: nil,
 		Topic:      topic,
@@ -41,6 +43,43 @@ func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Pub
 		ctx:        ctx,
 		latency:    metrics.NewLatencyRecorder(),
 	}
+	p.statics = newStaticFields(cfg, id)
+	return p
+}
+
+// staticFields holds what does not change from message to message (templates
+// without actions), so that it is computed and parsed once per publisher.
+type staticFields struct {
+	userProps     []paho.UserProperty
+	dynamicProps  map[string]*template.Template
+	expiry        *uint32
+	expiryOK      bool
+	idStr         string
+	needsOrdering bool
+}
+
+func newStaticFields(cfg config.Config, id int) staticFields {
+	sf := staticFields{
+		idStr:         strconv.Itoa(id),
+		needsOrdering: cfg.DetectOutOfOrder || cfg.DetectGaps,
+	}
+	for key, tmpl := range cfg.MqttPublisher.UserPropertyTemplates {
+		if v, ok := utils.StaticTemplateValue(tmpl, id); ok {
+			sf.userProps = append(sf.userProps, paho.UserProperty{Key: key, Value: v})
+			continue
+		}
+		if sf.dynamicProps == nil {
+			sf.dynamicProps = make(map[string]*template.Template)
+		}
+		sf.dynamicProps[key] = tmpl
+	}
+	if v, ok := utils.StaticTemplateValue(cfg.MessageTTLTemplate, id); ok {
+		if ttl, err := time.ParseDuration(v); err == nil {
+			secs := uint32(ttl.Seconds())
+			sf.expiry, sf.expiryOK = &secs, true
+		}
+	}
+	return sf
 }
 
 func (p *Mqtt5Publisher) Connect() {
@@ -235,6 +274,7 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 		}
 		copy(body, p.msg)
 	}
+
 	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
 
 	pub := &paho.Publish{
@@ -243,35 +283,39 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 		Topic:   p.Topic,
 		Payload: body,
 	}
-	if p.Config.DetectOutOfOrder || p.Config.DetectGaps {
-		pub.Properties = &paho.PublishProperties{
-			User: []paho.UserProperty{
-				{Key: utils.HeaderPublisherID, Value: strconv.Itoa(p.Id)},
-				{Key: utils.HeaderSequence, Value: strconv.FormatUint(seq, 10)},
-			},
-		}
-	}
 
-	if len(p.Config.MqttPublisher.UserPropertyTemplates) > 0 {
-		if pub.Properties == nil {
-			pub.Properties = &paho.PublishProperties{}
+	sf := &p.statics
+	if sf.needsOrdering || len(sf.userProps) > 0 || len(sf.dynamicProps) > 0 {
+		user := make([]paho.UserProperty, 0, len(sf.userProps)+len(sf.dynamicProps)+2)
+		if sf.needsOrdering {
+			user = append(user,
+				paho.UserProperty{Key: utils.HeaderPublisherID, Value: sf.idStr},
+				paho.UserProperty{Key: utils.HeaderSequence, Value: strconv.FormatUint(seq, 10)})
 		}
-		for key, tmpl := range p.Config.MqttPublisher.UserPropertyTemplates {
-			val := utils.ExecuteTemplate(tmpl, p.Id, seq)
-			pub.Properties.User = append(pub.Properties.User, paho.UserProperty{Key: key, Value: val})
+		user = append(user, sf.userProps...)
+		for key, tmpl := range sf.dynamicProps {
+			user = append(user, paho.UserProperty{Key: key, Value: utils.ExecuteTemplate(tmpl, p.Id, seq)})
 		}
+		pub.Properties = &paho.PublishProperties{User: user}
 	}
 
 	if p.Config.MessageTTLTemplate != nil {
-		ttlStr := utils.ExecuteTemplate(p.Config.MessageTTLTemplate, p.Id, seq)
-		if ttl, err := time.ParseDuration(ttlStr); err == nil {
-			expirySecs := uint32(ttl.Seconds())
+		if sf.expiryOK {
 			if pub.Properties == nil {
 				pub.Properties = &paho.PublishProperties{}
 			}
-			pub.Properties.MessageExpiry = &expirySecs
+			pub.Properties.MessageExpiry = sf.expiry
 		} else {
-			log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
+			ttlStr := utils.ExecuteTemplate(p.Config.MessageTTLTemplate, p.Id, seq)
+			if ttl, err := time.ParseDuration(ttlStr); err == nil {
+				expirySecs := uint32(ttl.Seconds())
+				if pub.Properties == nil {
+					pub.Properties = &paho.PublishProperties{}
+				}
+				pub.Properties.MessageExpiry = &expirySecs
+			} else {
+				log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
+			}
 		}
 	}
 
