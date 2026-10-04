@@ -26,6 +26,7 @@ type Amqp091Publisher struct {
 	returns          chan amqp091.Return
 	publishTimes     map[uint64]time.Time
 	publishTimesLock sync.Mutex
+	latency          *metrics.LatencyRecorder
 	sem              chan struct{}
 	exchange         string
 	routingKey       string
@@ -47,6 +48,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp091Publis
 		exchange:     exchange,
 		routingKey:   routingKey,
 		publishTimes: make(map[uint64]time.Time),
+		latency:      metrics.NewLatencyRecorder(),
 		whichUri:     0,
 		ctx:          ctx,
 	}
@@ -196,7 +198,7 @@ func (p *Amqp091Publisher) handleConfirms() {
 		if confirm.Ack {
 			pubTime := p.getPublishTime(confirm.DeliveryTag)
 			latency := time.Since(pubTime)
-			metrics.RecordPublishingLatency(latency)
+			p.latency.Record(latency)
 			metrics.MessagesConfirmed.Inc()
 			if log.IsDebug() {
 				log.Debug("message confirmed", "id", p.Id, "delivery_tag", confirm.DeliveryTag, "latency", latency)

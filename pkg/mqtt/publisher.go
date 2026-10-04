@@ -24,6 +24,7 @@ type MqttPublisher struct {
 	msg        []byte
 	sem        chan struct{}
 	wg         sync.WaitGroup
+	latency    *metrics.LatencyRecorder
 }
 
 func NewMqttPublisher(ctx context.Context, cfg config.Config, id int) *MqttPublisher {
@@ -35,6 +36,7 @@ func NewMqttPublisher(ctx context.Context, cfg config.Config, id int) *MqttPubli
 		Config:     cfg,
 		ctx:        ctx,
 		sem:        make(chan struct{}, cfg.MaxInFlight),
+		latency:    metrics.NewLatencyRecorder(),
 	}
 }
 
@@ -193,7 +195,7 @@ func (p *MqttPublisher) Send(seq uint64) {
 		log.Error("message sending failure", "id", p.Id, "error", token.Error())
 	} else {
 		metrics.MessagesPublished.Inc()
-		metrics.RecordPublishingLatency(latency)
+		p.latency.Record(latency)
 		if log.IsDebug() {
 			log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 		}

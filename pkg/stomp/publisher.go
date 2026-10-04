@@ -31,6 +31,7 @@ type StompPublisher struct {
 	msg        []byte
 	whichUri   int
 	msgSent    uint64
+	latency    *metrics.LatencyRecorder
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *StompPublisher {
@@ -40,6 +41,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *StompPublishe
 		Topic:      utils.ResolveTerminus(cfg.PublishToTemplate, id),
 		Config:     cfg,
 		ctx:        ctx,
+		latency:    metrics.NewLatencyRecorder(),
 	}
 
 	if cfg.SpreadConnections {
@@ -193,7 +195,7 @@ func (p *StompPublisher) Send() error {
 		return err
 	}
 	metrics.MessagesPublished.Inc()
-	metrics.RecordPublishingLatency(latency)
+	p.latency.Record(latency)
 	if log.IsDebug() {
 		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 	}

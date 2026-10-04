@@ -28,6 +28,7 @@ type Mqtt5Publisher struct {
 	msg        []byte
 	wg         sync.WaitGroup
 	bodyPool   sync.Pool
+	latency    *metrics.LatencyRecorder
 }
 
 func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Publisher {
@@ -38,6 +39,7 @@ func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Pub
 		Topic:      topic,
 		Config:     cfg,
 		ctx:        ctx,
+		latency:    metrics.NewLatencyRecorder(),
 	}
 }
 
@@ -289,7 +291,7 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 	}
 	latency := time.Since(startTime)
 	metrics.MessagesPublished.Inc()
-	metrics.RecordPublishingLatency(latency)
+	p.latency.Record(latency)
 	if log.IsDebug() {
 		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
 	}

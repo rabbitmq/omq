@@ -57,6 +57,7 @@ type StreamPublisher struct {
 	msg              []byte
 	sem              chan struct{}
 	inFlight         atomic.Int64
+	latency          *metrics.LatencyRecorder
 	basePublishingId int64
 }
 
@@ -65,10 +66,11 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *StreamPublish
 	topic = strings.TrimPrefix(topic, "/queues/")
 
 	p := &StreamPublisher{
-		Id:     id,
-		Topic:  topic,
-		Config: cfg,
-		ctx:    ctx,
+		Id:      id,
+		Topic:   topic,
+		Config:  cfg,
+		ctx:     ctx,
+		latency: metrics.NewLatencyRecorder(),
 	}
 	// From minQueueSize up, the library's own queue provides the back-pressure.
 	// Super stream producers don't expose QueueSize, so they keep the semaphore.
@@ -160,7 +162,7 @@ func (p *StreamPublisher) Connect() {
 
 				if data := msg.GetMessage().GetData(); len(data) > 0 {
 					if _, latency := utils.CalculateEndToEndLatency(&data[0]); latency > 0 {
-						metrics.RecordPublishingLatency(latency)
+						p.latency.Record(latency)
 					}
 				}
 			} else if log.IsDebug() {

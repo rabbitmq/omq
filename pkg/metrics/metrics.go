@@ -53,6 +53,7 @@ var (
 func startServer() {
 	once.Do(func() {
 		http.HandleFunc("/metrics", func(w http.ResponseWriter, req *http.Request) {
+			FlushLatencies()
 			vmetrics.WritePrometheus(w, true)
 		})
 
@@ -223,11 +224,6 @@ var (
 	e2eLatencyTracker   = newLatencyTracker()
 )
 
-func RecordPublishingLatency(latency time.Duration) {
-	PublishingLatency.Update(latency.Seconds())
-	pubLatencyTracker.record(latency)
-}
-
 func RecordEndToEndLatency(latency time.Duration) {
 	if latency <= 0 {
 		return
@@ -295,6 +291,7 @@ func (m *MetricsServer) printMessageRates(ctx context.Context) {
 }
 
 func buildRateFields(publishedRate, consumedRate uint64) []any {
+	FlushLatencies()
 	var fields []any
 	fields = append(fields, "published", fmt.Sprintf("%v/s", publishedRate))
 	fields = append(fields, "consumed", fmt.Sprintf("%v/s", consumedRate))
@@ -335,6 +332,7 @@ func (m *MetricsServer) StartTime(t time.Time) {
 }
 
 func (m *MetricsServer) Stop() {
+	FlushLatencies()
 	publishedFinal := MessagesPublished.Get()
 	consumedFinal := getTotalConsumed()
 	publishedRate := publishedFinal - previouslyPublished

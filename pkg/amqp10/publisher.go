@@ -38,6 +38,7 @@ type Amqp10Publisher struct {
 	amqpMsg     amqp.Message
 	amqpProps   amqp.MessageProperties
 	amqpHeader  amqp.MessageHeader
+	latency     *metrics.LatencyRecorder
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publisher {
@@ -49,6 +50,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publish
 		Terminus:   utils.ResolveTerminus(cfg.PublishToTemplate, id),
 		whichUri:   0,
 		ctx:        ctx,
+		latency:    metrics.NewLatencyRecorder(),
 	}
 
 	if !cfg.Amqp.SendSettled {
@@ -244,7 +246,7 @@ func (p *Amqp10Publisher) publishSettled() string {
 			}
 			metrics.MessagesPublished.Inc()
 			metrics.MessagesConfirmed.Inc()
-			metrics.RecordPublishingLatency(latency)
+			p.latency.Record(latency)
 		}
 	}
 }
@@ -404,7 +406,7 @@ func (p *Amqp10Publisher) handleSettlement(s amqp.Settlement, ptMu *sync.Mutex, 
 	case *amqp.StateAccepted:
 		metrics.MessagesPublished.Inc()
 		metrics.MessagesConfirmed.Inc()
-		metrics.RecordPublishingLatency(latency)
+		p.latency.Record(latency)
 	case *amqp.StateModified:
 		log.Debug("server requires modifications to accept this message", "state", stateType)
 	case *amqp.StateReceived:
