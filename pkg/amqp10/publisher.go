@@ -39,6 +39,7 @@ type Amqp10Publisher struct {
 	amqpProps   amqp.MessageProperties
 	amqpHeader  amqp.MessageHeader
 	latency     *metrics.LatencyRecorder
+	bodies      utils.BodyArena
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publisher {
@@ -454,8 +455,7 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	if p.Config.SizeTemplate != nil {
 		body = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	} else {
-		body = make([]byte, len(p.msg))
-		copy(body, p.msg)
+		body = p.bodies.Copy(p.msg)
 	}
 	msg := &p.amqpMsg
 	props := &p.amqpProps

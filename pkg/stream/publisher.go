@@ -58,6 +58,7 @@ type StreamPublisher struct {
 	sem              chan struct{}
 	inFlight         atomic.Int64
 	latency          *metrics.LatencyRecorder
+	bodies           utils.BodyArena
 	basePublishingId int64
 }
 
@@ -303,8 +304,7 @@ func (p *StreamPublisher) Send(seq uint64) {
 	if p.Config.SizeTemplate != nil {
 		body = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	} else {
-		body = make([]byte, len(p.msg))
-		copy(body, p.msg)
+		body = p.bodies.Copy(p.msg)
 	}
 	utils.UpdatePayloadAt(time.Now(), p.Config.UseMillis, &body)
 

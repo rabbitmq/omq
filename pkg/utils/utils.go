@@ -551,3 +551,30 @@ func PastTense(outcome string) string {
 	}
 	return outcome
 }
+
+// BodyArena hands out independent copies of a payload carved out of larger
+// chunks, so a publisher that needs a fresh buffer per message (because the
+// client library keeps it until the broker confirms) allocates once per chunk
+// instead of once per message. It is not safe for concurrent use.
+type BodyArena struct {
+	chunk []byte
+}
+
+const bodyArenaChunk = 64 * 1024
+
+// Copy returns a copy of src that no other call will ever hand out again.
+func (a *BodyArena) Copy(src []byte) []byte {
+	n := len(src)
+	if n == 0 || n > bodyArenaChunk/16 {
+		b := make([]byte, n)
+		copy(b, src)
+		return b
+	}
+	if len(a.chunk) < n {
+		a.chunk = make([]byte, bodyArenaChunk)
+	}
+	b := a.chunk[:n:n]
+	a.chunk = a.chunk[n:]
+	copy(b, src)
+	return b
+}

@@ -40,3 +40,17 @@ var _ = Context("Template evaluation", func() {
 		Expect(utils.ExecuteTemplate(parse("{{ add 1 2 }},x"), 1, 0)).To(Equal("3"))
 	})
 })
+
+var _ = Context("BodyArena", func() {
+	It("hands out independent copies", func() {
+		var a utils.BodyArena
+		src := []byte{1, 2, 3}
+		b1 := a.Copy(src)
+		b2 := a.Copy(src)
+		b1[0] = 9
+		Expect(b2[0]).To(Equal(byte(1)))
+		Expect(src[0]).To(Equal(byte(1)))
+		Expect(append(b1, 7)).NotTo(BeNil()) // capped capacity: append must not overwrite b2
+		Expect(b2).To(Equal([]byte{1, 2, 3}))
+	})
+})
