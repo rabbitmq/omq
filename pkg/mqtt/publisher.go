@@ -23,6 +23,7 @@ type MqttPublisher struct {
 	ctx        context.Context
 	msg        []byte
 	wg         sync.WaitGroup
+	bodyPool   sync.Pool
 	latency    *metrics.LatencyRecorder
 }
 
@@ -206,11 +207,24 @@ func (p *MqttPublisher) Send(seq uint64) {
 		return
 	}
 
+	// Send waits for the token, which for QoS 0 completes once the packet has
+	// been written, so the buffer can be recycled afterwards. For QoS 1/2 the
+	// payload stays in the client's store until acknowledged, so it can't be.
+	recyclable := p.Config.MqttPublisher.QoS == 0 && p.Config.SizeTemplate == nil
 	var body []byte
+	var holder *[]byte
 	if p.Config.SizeTemplate != nil {
 		body = utils.MessageBody(p.Config.Size, p.Config.SizeTemplate, p.Id)
 	} else {
-		body = make([]byte, len(p.msg))
+		if recyclable {
+			if pooled, ok := p.bodyPool.Get().(*[]byte); ok && cap(*pooled) >= len(p.msg) {
+				holder = pooled
+				body = (*pooled)[:len(p.msg)]
+			}
+		}
+		if body == nil {
+			body = make([]byte, len(p.msg))
+		}
 		copy(body, p.msg)
 	}
 
@@ -221,6 +235,13 @@ func (p *MqttPublisher) Send(seq uint64) {
 	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), retained, body)
 	token.Wait()
 	latency := time.Since(startTime)
+	if recyclable {
+		if holder == nil {
+			holder = new([]byte)
+		}
+		*holder = body
+		p.bodyPool.Put(holder)
+	}
 	if token.Error() != nil {
 		log.Error("message sending failure", "id", p.Id, "error", token.Error())
 	} else {
