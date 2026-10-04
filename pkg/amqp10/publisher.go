@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/rabbitmq/omq/pkg/config"
@@ -38,8 +39,9 @@ type Amqp10Publisher struct {
 	amqpMsg     amqp.Message
 	amqpProps   amqp.MessageProperties
 	amqpHeader  amqp.MessageHeader
-	latency     *metrics.LatencyRecorder
 	bodies      utils.BodyArena
+	latency     *metrics.LatencyRecorder
+	statics     staticFields
 }
 
 func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publisher {
@@ -53,6 +55,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp10Publish
 		ctx:        ctx,
 		latency:    metrics.NewLatencyRecorder(),
 	}
+	publisher.initStatics()
 
 	if !cfg.Amqp.SendSettled {
 		publisher.settlements = make(chan amqp.Settlement, cfg.MaxInFlight)
@@ -303,14 +306,14 @@ func (p *Amqp10Publisher) publishUnsettled() string {
 				return "context cancelled"
 			}
 			msg := p.prepareMessage()
+			startTime := time.Now()
+			utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &msg.Data[0])
 			if p.Sender == nil {
 				<-p.sem
 				p.Connect()
 				p.sem = make(chan struct{}, p.Config.MaxInFlight)
 				continue
 			}
-			startTime := time.Now()
-			utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &msg.Data[0])
 			receipt, err := p.Sender.SendWithReceipt(p.ctx, msg, nil)
 			if err != nil {
 				<-p.sem
@@ -447,6 +450,63 @@ func maybeConvertToInt(value string) any {
 	return value
 }
 
+// staticFields holds what does not change from message to message (templates
+// without actions), so that it is computed and parsed once per publisher.
+type staticFields struct {
+	priority     uint8
+	priorityOK   bool
+	ttl          time.Duration
+	ttlOK        bool
+	dynamicProps map[string]*template.Template
+	dynamicAnnot map[string]*template.Template
+}
+
+// initStatics pre-populates the reused application properties and annotations
+// maps with the constant entries; only the dynamic ones are rewritten per message.
+func (p *Amqp10Publisher) initStatics() {
+	cfg := p.Config
+	sf := &p.statics
+	if v, ok := utils.StaticTemplateValue(cfg.MessagePriorityTemplate, p.Id); ok {
+		if priority, err := strconv.ParseUint(v, 10, 8); err == nil {
+			sf.priority, sf.priorityOK = uint8(priority), true
+		}
+	}
+	if v, ok := utils.StaticTemplateValue(cfg.MessageTTLTemplate, p.Id); ok {
+		if ttl, err := time.ParseDuration(v); err == nil {
+			sf.ttl, sf.ttlOK = ttl, true
+		}
+	}
+
+	if len(cfg.Amqp.AppPropertyTemplates) > 0 {
+		p.amqpMsg.ApplicationProperties = make(map[string]any, len(cfg.Amqp.AppPropertyTemplates))
+		for key, tmpl := range cfg.Amqp.AppPropertyTemplates {
+			if v, ok := utils.StaticTemplateValue(tmpl, p.Id); ok {
+				p.amqpMsg.ApplicationProperties[key] = maybeConvertToInt(v)
+				continue
+			}
+			if sf.dynamicProps == nil {
+				sf.dynamicProps = make(map[string]*template.Template)
+			}
+			sf.dynamicProps[key] = tmpl
+		}
+	}
+
+	needsOrderingMetadata := cfg.DetectOutOfOrder || cfg.DetectGaps
+	if len(cfg.Amqp.MsgAnnotationTemplates) > 0 || needsOrderingMetadata || len(cfg.StreamFilterValueSet) > 0 {
+		p.amqpMsg.Annotations = make(map[any]any, len(cfg.Amqp.MsgAnnotationTemplates)+3)
+		for key, tmpl := range cfg.Amqp.MsgAnnotationTemplates {
+			if v, ok := utils.StaticTemplateValue(tmpl, p.Id); ok {
+				p.amqpMsg.Annotations[key] = maybeConvertToInt(v)
+				continue
+			}
+			if sf.dynamicAnnot == nil {
+				sf.dynamicAnnot = make(map[string]*template.Template)
+			}
+			sf.dynamicAnnot[key] = tmpl
+		}
+	}
+}
+
 func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	seq := p.msgSent
 	p.msgSent++
@@ -474,31 +534,16 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	msg.Header = header
 	msg.DeliveryTag = nil
 
-	// Handle template-based application properties
-	if len(p.Config.Amqp.AppPropertyTemplates) > 0 {
-		if msg.ApplicationProperties == nil {
-			msg.ApplicationProperties = make(map[string]any, len(p.Config.Amqp.AppPropertyTemplates))
-		}
-		for key, tmpl := range p.Config.Amqp.AppPropertyTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
-			msg.ApplicationProperties[key] = maybeConvertToInt(stringValue)
-		}
+	for key, tmpl := range p.statics.dynamicProps {
+		msg.ApplicationProperties[key] = maybeConvertToInt(utils.ExecuteTemplate(tmpl, p.Id, seq))
 	}
 
-	// Handle template-based message annotations
-	needsOrderingMetadata := p.Config.DetectOutOfOrder || p.Config.DetectGaps
-	if len(p.Config.Amqp.MsgAnnotationTemplates) > 0 || needsOrderingMetadata {
-		if msg.Annotations == nil {
-			msg.Annotations = make(map[any]any, len(p.Config.Amqp.MsgAnnotationTemplates)+2)
-		}
-		for key, tmpl := range p.Config.Amqp.MsgAnnotationTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
-			msg.Annotations[key] = maybeConvertToInt(stringValue)
-		}
-		if needsOrderingMetadata {
-			msg.Annotations[utils.HeaderPublisherID] = int64(p.Id)
-			msg.Annotations[utils.HeaderSequence] = int64(seq)
-		}
+	for key, tmpl := range p.statics.dynamicAnnot {
+		msg.Annotations[key] = maybeConvertToInt(utils.ExecuteTemplate(tmpl, p.Id, seq))
+	}
+	if p.Config.DetectOutOfOrder || p.Config.DetectGaps {
+		msg.Annotations[utils.HeaderPublisherID] = int64(p.Id)
+		msg.Annotations[utils.HeaderSequence] = int64(seq)
 	}
 
 	if len(p.Config.Amqp.Subjects) > 0 {
@@ -510,30 +555,35 @@ func (p *Amqp10Publisher) prepareMessage() *amqp.Message {
 	}
 
 	if len(p.Config.StreamFilterValueSet) > 0 {
-		if msg.Annotations == nil {
-			msg.Annotations = make(amqp.Annotations)
-		}
 		msg.Annotations["x-stream-filter-value"] = p.Config.StreamFilterValueSet[seq%uint64(len(p.Config.StreamFilterValueSet))]
 	}
 
 	header.Durable = p.Config.MessageDurability
 
 	if p.Config.MessagePriorityTemplate != nil {
-		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id, seq)
-		if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
-			header.Priority = uint8(priority)
+		if p.statics.priorityOK {
+			header.Priority = p.statics.priority
 		} else {
-			log.Error("failed to parse template-generated priority", "value", priorityStr, "error", err)
-			os.Exit(1)
+			priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id, seq)
+			if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
+				header.Priority = uint8(priority)
+			} else {
+				log.Error("failed to parse template-generated priority", "value", priorityStr, "error", err)
+				os.Exit(1)
+			}
 		}
 	}
 	if p.Config.MessageTTLTemplate != nil {
-		ttlStr := utils.ExecuteTemplate(p.Config.MessageTTLTemplate, p.Id, seq)
-		if ttl, err := time.ParseDuration(ttlStr); err == nil {
-			header.TTL = ttl
+		if p.statics.ttlOK {
+			header.TTL = p.statics.ttl
 		} else {
-			log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
-			os.Exit(1)
+			ttlStr := utils.ExecuteTemplate(p.Config.MessageTTLTemplate, p.Id, seq)
+			if ttl, err := time.ParseDuration(ttlStr); err == nil {
+				header.TTL = ttl
+			} else {
+				log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
+				os.Exit(1)
+			}
 		}
 	}
 	return msg

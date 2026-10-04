@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	amqp091 "github.com/rabbitmq/amqp091-go"
@@ -25,6 +26,8 @@ type Amqp091Publisher struct {
 	returns      chan amqp091.Return
 	publishTimes *utils.TagTimes
 	latency      *metrics.LatencyRecorder
+	tag          uint64 // delivery tag of the last publish on the current channel
+	statics      staticFields
 	sem          chan struct{}
 	exchange     string
 	routingKey   string
@@ -32,7 +35,6 @@ type Amqp091Publisher struct {
 	msg          []byte
 	whichUri     int
 	msgSent      uint64
-	tag          uint64 // delivery tag of the last publish on the current channel
 	ctx          context.Context
 }
 
@@ -48,6 +50,7 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) *Amqp091Publis
 		routingKey:   routingKey,
 		publishTimes: utils.NewTagTimes(cfg.MaxInFlight),
 		latency:      metrics.NewLatencyRecorder(),
+		statics:      newStaticFields(cfg, id),
 		whichUri:     0,
 		ctx:          ctx,
 	}
@@ -252,6 +255,59 @@ func (p *Amqp091Publisher) Stop(reason string) {
 	}
 }
 
+// staticFields holds what does not change from message to message (templates
+// without actions), so that it is computed and parsed once per publisher.
+type staticFields struct {
+	expiration     string
+	expirationOK   bool
+	priority       uint8
+	priorityOK     bool
+	headers        amqp091.Table // reused for every message; the dynamic keys are overwritten each time
+	dynamicHeaders map[string]*template.Template
+}
+
+func newStaticFields(cfg config.Config, id int) staticFields {
+	var sf staticFields
+	if v, ok := utils.StaticTemplateValue(cfg.MessageTTLTemplate, id); ok {
+		if ttl, err := time.ParseDuration(v); err == nil {
+			sf.expirationOK = true
+			if ttl.Milliseconds() > 0 {
+				sf.expiration = strconv.FormatInt(ttl.Milliseconds(), 10)
+			}
+		}
+	}
+	if v, ok := utils.StaticTemplateValue(cfg.MessagePriorityTemplate, id); ok {
+		if priority, err := strconv.ParseUint(v, 10, 8); err == nil {
+			sf.priorityOK = true
+			sf.priority = uint8(priority)
+		}
+	}
+	needsOrderingMetadata := cfg.DetectOutOfOrder || cfg.DetectGaps
+	if len(cfg.Amqp091.HeaderTemplates) > 0 || needsOrderingMetadata || len(cfg.StreamFilterValueSet) > 0 {
+		sf.headers = make(amqp091.Table)
+		for key, tmpl := range cfg.Amqp091.HeaderTemplates {
+			if v, ok := utils.StaticTemplateValue(tmpl, id); ok {
+				sf.headers[key] = headerValue(v)
+				continue
+			}
+			if sf.dynamicHeaders == nil {
+				sf.dynamicHeaders = make(map[string]*template.Template)
+			}
+			sf.dynamicHeaders[key] = tmpl
+		}
+	}
+	return sf
+}
+
+func headerValue(s string) any {
+	if intVal, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return intVal
+	} else if floatVal, err := strconv.ParseFloat(s, 64); err == nil {
+		return floatVal
+	}
+	return s
+}
+
 func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 	seq := p.msgSent
 	p.msgSent++
@@ -266,46 +322,44 @@ func (p *Amqp091Publisher) prepareMessage() amqp091.Publishing {
 	}
 
 	if p.Config.MessageTTLTemplate != nil {
-		ttlStr := utils.ExecuteTemplate(p.Config.MessageTTLTemplate, p.Id, seq)
-		if ttl, err := time.ParseDuration(ttlStr); err == nil && ttl.Milliseconds() > 0 {
-			msg.Expiration = strconv.FormatInt(ttl.Milliseconds(), 10)
-		} else if err != nil {
-			log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
+		if p.statics.expirationOK {
+			msg.Expiration = p.statics.expiration
+		} else {
+			ttlStr := utils.ExecuteTemplate(p.Config.MessageTTLTemplate, p.Id, seq)
+			if ttl, err := time.ParseDuration(ttlStr); err == nil && ttl.Milliseconds() > 0 {
+				msg.Expiration = strconv.FormatInt(ttl.Milliseconds(), 10)
+			} else if err != nil {
+				log.Error("failed to parse template-generated TTL", "value", ttlStr, "error", err)
+			}
 		}
 	}
 
 	if p.Config.MessagePriorityTemplate != nil {
-		priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id, seq)
-		if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
-			msg.Priority = uint8(priority)
+		if p.statics.priorityOK {
+			msg.Priority = p.statics.priority
 		} else {
-			log.Error("failed to parse template-generated priority", "value", priorityStr, "error", err)
-			os.Exit(1)
+			priorityStr := utils.ExecuteTemplate(p.Config.MessagePriorityTemplate, p.Id, seq)
+			if priority, err := strconv.ParseUint(priorityStr, 10, 8); err == nil {
+				msg.Priority = uint8(priority)
+			} else {
+				log.Error("failed to parse template-generated priority", "value", priorityStr, "error", err)
+				os.Exit(1)
+			}
 		}
 	}
 
-	needsOrderingMetadata := p.Config.DetectOutOfOrder || p.Config.DetectGaps
-	if len(p.Config.Amqp091.HeaderTemplates) > 0 || needsOrderingMetadata || len(p.Config.StreamFilterValueSet) > 0 {
-		if msg.Headers == nil {
-			msg.Headers = make(amqp091.Table)
+	if headers := p.statics.headers; headers != nil {
+		for key, tmpl := range p.statics.dynamicHeaders {
+			headers[key] = headerValue(utils.ExecuteTemplate(tmpl, p.Id, seq))
 		}
-		for key, tmpl := range p.Config.Amqp091.HeaderTemplates {
-			stringValue := utils.ExecuteTemplate(tmpl, p.Id, seq)
-			if intVal, err := strconv.ParseInt(stringValue, 10, 64); err == nil {
-				msg.Headers[key] = intVal
-			} else if floatVal, err := strconv.ParseFloat(stringValue, 64); err == nil {
-				msg.Headers[key] = floatVal
-			} else {
-				msg.Headers[key] = stringValue
-			}
-		}
-		if needsOrderingMetadata {
-			msg.Headers[utils.HeaderPublisherID] = int64(p.Id)
-			msg.Headers[utils.HeaderSequence] = int64(seq)
+		if p.Config.DetectOutOfOrder || p.Config.DetectGaps {
+			headers[utils.HeaderPublisherID] = int64(p.Id)
+			headers[utils.HeaderSequence] = int64(seq)
 		}
 		if len(p.Config.StreamFilterValueSet) > 0 {
-			msg.Headers["x-stream-filter-value"] = p.Config.StreamFilterValueSet[seq%uint64(len(p.Config.StreamFilterValueSet))]
+			headers["x-stream-filter-value"] = p.Config.StreamFilterValueSet[seq%uint64(len(p.Config.StreamFilterValueSet))]
 		}
+		msg.Headers = headers
 	}
 
 	return msg
