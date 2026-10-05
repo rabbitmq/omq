@@ -106,7 +106,9 @@ func (p *StreamPublisher) Connect() {
 	parsedUri := utils.ParseURI(uriStr, "rabbitmq-stream", defaultPort)
 
 	isTLS := parsedUri.Scheme == "rabbitmq-stream+tls"
+	// Let the OS size the receive buffer; the library's 8 KiB default stalls large confirmation bursts on Linux.
 	opts := stream.NewEnvironmentOptions().
+		SetReadBuffer(0).
 		SetHost(strings.Split(parsedUri.Broker, ":")[0]).
 		SetUser(parsedUri.Username).
 		SetPassword(parsedUri.Password).
