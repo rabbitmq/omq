@@ -1243,7 +1243,7 @@ var _ = Describe("OMQ CLI", func() {
 			args := []string{
 				"stomp",
 				"--pmessages=3",
-				"--cmessages=6", // expect to consume each message twice (requeued once)
+				"--cmessages=6", // Requeue matching deliveries until the consumer limit.
 				"--publish-to=/topic/priority-requeue-stomp",
 				"--consume-from=/topic/priority-requeue-stomp",
 				"--message-priority=5",
@@ -1256,7 +1256,9 @@ var _ = Describe("OMQ CLI", func() {
 			session := omq(args)
 			Eventually(session).WithTimeout(11 * time.Second).Should(gexec.Exit(0))
 
-			// All 3 messages should be consumed twice (nacked with requeue once, then acked)
+			// Requeued messages produce six deliveries; each delivery is nacked.
+			// Shutdown must not trigger a broker error from a late redelivery.
+			Expect(session.Err.Contents()).ShouldNot(ContainSubstring("received ERROR"))
 			output, _ := io.ReadAll(session.Out)
 			buf := bytes.NewReader(output)
 			Expect(metricValue(buf, `omq_messages_consumed_total{priority="5"}`)).Should(Equal(6.0))

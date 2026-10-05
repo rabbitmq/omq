@@ -275,14 +275,15 @@ func (c *StompConsumer) Start(consumerReady chan bool) {
 
 func (c *StompConsumer) Stop(reason string) {
 	if c.Subscription != nil {
+		// Drain deliveries already in flight so the STOMP I/O loop can process
+		// the DISCONNECT receipt. Each consumer owns its connection, so closing
+		// the session also cancels its subscription. An explicit UNSUBSCRIBE
+		// can race with a requeued delivery on RabbitMQ and produce an ERROR
+		// after its receipt, while the client is trying to disconnect.
 		go func(sub *stomp.Subscription) {
 			for range sub.C {
 			}
 		}(c.Subscription)
-		err := c.Subscription.Unsubscribe()
-		if err != nil {
-			log.Info("failed to unsubscribe", "id", c.Id, "error", err.Error())
-		}
 	}
 	if c.Connection != nil {
 		err := c.Connection.Disconnect()
