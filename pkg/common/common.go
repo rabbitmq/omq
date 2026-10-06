@@ -46,6 +46,8 @@ func NewPublisher(ctx context.Context, cfg config.Config, id int) (Publisher, er
 			return nil, fmt.Errorf("failed to create an MQTT publisher")
 		}
 		return p, nil
+	case config.MQTT5:
+		return mqtt.NewMqtt5Requester(ctx, cfg, id), nil
 	case config.STREAM:
 		p := stream.NewPublisher(ctx, cfg, id)
 		if p == nil {
@@ -83,6 +85,8 @@ func NewConsumer(ctx context.Context, protocol config.Protocol, cfg config.Confi
 			return nil, fmt.Errorf("failed to create an MQTT consumer")
 		}
 		return c, nil
+	case config.MQTT5:
+		return mqtt.NewMqtt5Responder(ctx, cfg, id), nil
 	case config.STREAM:
 		c := stream.NewConsumer(ctx, cfg, id)
 		if c == nil {

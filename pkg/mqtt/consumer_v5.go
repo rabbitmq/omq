@@ -99,7 +99,7 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 		ConnectPassword:               []byte(pass),
 		CleanStartOnInitialConnection: c.Config.MqttConsumer.CleanSession,
 		SessionExpiryInterval:         uint32(c.Config.MqttConsumer.SessionExpiryInterval.Seconds()),
-		KeepAlive:                     20,
+		KeepAlive:                     uint16(c.Config.MqttConsumer.KeepAlive / time.Second),
 		ReconnectBackoff:              autopaho.NewConstantBackoff(1 * time.Second),
 		ConnectTimeout:                30 * time.Second,
 		TlsCfg: &tls.Config{
@@ -127,42 +127,7 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 					QoS:   byte(c.Config.MqttConsumer.QoS),
 				})
 			}
-			if _, err := cm.Subscribe(c.ctx, &paho.Subscribe{
-				Subscriptions: subscriptions,
-			}); err != nil {
-				log.Error("failed to subscribe, retrying", "id", c.Id, "error", err)
-				go func() {
-					for {
-						select {
-						case <-c.ctx.Done():
-							return
-						case <-time.After(config.ReconnectDelay):
-						}
-						if _, retryErr := cm.Subscribe(c.ctx, &paho.Subscribe{
-							Subscriptions: subscriptions,
-						}); retryErr == nil {
-							for _, sub := range subscriptions {
-								log.Info("consumer subscribed", "id", c.Id, "topic", sub.Topic)
-							}
-							select {
-							case subscribed <- struct{}{}:
-							default:
-							}
-							return
-						} else {
-							log.Error("failed to subscribe, retrying", "id", c.Id, "error", retryErr)
-						}
-					}
-				}()
-			} else {
-				for _, sub := range subscriptions {
-					log.Info("consumer subscribed", "id", c.Id, "topic", sub.Topic)
-				}
-				select {
-				case subscribed <- struct{}{}:
-				default:
-				}
-			}
+			subscribeWithRetry(c.ctx, cm, subscriptions, subscribed, "consumer", c.Id)
 		},
 		OnConnectError: func(err error) {
 			log.Info("consumer failed to connect ", "id", c.Id, "error", err)
@@ -219,12 +184,14 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 	}
 
 	// TODO: currently we can consume more than ConsumerCount messages
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for msgsReceived.Load() < int64(c.Config.ConsumeCount) {
 		select {
 		case <-c.ctx.Done():
 			c.Stop("time limit reached")
 			return
-		case <-time.After(100 * time.Millisecond):
+		case <-ticker.C:
 			// Check more frequently to respond to context cancellation faster
 		}
 	}

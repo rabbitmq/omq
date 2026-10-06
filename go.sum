@@ -37,8 +37,6 @@ github.com/clipperhouse/uax29/v2 v2.7.0/go.mod h1:EFJ2TJMRUaplDxHKj1qAEhCtQPW2tJ
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/eclipse/paho.golang v0.23.0 h1:KHgl2wz6EJo7cMBmkuhpt7C576vP+kpPv7jjvSyR6Mk=
-github.com/eclipse/paho.golang v0.23.0/go.mod h1:nQRhTkoZv8EAiNs5UU0/WdQIx2NrnWUpL9nsGJTQN04=
 github.com/eclipse/paho.mqtt.golang v1.5.1 h1:/VSOv3oDLlpqR2Epjn1Q7b2bSTplJIeV2ISgCl2W7nE=
 github.com/eclipse/paho.mqtt.golang v1.5.1/go.mod h1:1/yJCneuyOoCOzKSsOTUc0AJfpsItBGWvYpBLimhArU=
 github.com/felixge/fgprof v0.9.5 h1:8+vR6yu2vvSKn08urWyEuxx75NWPEvybbkBirEpsbVY=
@@ -159,6 +157,8 @@ github.com/mitchellh/reflectwalk v1.0.2 h1:G2LzWKi524PWgd3mLHV8Y5k7s6XUvT0Gef6zx
 github.com/mitchellh/reflectwalk v1.0.2/go.mod h1:mSTlrgnPZtwu0c4WaC2kGObEpuNDbx0jmZXqmk4esnw=
 github.com/mkuratczyk/go-amqp v0.0.0-20260818071438-088b569071c5 h1:ewRP+CSsDChagQwD5GMBL7WCEdvi1Q4oNW1xdy0qA+Y=
 github.com/mkuratczyk/go-amqp v0.0.0-20260818071438-088b569071c5/go.mod h1:pCJaHsvRlmmFUpxyQbh2qPkUFqYJeRBTqJSHKJadvPg=
+github.com/mkuratczyk/paho.golang v0.0.0-20261005133437-1299bf18dd0d h1:qMCyXV4e1x7CTYoMuox/s/jwIb0XFjEerHOdk4DH1Fc=
+github.com/mkuratczyk/paho.golang v0.0.0-20261005133437-1299bf18dd0d/go.mod h1:UgP5muyv9x5gfkVksNCkg2lAWZs1vENy5sZ17IQePHw=
 github.com/muesli/termenv v0.16.0 h1:S5AlUN9dENB57rsbnkPyfdGuWIlkmzJjbFf0Tf5FWUc=
 github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3VfY/Cnk=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=

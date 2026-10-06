@@ -22,6 +22,8 @@
 			--cons-color: #FF9800;
 			--latency-color: #9C27B0;
 			--e2e-color: #F44336;
+			--request-color: #3F51B5;
+			--reply-color: #009688;
 		}
 
 		body.dark-mode {
@@ -34,6 +36,8 @@
 			--cons-color: #00cc00;
 			--latency-color: #00aa00;
 			--e2e-color: #008800;
+			--request-color: #00ffaa;
+			--reply-color: #00ccaa;
 		}
 
 		body {
@@ -229,11 +233,32 @@
 					<canvas id="pub-latency-chart"></canvas>
 				</div>
 			</div>
-			<div class="chart-container">
+			<div class="chart-container" id="e2e-latency-container">
 				<div class="chart-title">End-to-End Latency (ms) - p99</div>
 				<div class="chart-stats" id="e2e-latency-stats">min: 0, max: 0</div>
 				<div class="chart-wrapper">
 					<canvas id="e2e-latency-chart"></canvas>
+				</div>
+			</div>
+			<div class="chart-container" id="rpc-request-latency-container">
+				<div class="chart-title">RPC Request Latency, requester → responder (ms) - p99</div>
+				<div class="chart-stats" id="rpc-request-latency-stats">min: 0, max: 0</div>
+				<div class="chart-wrapper">
+					<canvas id="rpc-request-latency-chart"></canvas>
+				</div>
+			</div>
+			<div class="chart-container" id="rpc-reply-latency-container">
+				<div class="chart-title">RPC Reply Latency, responder → requester (ms) - p99</div>
+				<div class="chart-stats" id="rpc-reply-latency-stats">min: 0, max: 0</div>
+				<div class="chart-wrapper">
+					<canvas id="rpc-reply-latency-chart"></canvas>
+				</div>
+			</div>
+			<div class="chart-container" id="rpc-rtt-container">
+				<div class="chart-title">RPC Round Trip, includes processing (ms) - p99</div>
+				<div class="chart-stats" id="rpc-rtt-stats">min: 0, max: 0</div>
+				<div class="chart-wrapper">
+					<canvas id="rpc-rtt-chart"></canvas>
 				</div>
 			</div>
 		</div>
@@ -270,6 +295,8 @@
 				cons: isDark ? '#00cc00' : '#FF9800',
 				latency: isDark ? '#00aa00' : '#9C27B0',
 				e2e: isDark ? '#008800' : '#F44336',
+				request: isDark ? '#00ffaa' : '#3F51B5',
+				reply: isDark ? '#00ccaa' : '#009688',
 				grid: isDark ? '#003300' : '#e0e0e0',
 				text: isDark ? '#00ff00' : '#333333'
 			};
@@ -348,13 +375,22 @@
 		const consRateChart = createChart('cons-rate-chart', 'Rate', colors.cons);
 		const pubLatencyChart = createChart('pub-latency-chart', 'p99', colors.latency);
 		const e2eLatencyChart = createChart('e2e-latency-chart', 'p99', colors.e2e);
+		const rpcRequestLatencyChart = createChart('rpc-request-latency-chart', 'p99', colors.request);
+		const rpcReplyLatencyChart = createChart('rpc-reply-latency-chart', 'p99', colors.reply);
+		const rpcRttChart = createChart('rpc-rtt-chart', 'p99', colors.e2e);
+		document.getElementById('rpc-request-latency-container').style.display = 'none';
+		document.getElementById('rpc-reply-latency-container').style.display = 'none';
+		document.getElementById('rpc-rtt-container').style.display = 'none';
 
 		// Track min/max for each chart
 		const chartStats = {
 			'pub-rate-chart': { min: Infinity, max: -Infinity, statsId: 'pub-rate-stats', decimals: 0 },
 			'cons-rate-chart': { min: Infinity, max: -Infinity, statsId: 'cons-rate-stats', decimals: 0 },
 			'pub-latency-chart': { min: Infinity, max: -Infinity, statsId: 'pub-latency-stats', decimals: 2 },
-			'e2e-latency-chart': { min: Infinity, max: -Infinity, statsId: 'e2e-latency-stats', decimals: 2 }
+			'e2e-latency-chart': { min: Infinity, max: -Infinity, statsId: 'e2e-latency-stats', decimals: 2 },
+			'rpc-request-latency-chart': { min: Infinity, max: -Infinity, statsId: 'rpc-request-latency-stats', decimals: 2 },
+			'rpc-reply-latency-chart': { min: Infinity, max: -Infinity, statsId: 'rpc-reply-latency-stats', decimals: 2 },
+			'rpc-rtt-chart': { min: Infinity, max: -Infinity, statsId: 'rpc-rtt-stats', decimals: 2 }
 		};
 
 		function updateChartColors() {
@@ -363,7 +399,10 @@
 				{ chart: pubRateChart, color: colors.pub },
 				{ chart: consRateChart, color: colors.cons },
 				{ chart: pubLatencyChart, color: colors.latency },
-				{ chart: e2eLatencyChart, color: colors.e2e }
+				{ chart: e2eLatencyChart, color: colors.e2e },
+				{ chart: rpcRequestLatencyChart, color: colors.request },
+				{ chart: rpcReplyLatencyChart, color: colors.reply },
+				{ chart: rpcRttChart, color: colors.e2e }
 			];
 
 			charts.forEach(({ chart, color }) => {
@@ -538,6 +577,9 @@
 						addDataPoint(consRateChart, timeLabel, null, dataPointCount);
 						addDataPoint(pubLatencyChart, timeLabel, null, dataPointCount);
 						addDataPoint(e2eLatencyChart, timeLabel, null, dataPointCount);
+						addDataPoint(rpcRequestLatencyChart, timeLabel, null, dataPointCount);
+						addDataPoint(rpcReplyLatencyChart, timeLabel, null, dataPointCount);
+						addDataPoint(rpcRttChart, timeLabel, null, dataPointCount);
 
 						// Reset tracking for new session
 						previousPublished = null;
@@ -568,6 +610,24 @@
 					const e2eLatencyP99 = (metrics['omq_end_to_end_latency_seconds{quantile="0.99"}'] || 0) * 1000;
 					addDataPoint(pubLatencyChart, timeLabel, pubLatencyP99, dataPointCount);
 					addDataPoint(e2eLatencyChart, timeLabel, e2eLatencyP99, dataPointCount);
+
+					const rpcRequestCount = metrics['omq_rpc_request_latency_seconds_count'] || 0;
+					const rpcReplyCount = metrics['omq_rpc_reply_latency_seconds_count'] || 0;
+					const rpcRttCount = metrics['omq_roundtrip_latency_seconds_count'] || 0;
+					if (rpcRequestCount > 0 || rpcReplyCount > 0) {
+						document.getElementById('e2e-latency-container').style.display = 'none';
+						document.getElementById('rpc-request-latency-container').style.display = '';
+						document.getElementById('rpc-reply-latency-container').style.display = '';
+						document.getElementById('rpc-rtt-container').style.display = '';
+						const requestP99 = (metrics['omq_rpc_request_latency_seconds{quantile="0.99"}'] || 0) * 1000;
+						const replyP99 = (metrics['omq_rpc_reply_latency_seconds{quantile="0.99"}'] || 0) * 1000;
+						const rttP99 = (metrics['omq_roundtrip_latency_seconds{quantile="0.99"}'] || 0) * 1000;
+						addDataPoint(rpcRequestLatencyChart, timeLabel, requestP99, dataPointCount);
+						addDataPoint(rpcReplyLatencyChart, timeLabel, replyP99, dataPointCount);
+						if (rpcRttCount > 0) {
+							addDataPoint(rpcRttChart, timeLabel, rttP99, dataPointCount);
+						}
+					}
 				} else {
 					console.log('Skipping data points - waiting for previous values', {
 						previousPublished, previousConsumed, published, consumed

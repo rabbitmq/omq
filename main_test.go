@@ -502,6 +502,211 @@ var _ = Describe("OMQ CLI", func() {
 		Entry("default to MQTT v5.0", "", "MQTT 5-0"),
 	)
 
+	Describe("MQTT RPC", func() {
+		It("sends requests and receives matching replies", func() {
+			session := omq([]string{
+				"mqtt-rpc",
+				"--publish-to=omq-rpc-test",
+				"--consume-from=omq-rpc-test",
+				"--publisher-id=omq-rpc-test-requester",
+				"--consumer-id=omq-rpc-test-responder",
+				"--pmessages=2",
+				"--cmessages=2",
+				"--max-in-flight=2",
+				"--time=5s",
+				"--print-all-metrics",
+			})
+
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=4`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=4`))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_roundtrip_latency_seconds_count`)).Should(Equal(2.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_rpc_request_latency_seconds_count`)).Should(Equal(2.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_rpc_reply_latency_seconds_count`)).Should(Equal(2.0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_rpc_timeouts_total`)).Should(Equal(0.0))
+			buf.Reset(output)
+			// Both RPC roles buffer publishing latencies; final metrics must flush them.
+			Expect(metricValue(buf, `omq_publishing_latency_seconds_count`)).Should(Equal(4.0))
+			buf.Reset(output)
+			// Request and reply are different messages; don't mix them into end-to-end.
+			Expect(metricValue(buf, `omq_end_to_end_latency_seconds_count`)).Should(BeNumerically("<=", 0))
+		})
+
+		It("supports --consumer-latency to simulate processing time before the reply is sent", func() {
+			session := omq([]string{
+				"mqtt-rpc",
+				"--publish-to=omq-rpc-latency-test",
+				"--consume-from=omq-rpc-latency-test",
+				"--publisher-id=omq-rpc-latency-test-requester",
+				"--consumer-id=omq-rpc-latency-test-responder",
+				"--pmessages=2",
+				"--cmessages=2",
+				"--consumer-latency=50ms",
+				"--time=5s",
+				"--print-all-metrics",
+			})
+
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=4`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=4`))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_roundtrip_latency_seconds_count`)).Should(Equal(2.0))
+			buf.Reset(output)
+			// with --max-in-flight=1 (default), the round trips are serialized, so a 50ms
+			// consumer latency on each of the 2 requests must show up in the total duration.
+			rttSum := metricValue(buf, `omq_roundtrip_latency_seconds_sum`)
+			Expect(rttSum).Should(BeNumerically(">", 0.1))
+			buf.Reset(output)
+			requestSum := metricValue(buf, `omq_rpc_request_latency_seconds_sum`)
+			buf.Reset(output)
+			replySum := metricValue(buf, `omq_rpc_reply_latency_seconds_sum`)
+			// Processing time belongs in the round trip, not in either message's transit.
+			Expect(requestSum + replySum).Should(BeNumerically("<", rttSum))
+		})
+
+		DescribeTable("rejects unsupported options",
+			func(args []string, expectedError string) {
+				session := omq(append([]string{"mqtt-rpc"}, args...))
+				Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(1))
+				Eventually(session.Out).Should(gbytes.Say(expectedError))
+			},
+			Entry("invalid drain timeout", []string{"--mqtt-rpc-drain-timeout=0"}, "mqtt-rpc-drain-timeout must be greater than 0"),
+			Entry("invalid queue limit", []string{"--mqtt-rpc-reply-queue-limit=0"}, "mqtt-rpc-reply-queue-limit must be at least 1"),
+			Entry("retained requests", []string{"--mqtt-retained=true"}, "--mqtt-retained is not supported for mqtt-rpc"),
+			Entry("MQTT 3 publisher", []string{"--mqtt-publisher-version=3"}, "--mqtt-publisher-version must be 5 for mqtt-rpc"),
+			Entry("MQTT 3 consumer", []string{"--mqtt-consumer-version=3"}, "--mqtt-consumer-version must be 5 for mqtt-rpc"),
+			Entry("wildcard response topic", []string{"--mqtt-response-topic=rpc/+/reply"}, "must not contain MQTT wildcards"),
+		)
+
+		It("keeps request QoS and reply QoS independent", func() {
+			session := omq([]string{
+				"mqtt-rpc",
+				"--publish-to=omq-rpc-qos-test",
+				"--consume-from=omq-rpc-qos-test",
+				"--publisher-id=omq-rpc-qos-requester",
+				"--consumer-id=omq-rpc-qos-responder",
+				"--mqtt-publisher-qos=1",
+				"--mqtt-consumer-qos=0",
+				"--pmessages=2",
+				"--cmessages=2",
+				"--time=5s",
+				"--print-all-metrics",
+			})
+
+			Eventually(session).WithTimeout(6 * time.Second).Should(gexec.Exit(0))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL PUBLISHED messages=4`))
+			Eventually(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=4`))
+		})
+
+		It("answers in-flight requests when the time limit is reached", func() {
+			session := omq([]string{
+				"mqtt-rpc",
+				"--publish-to=omq-rpc-shutdown",
+				"--consume-from=omq-rpc-shutdown",
+				"--max-in-flight=5",
+				"--consumer-latency=400ms",
+				"--mqtt-rpc-timeout=10s",
+				"--time=3s",
+				"--print-all-metrics",
+			})
+
+			// Waiting out the 10s timeout for replies that cannot arrive would exceed this.
+			Eventually(session).WithTimeout(8 * time.Second).Should(gexec.Exit(0))
+
+			output, _ := io.ReadAll(session.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_rpc_timeouts_total`)).Should(Equal(0.0))
+		})
+
+		It("bounds the reply backlog and stops while a separate requester keeps sending", func() {
+			responder := omq([]string{
+				"mqtt-rpc", "--publishers=0", "--consume-from=omq-rpc-overload",
+				"--consumer-latency=50ms", "--mqtt-rpc-reply-queue-limit=8",
+				"--mqtt-rpc-drain-timeout=100ms", "--time=3s", "--print-all-metrics",
+			})
+			Eventually(responder.Err).WithTimeout(3 * time.Second).Should(gbytes.Say("responder subscribed"))
+			requester := omq([]string{
+				"mqtt-rpc", "--consumers=0", "--publish-to=omq-rpc-overload",
+				"--rate=200", "--max-in-flight=100", "--mqtt-rpc-timeout=500ms", "--time=10s",
+			})
+			Eventually(responder).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+			Expect(requester.ExitCode()).Should(Equal(-1))
+			output, _ := io.ReadAll(responder.Out)
+			buf := bytes.NewReader(output)
+			Expect(metricValue(buf, `omq_rpc_replies_dropped_total`)).Should(BeNumerically(">", 0))
+			buf.Reset(output)
+			Expect(metricValue(buf, `omq_rpc_reply_queue_depth`)).Should(Equal(0.0))
+			requester.Signal(os.Signal(os.Interrupt))
+			Eventually(requester).WithTimeout(3 * time.Second).Should(gexec.Exit(0))
+		})
+
+		It("warns when several responders share one request topic", func() {
+			session := omq([]string{
+				"mqtt-rpc",
+				"--publish-to=omq-rpc-fanout",
+				"--consume-from=omq-rpc-fanout",
+				"--consumers=2",
+				"--publishers=1",
+				"--pmessages=1",
+				"--time=3s",
+			})
+			Eventually(session.Err).WithTimeout(5 * time.Second).Should(gbytes.Say("responders share one request topic"))
+			session.Signal(os.Signal(os.Interrupt))
+			Eventually(session).WithTimeout(5 * time.Second).Should(gexec.Exit(0))
+		})
+
+		// Runs every command from docs/mqtt-rpc.md, shortened to a few calls per
+		// requester, so the documented topologies cannot silently stop working.
+		Describe("examples from docs/mqtt-rpc.md", func() {
+			const callsPerRequester = 3
+			examples := docExamples("docs/mqtt-rpc.md")
+
+			It("has examples to run", func() {
+				Expect(len(examples)).Should(BeNumerically(">=", 3))
+			})
+
+			for i, example := range examples {
+				It("completes every call in example "+strconv.Itoa(i+1), func() {
+					Expect(example[0]).Should(Equal("omq"))
+					args := append(slices.Clone(example[1:]),
+						"--pmessages="+strconv.Itoa(callsPerRequester),
+						"--rate=-1",
+						"--time=8s",
+						"--print-all-metrics")
+					requesters := 1
+					for j, a := range args {
+						if a == "--publishers" && j+1 < len(args) {
+							requesters, _ = strconv.Atoi(args[j+1])
+						}
+					}
+
+					session := omq(args)
+					Eventually(session).WithTimeout(20 * time.Second).Should(gexec.Exit(0))
+
+					output, _ := io.ReadAll(session.Out)
+					buf := bytes.NewReader(output)
+					Expect(metricValue(buf, `omq_roundtrip_latency_seconds_count`)).Should(Equal(float64(requesters * callsPerRequester)))
+					buf.Reset(output)
+					Expect(metricValue(buf, `omq_rpc_timeouts_total`)).Should(Equal(0.0))
+				})
+			}
+		})
+
+		It("still rejects --consumer-latency for plain MQTT consumers", func() {
+			session := omq([]string{"mqtt", "--consumer-latency=1ms", "--time=1s", "--publishers=0", "--consumers=0"})
+			Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(1))
+			Eventually(session.Out).Should(gbytes.Say("Consumer latency is not supported for MQTT consumers"))
+		})
+	})
+
 	Describe("declares queues for AMQP and STOMP clients", func() {
 		It("declares queues for AMQP consumers with /queues/ address", func() {
 			args := []string{
@@ -1566,6 +1771,51 @@ var _ = Describe("OMQ CLI", func() {
 		})
 	})
 })
+
+// docExamples returns the argv of each ```shell block in a markdown file, with line
+// continuations joined and single/double quotes honoured.
+func docExamples(path string) [][]string {
+	content, err := os.ReadFile(path)
+	Expect(err).ShouldNot(HaveOccurred())
+	blocks := regexp.MustCompile("(?s)```shell\\n(.*?)```").FindAllStringSubmatch(string(content), -1)
+
+	var examples [][]string
+	for _, block := range blocks {
+		var args []string
+		var cur strings.Builder
+		var quote rune
+		inWord := false
+		flush := func() {
+			if inWord {
+				args = append(args, cur.String())
+				cur.Reset()
+				inWord = false
+			}
+		}
+		text := strings.ReplaceAll(block[1], "\\\n", " ")
+		for _, r := range text {
+			switch {
+			case quote != 0:
+				if r == quote {
+					quote = 0
+				} else {
+					cur.WriteRune(r)
+				}
+			case r == '\'' || r == '"':
+				quote = r
+				inWord = true
+			case r == ' ' || r == '\n' || r == '\t':
+				flush()
+			default:
+				cur.WriteRune(r)
+				inWord = true
+			}
+		}
+		flush()
+		examples = append(examples, args)
+	}
+	return examples
+}
 
 func omq(args []string) *gexec.Session {
 	GinkgoWriter.Println("omq", strings.Join(args, " "))

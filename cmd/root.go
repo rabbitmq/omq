@@ -60,6 +60,7 @@ var (
 	amqp091_stream  = &cobra.Command{}
 	stomp_stream    = &cobra.Command{}
 	mqtt_stream     = &cobra.Command{}
+	mqtt_rpc        = &cobra.Command{}
 	versionCmd      = &cobra.Command{}
 )
 
@@ -84,6 +85,8 @@ var (
 	sizeStr                   string
 	requeueWhenPriority       []int
 	discardWhenPriority       []int
+	mqttResponseTopicStr      string
+	mqttReplySizeStr          string
 )
 
 var (
@@ -117,6 +120,9 @@ func RootCmd() *cobra.Command {
 	mqttConsumerFlags.Uint16Var(&cfg.MqttConsumer.ReceiveMaximum, "mqtt-consumer-receive-maximum", 8,
 		"MQTT v5 Receive Maximum sent in CONNECT (max concurrent QoS 1/2 in-flight publishes); also sizes an internal per-connection buffer, so large values increase memory usage significantly")
 
+	mqttConsumerFlags.DurationVar(&cfg.MqttConsumer.KeepAlive, "mqtt-consumer-keep-alive", 20*time.Second,
+		"MQTT consumer keep alive interval, in whole seconds (0 disables keep alive)")
+
 	mqttPublisherFlags := pflag.NewFlagSet("mqtt-publisher", pflag.ContinueOnError)
 	mqttPublisherFlags.IntVar(&cfg.MqttPublisher.Version, "mqtt-publisher-version", 5,
 		"MQTT consumer protocol version (3, 4 or 5; default=5)")
@@ -126,10 +132,27 @@ func RootCmd() *cobra.Command {
 		"MQTT publisher clean session")
 	mqttPublisherFlags.DurationVar(&cfg.MqttPublisher.SessionExpiryInterval, "mqtt-publisher-session-expiry-interval", 0,
 		"MQTT publisher session expiry interval")
+	mqttPublisherFlags.DurationVar(&cfg.MqttPublisher.KeepAlive, "mqtt-publisher-keep-alive", 20*time.Second,
+		"MQTT publisher keep alive interval, in whole seconds (0 disables keep alive)")
 	mqttPublisherFlags.StringArrayVar(&mqttUserProperties, "mqtt-user-property", []string{},
 		"MQTT v5 user property, eg. key1=val1")
 	mqttPublisherFlags.BoolSliceVar(&cfg.MqttPublisher.Retained, "mqtt-retained", []bool{false},
 		"Whether published messages should be retained; accepts a list to cycle through, eg. \"true,false\"")
+
+	mqttRpcFlags := pflag.NewFlagSet("mqtt-rpc", pflag.ContinueOnError)
+	mqttRpcFlags.StringVar(&mqttResponseTopicStr, "mqtt-response-topic",
+		fmt.Sprintf("/topic/omq-rpc-response-%%d-%s", cfg.MqttRpc.InstanceID),
+		"MQTT5 response topic template for requesters (%d => requester's id; supports Go templates)")
+	mqttRpcFlags.StringVar(&mqttReplySizeStr, "mqtt-reply-size", "12",
+		"Reply payload size for responders (same format as --size: units, templates and comma-separated values)")
+	mqttRpcFlags.DurationVar(&cfg.MqttRpc.Timeout, "mqtt-rpc-timeout", 5*time.Second,
+		"How long a requester waits for a reply before giving up on a request")
+
+	mqttRpcFlags.DurationVar(&cfg.MqttRpc.DrainTimeout, "mqtt-rpc-drain-timeout", 5*time.Second,
+		"Maximum time to drain accepted replies on responder shutdown")
+
+	mqttRpcFlags.IntVar(&cfg.MqttRpc.ReplyQueueLimit, "mqtt-rpc-reply-queue-limit", 1024,
+		"Maximum queued replies per responder; new requests are dropped when full")
 
 	amqpPublisherFlags := pflag.NewFlagSet("amqp-publisher", pflag.ContinueOnError)
 
@@ -487,6 +510,28 @@ func RootCmd() *cobra.Command {
 	mqtt_stream.Flags().AddFlagSet(streamConsumerFlags)
 	mqtt_stream.Flags().AddFlagSet(streamFlags)
 
+	mqtt_rpc = &cobra.Command{
+		Use:   "mqtt-rpc",
+		Short: "MQTT 5 request/response",
+		Long: `MQTT 5 requesters and responders.
+
+RabbitMQ does not support MQTT shared subscriptions, so several responders on one
+request topic each answer every request. Give each responder its own topic and pin
+publishers to one:
+
+    omq mqtt-rpc --consumers 2 --publishers 10 \
+        --consume-from 'rpc/request/%d' \
+        --publish-to 'rpc/request/{{ mod .id 2 }}'`,
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.PublisherProto = config.MQTT5
+			cfg.ConsumerProto = config.MQTT5
+			start(cfg)
+		},
+	}
+	mqtt_rpc.Flags().AddFlagSet(mqttPublisherFlags)
+	mqtt_rpc.Flags().AddFlagSet(mqttConsumerFlags)
+	mqtt_rpc.Flags().AddFlagSet(mqttRpcFlags)
+
 	versionCmd = &cobra.Command{
 		Use: "version",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -515,9 +560,21 @@ func RootCmd() *cobra.Command {
 				fmt.Printf("ERROR: %s\n", err)
 				os.Exit(1)
 			}
+			if err := validateMqttRpcCommand(cmd, &cfg); err != nil {
+				fmt.Printf("ERROR: %s\n", err)
+				os.Exit(1)
+			}
+			setMqttRpcClientIDs(cmd, &cfg)
 
 			if strings.Contains(cmd.Use, "-") {
-				err := setUris(&cfg, cmd.Use)
+				// "mqtt-rpc" isn't a "<publisher-proto>-<consumer-proto>" pair like every
+				// other command name; both sides of mqtt-rpc are MQTT5, so reuse mqtt-mqtt's
+				// URI defaulting.
+				protoPair := cmd.Use
+				if protoPair == "mqtt-rpc" {
+					protoPair = "mqtt-mqtt"
+				}
+				err := setUris(&cfg, protoPair)
 				if err != nil {
 					fmt.Printf("ERROR: %s\n", err)
 					os.Exit(1)
@@ -660,6 +717,7 @@ func RootCmd() *cobra.Command {
 	rootCmd.AddCommand(amqp091_stream)
 	rootCmd.AddCommand(stomp_stream)
 	rootCmd.AddCommand(mqtt_stream)
+	rootCmd.AddCommand(mqtt_rpc)
 	rootCmd.AddCommand(versionCmd)
 
 	return rootCmd
@@ -675,13 +733,25 @@ func start(cfg config.Config) {
 		}
 	}
 
-	if cfg.ConsumerLatencyTemplate != nil && cfg.ConsumerProto == config.MQTT {
+	// mqtt-rpc is the only command that sets both sides to MQTT5. Plain MQTT stays on
+	// config.MQTT even at protocol version 5. Don't infer RPC from
+	// MqttRpc.ResponseTopicTemplate: that flag's default is applied for every command,
+	// so the template is always parsed and a nil-check would disable this guard.
+	isMqttRpc := cfg.PublisherProto == config.MQTT5 && cfg.ConsumerProto == config.MQTT5
+	if cfg.ConsumerLatencyTemplate != nil && (cfg.ConsumerProto == config.MQTT || cfg.ConsumerProto == config.MQTT5) && !isMqttRpc {
 		fmt.Println("Consumer latency is not supported for MQTT consumers")
 		os.Exit(1)
 	}
 
-	if cfg.MaxInFlight > 1 && cfg.PublisherProto != config.AMQP && cfg.PublisherProto != config.AMQP091 && cfg.PublisherProto != config.MQTT && cfg.PublisherProto != config.STREAM {
-		fmt.Println("max-in-flight > 1 is only supported for AMQP, AMQP 0.9.1, MQTT, and STREAM publishers")
+	if isMqttRpc && cfg.MqttConsumer.SubscriptionsPerConsumer != 1 {
+		log.Info("WARNING: --mqtt-subscriptions-per-consumer is ignored for mqtt-rpc (a responder always makes exactly one subscription)")
+	}
+	if isMqttRpc {
+		warnMqttRpcTopology(cfg)
+	}
+
+	if cfg.MaxInFlight > 1 && cfg.PublisherProto != config.AMQP && cfg.PublisherProto != config.AMQP091 && cfg.PublisherProto != config.MQTT && cfg.PublisherProto != config.MQTT5 && cfg.PublisherProto != config.STREAM {
+		fmt.Println("max-in-flight > 1 is only supported for AMQP, AMQP 0.9.1, MQTT, MQTT RPC, and STREAM publishers")
 		os.Exit(1)
 	}
 
@@ -692,6 +762,10 @@ func start(cfg config.Config) {
 		}
 		if cfg.ConsumerProto == config.MQTT && cfg.MqttConsumer.Version != 5 {
 			fmt.Println("--detect-out-of-order-messages/--detect-gaps-in-messages are not supported with MQTT v3 consumers (use --mqtt-consumer-version 5)")
+			os.Exit(1)
+		}
+		if isMqttRpc {
+			fmt.Println("--detect-out-of-order-messages/--detect-gaps-in-messages are not supported with mqtt-rpc")
 			os.Exit(1)
 		}
 	}
@@ -1024,33 +1098,32 @@ func defaultUri(proto string) string {
 
 func sanitizeConfig(cfg *config.Config) error {
 	if sizeStr != "" {
-		if strings.Contains(sizeStr, "{{") || strings.Contains(sizeStr, ",") {
-			// Use template for dynamic values
-			tmpl, err := config.ParseTemplateValue(sizeStr)
-			if err != nil {
-				return fmt.Errorf("invalid template in size: %v", err)
-			}
-			cfg.SizeTemplate = tmpl
+		size, tmpl, err := parseSizeFlag(sizeStr, "size")
+		if err != nil {
+			return err
+		}
+		cfg.Size = size
+		cfg.SizeTemplate = tmpl
+	}
 
-			// validate by executing template once with id=0
-			sizeValue := utils.ExecuteTemplate(tmpl, 0)
-			size, err := utils.ParseSize(sizeValue)
-			if err != nil {
-				return fmt.Errorf("invalid size value: %v", err)
-			}
-			if size < 12 {
-				return fmt.Errorf("size can't be less than 12 bytes")
-			}
-		} else {
-			// static value
-			size, err := utils.ParseSize(sizeStr)
-			if err != nil {
-				return fmt.Errorf("invalid size value: %v", err)
-			}
-			if size < 12 {
-				return fmt.Errorf("size can't be less than 12 bytes")
-			}
-			cfg.Size = size
+	if mqttReplySizeStr != "" {
+		size, tmpl, err := parseSizeFlag(mqttReplySizeStr, "mqtt-reply-size")
+		if err != nil {
+			return err
+		}
+		cfg.MqttRpc.ReplySize = size
+		cfg.MqttRpc.ReplySizeTemplate = tmpl
+	}
+
+	for _, side := range []struct {
+		flag string
+		d    time.Duration
+	}{
+		{"--mqtt-publisher-keep-alive", cfg.MqttPublisher.KeepAlive},
+		{"--mqtt-consumer-keep-alive", cfg.MqttConsumer.KeepAlive},
+	} {
+		if side.d < 0 || side.d%time.Second != 0 || side.d > math.MaxUint16*time.Second {
+			return fmt.Errorf("%s must be a whole number of seconds between 0 and %d", side.flag, math.MaxUint16)
 		}
 	}
 
@@ -1105,6 +1178,18 @@ func sanitizeConfig(cfg *config.Config) error {
 
 	if cfg.MaxInFlight < 1 {
 		return fmt.Errorf("max-in-flight must be at least 1")
+	}
+
+	if cfg.MqttRpc.Timeout <= 0 {
+		return fmt.Errorf("mqtt-rpc-timeout must be greater than 0")
+	}
+
+	if cfg.MqttRpc.DrainTimeout <= 0 {
+		return fmt.Errorf("mqtt-rpc-drain-timeout must be greater than 0")
+	}
+
+	if cfg.MqttRpc.ReplyQueueLimit < 1 {
+		return fmt.Errorf("mqtt-rpc-reply-queue-limit must be at least 1")
 	}
 
 	// go-amqp treats `0` as if the value was not set and uses 1 credit
@@ -1266,6 +1351,15 @@ func sanitizeConfig(cfg *config.Config) error {
 		cfg.ConsumeFromTemplate = tmpl
 	}
 
+	// Parse mqtt-response-topic template
+	if mqttResponseTopicStr != "" {
+		tmpl, err := config.ParseTemplateValue(mqttResponseTopicStr)
+		if err != nil {
+			return fmt.Errorf("invalid template in mqtt-response-topic: %v", err)
+		}
+		cfg.MqttRpc.ResponseTopicTemplate = tmpl
+	}
+
 	// Validate and set priority-based outcome flags
 	cfg.RequeueWhenPriority = requeueWhenPriority
 	cfg.DiscardWhenPriority = discardWhenPriority
@@ -1278,6 +1372,114 @@ func sanitizeConfig(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+// warnMqttRpcTopology warns when the request topics cannot scale responders without
+// shared subscriptions, which RabbitMQ MQTT does not support. The workaround is
+// client-side sharding: one request topic per responder, publishers pinned to a
+// responder with {{ mod .id N }}.
+func warnMqttRpcTopology(cfg config.Config) {
+	if cfg.ConsumeFromTemplate == nil {
+		return
+	}
+	sameRequestTopic := utils.ResolveTerminus(cfg.ConsumeFromTemplate, 0) == utils.ResolveTerminus(cfg.ConsumeFromTemplate, 1)
+	if cfg.Consumers > 1 && sameRequestTopic {
+		log.Info("WARNING: mqtt-rpc responders share one request topic, so each request is delivered to every responder and each sends a reply. RabbitMQ does not support MQTT shared subscriptions; give each responder its own topic and pin publishers to one, for example --consume-from 'rpc/request/%d' --publish-to 'rpc/request/{{ mod .id "+strconv.Itoa(cfg.Consumers)+" }}'",
+			"consumers", cfg.Consumers)
+	}
+	if cfg.PublishToTemplate == nil {
+		return
+	}
+	publishersPairedByID := utils.ResolveTerminus(cfg.PublishToTemplate, 0) != utils.ResolveTerminus(cfg.PublishToTemplate, 1)
+	consumersPairedByID := !sameRequestTopic
+	if publishersPairedByID && consumersPairedByID && cfg.Publishers != cfg.Consumers {
+		log.Info("WARNING: mqtt-rpc request topics vary by client id, but publisher and consumer counts differ; unpaired clients will time out or sit idle. Use the same count, or pin publishers onto responder topics with --publish-to 'rpc/request/{{ mod .id N }}' and --consume-from 'rpc/request/%d'",
+			"publishers", cfg.Publishers, "consumers", cfg.Consumers)
+	}
+}
+
+func validateMqttRpcCommand(cmd *cobra.Command, cfg *config.Config) error {
+	if cmd.Name() != "mqtt-rpc" {
+		return nil
+	}
+	if cfg.MqttPublisher.Version != 5 {
+		return fmt.Errorf("--mqtt-publisher-version must be 5 for mqtt-rpc")
+	}
+	if cfg.MqttConsumer.Version != 5 {
+		return fmt.Errorf("--mqtt-consumer-version must be 5 for mqtt-rpc")
+	}
+	if cmd.Flags().Changed("mqtt-retained") {
+		return fmt.Errorf("--mqtt-retained is not supported for mqtt-rpc")
+	}
+	if responseTopicHasWildcard(cfg) {
+		return fmt.Errorf("--mqtt-response-topic must not contain MQTT wildcards (+ or #)")
+	}
+	return nil
+}
+
+// responseTopicHasWildcard reports whether any requester's response topic contains
+// a wildcard. MQTT-3.3.2-14 forbids wildcards in a Response Topic, and a wildcard
+// subscription would also deliver unrelated publishes into the RPC matcher.
+func responseTopicHasWildcard(cfg *config.Config) bool {
+	if cfg.MqttRpc.ResponseTopicTemplate == nil {
+		return false
+	}
+	n := cfg.Publishers
+	if n < 1 {
+		n = 1
+	}
+	for i := 0; i < n; i++ {
+		topic := utils.ExecuteTemplate(cfg.MqttRpc.ResponseTopicTemplate, i)
+		topic = strings.TrimPrefix(topic, "/exchange/amq.topic/")
+		topic = strings.TrimPrefix(topic, "/topic/")
+		if strings.ContainsAny(topic, "+#") {
+			return true
+		}
+	}
+	return false
+}
+
+func setMqttRpcClientIDs(cmd *cobra.Command, cfg *config.Config) {
+	if cmd.Name() != "mqtt-rpc" {
+		return
+	}
+	if !cmd.Flags().Changed("publisher-id") {
+		cfg.PublisherId += "-" + cfg.MqttRpc.InstanceID
+	}
+	if !cmd.Flags().Changed("consumer-id") {
+		cfg.ConsumerId += "-" + cfg.MqttRpc.InstanceID
+	}
+}
+
+// parseSizeFlag parses a --size-style flag value: a static size (with optional unit,
+// e.g. "10mb"), a Go template, or a comma-separated list of values to cycle through.
+// It returns either a static size (tmpl == nil) or a template (size == 0).
+func parseSizeFlag(value, flagName string) (int, *template.Template, error) {
+	if strings.Contains(value, "{{") || strings.Contains(value, ",") {
+		tmpl, err := config.ParseTemplateValue(value)
+		if err != nil {
+			return 0, nil, fmt.Errorf("invalid template in %s: %v", flagName, err)
+		}
+		// validate by executing the template once with id=0
+		sizeValue := utils.ExecuteTemplate(tmpl, 0)
+		size, err := utils.ParseSize(sizeValue)
+		if err != nil {
+			return 0, nil, fmt.Errorf("invalid size value: %v", err)
+		}
+		if size < 12 {
+			return 0, nil, fmt.Errorf("size can't be less than 12 bytes")
+		}
+		return 0, tmpl, nil
+	}
+
+	size, err := utils.ParseSize(value)
+	if err != nil {
+		return 0, nil, fmt.Errorf("invalid size value: %v", err)
+	}
+	if size < 12 {
+		return 0, nil, fmt.Errorf("size can't be less than 12 bytes")
+	}
+	return size, nil, nil
 }
 
 func parseStreamOffset(offset string) (any, error) {

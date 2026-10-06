@@ -47,6 +47,11 @@ var (
 	PublishingLatency         *vmetrics.Summary
 	EndToEndLatency           *vmetrics.Summary
 	DelayAccuracy             *vmetrics.Summary
+	RoundTripLatency          *vmetrics.Summary
+	RpcRequestLatency         *vmetrics.Summary
+	RpcReplyLatency           *vmetrics.Summary
+	RpcTimeouts               *vmetrics.Counter
+	RpcRepliesDropped         *vmetrics.Counter
 	globalLabels              map[string]string
 )
 
@@ -118,6 +123,13 @@ func registerMetrics(labels map[string]string, publishers int, rate float32) {
 	PublishingLatency = vmetrics.GetOrCreateSummaryExt(`omq_publishing_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
 	EndToEndLatency = vmetrics.GetOrCreateSummaryExt(`omq_end_to_end_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
 	DelayAccuracy = vmetrics.GetOrCreateSummaryExt(`omq_delay_accuracy_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
+	RoundTripLatency = vmetrics.GetOrCreateSummaryExt(`omq_roundtrip_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
+	// A request and a reply are different messages. Keep their transit times
+	// apart from omq_end_to_end_latency_seconds, which would otherwise mix them.
+	RpcRequestLatency = vmetrics.GetOrCreateSummaryExt(`omq_rpc_request_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
+	RpcReplyLatency = vmetrics.GetOrCreateSummaryExt(`omq_rpc_reply_latency_seconds`+labelsToString(globalLabels), SummaryWindow, []float64{0.5, 0.9, 0.95, 0.99})
+	RpcRepliesDropped = vmetrics.GetOrCreateCounter(`omq_rpc_replies_dropped_total` + labelsToString(globalLabels))
+	RpcTimeouts = vmetrics.GetOrCreateCounter(`omq_rpc_timeouts_total` + labelsToString(globalLabels))
 }
 
 func registerCommandLineMetric(cfg config.Config, globalLabels map[string]string) {
@@ -218,10 +230,13 @@ func (t *latencyTracker) reset() (min, max time.Duration, ok bool) {
 }
 
 var (
-	previouslyPublished uint64
-	previouslyConsumed  uint64
-	pubLatencyTracker   = newLatencyTracker()
-	e2eLatencyTracker   = newLatencyTracker()
+	previouslyPublished      uint64
+	previouslyConsumed       uint64
+	pubLatencyTracker        = newLatencyTracker()
+	e2eLatencyTracker        = newLatencyTracker()
+	rttLatencyTracker        = newLatencyTracker()
+	rpcRequestLatencyTracker = newLatencyTracker()
+	rpcReplyLatencyTracker   = newLatencyTracker()
 )
 
 func RecordEndToEndLatency(latency time.Duration) {
@@ -230,6 +245,35 @@ func RecordEndToEndLatency(latency time.Duration) {
 	}
 	EndToEndLatency.Update(latency.Seconds())
 	e2eLatencyTracker.record(latency)
+}
+
+func RecordRoundTripLatency(latency time.Duration) {
+	if latency <= 0 {
+		return
+	}
+	RoundTripLatency.Update(latency.Seconds())
+	rttLatencyTracker.record(latency)
+}
+
+// RecordRpcRequestLatency records requester→responder transit: the timestamp in
+// the request payload until the responder receives it. It does not include
+// responder processing or the reply.
+func RecordRpcRequestLatency(latency time.Duration) {
+	if latency <= 0 || RpcRequestLatency == nil {
+		return
+	}
+	RpcRequestLatency.Update(latency.Seconds())
+	rpcRequestLatencyTracker.record(latency)
+}
+
+// RecordRpcReplyLatency records responder→requester transit: the timestamp
+// written into the reply just before publish until the requester receives it.
+func RecordRpcReplyLatency(latency time.Duration) {
+	if latency <= 0 || RpcReplyLatency == nil {
+		return
+	}
+	RpcReplyLatency.Update(latency.Seconds())
+	rpcReplyLatencyTracker.record(latency)
 }
 
 func RecordDelayAccuracy(accuracy time.Duration) {
@@ -298,8 +342,19 @@ func buildRateFields(publishedRate, consumedRate uint64) []any {
 	if pubMin, pubMax, ok := pubLatencyTracker.reset(); ok {
 		fields = append(fields, "pub_min", formatLatency(pubMin), "pub_max", formatLatency(pubMax))
 	}
+	// Directional RPC transit is what to watch. Round-trip stays, but it mixes
+	// both messages plus responder processing, so it is printed after them.
+	if reqMin, reqMax, ok := rpcRequestLatencyTracker.reset(); ok {
+		fields = append(fields, "request_min", formatLatency(reqMin), "request_max", formatLatency(reqMax))
+	}
+	if repMin, repMax, ok := rpcReplyLatencyTracker.reset(); ok {
+		fields = append(fields, "reply_min", formatLatency(repMin), "reply_max", formatLatency(repMax))
+	}
 	if e2eMin, e2eMax, ok := e2eLatencyTracker.reset(); ok {
 		fields = append(fields, "e2e_min", formatLatency(e2eMin), "e2e_max", formatLatency(e2eMax))
+	}
+	if rttMin, rttMax, ok := rttLatencyTracker.reset(); ok {
+		fields = append(fields, "rtt_min", formatLatency(rttMin), "rtt_max", formatLatency(rttMax))
 	}
 	return fields
 }
@@ -412,4 +467,12 @@ func labelsToString(labels map[string]string) string {
 		result = strings.TrimSuffix(result, ",") + "}"
 	}
 	return result
+}
+
+// RpcReplyQueueDepthMetric exposes waiting replies for one responder, excluding
+// the reply currently being published.
+func RpcReplyQueueDepthMetric(id int, depth func() float64) *vmetrics.Gauge {
+	labels := map[string]string{"responder_id": strconv.Itoa(id)}
+	maps.Copy(labels, globalLabels)
+	return vmetrics.GetOrCreateGauge("omq_rpc_reply_queue_depth"+labelsToString(labels), depth)
 }
