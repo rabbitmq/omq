@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"math/rand/v2"
 	"text/template"
 	"time"
 
@@ -104,6 +106,17 @@ type MqttOptions struct {
 	UserPropertyTemplates    map[string]*template.Template
 	Retained                 []bool
 	ReceiveMaximum           uint16
+	KeepAlive                time.Duration
+}
+
+type MqttRpcOptions struct {
+	ResponseTopicTemplate *template.Template
+	InstanceID            string
+	ReplySize             int
+	ReplySizeTemplate     *template.Template
+	Timeout               time.Duration
+	DrainTimeout          time.Duration
+	ReplyQueueLimit       int
 }
 
 type Amqp091Options struct {
@@ -159,6 +172,7 @@ type Config struct {
 	Amqp091                     Amqp091Options
 	MqttPublisher               MqttOptions
 	MqttConsumer                MqttOptions
+	MqttRpc                     MqttRpcOptions
 	MetricTags                  map[string]string
 	DetectOutOfOrder            bool
 	DetectGaps                  bool
@@ -181,6 +195,9 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		QueueDurability: Configuration,
+		MqttRpc: MqttRpcOptions{
+			InstanceID: fmt.Sprintf("%x", rand.Uint64()),
+		},
 	}
 }
 

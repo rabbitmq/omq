@@ -297,12 +297,14 @@ func (c *StreamConsumer) Start(consumerReady chan bool) {
 	close(consumerReady)
 	log.Info("consumer started", "id", c.Id, "destination", c.Topic)
 
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for msgsReceived.Load() < int64(c.Config.ConsumeCount) {
 		select {
 		case <-c.ctx.Done():
 			c.Stop("time limit reached")
 			return
-		case <-time.After(100 * time.Millisecond):
+		case <-ticker.C:
 		}
 	}
 

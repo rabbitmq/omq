@@ -21,10 +21,11 @@ type LatencyRecorder struct {
 }
 
 var (
-	recordersMu sync.Mutex
-	recorders   []*LatencyRecorder
-	flushMu     sync.Mutex
-	flusherOnce sync.Once
+	recordersMu    sync.Mutex
+	recorders      []*LatencyRecorder
+	flushMu        sync.Mutex
+	flushRecorders []*LatencyRecorder // reused under flushMu
+	flusherOnce    sync.Once
 )
 
 // NewLatencyRecorder returns a recorder that is flushed periodically into the
@@ -58,13 +59,12 @@ func FlushLatencies() {
 	defer flushMu.Unlock()
 
 	recordersMu.Lock()
-	rs := make([]*LatencyRecorder, len(recorders))
-	copy(rs, recorders)
+	flushRecorders = append(flushRecorders[:0], recorders...)
 	recordersMu.Unlock()
 
 	minLat, maxLat := time.Duration(math.MaxInt64), time.Duration(0)
 	seen := false
-	for _, r := range rs {
+	for _, r := range flushRecorders {
 		r.mu.Lock()
 		full := r.samples
 		r.samples = r.spare[:0]
