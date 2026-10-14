@@ -14,7 +14,7 @@ require (
 	github.com/eclipse/paho.golang v0.23.0
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/felixge/fgprof v0.9.5
-	github.com/go-stomp/stomp/v3 v3.1.6-0.20260923105929-9eb558af012a
+	github.com/go-stomp/stomp/v3 v3.2.0
 	github.com/hashicorp/memberlist v0.7.0
 	github.com/michaelklishin/rabbit-hole v1.5.0
 	github.com/onsi/ginkgo/v2 v2.33.0
