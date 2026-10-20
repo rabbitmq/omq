@@ -28,6 +28,13 @@ publisher (from 1 to 10). It will also start a single AMQP 1.0 consumer that
 consumes all those messages by declaring a classic queue `sensors` with a
 wildcard subscription.
 
+Publishers start with a random delay of up to one second, or one publishing
+interval if that is longer. For example, `-x 10000 -r 0.1` spreads the first
+messages across ten seconds, producing roughly 1,000 messages per second
+instead of recurring bursts. Each publisher keeps its configured rate after
+this initial delay. Use `--publisher-start-window` to override the window
+(`0` starts all publishers immediately). Short runs may end before every publisher sends a message.
+
 If the publishing and consuming protocol is the same, you can use abbreviated
 commands: `amqp` instead of `amqp-amqp`, `stomp` instead of `stomp-stomp`, etc.
 

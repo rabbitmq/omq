@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math"
+	"math/rand/v2"
 	"net/url"
 	"os"
 	"regexp"
@@ -236,6 +238,28 @@ func Rate(rate float32) string {
 	default:
 		return strconv.FormatFloat(float64(rate), 'f', -1, 64)
 	}
+}
+
+// PublisherStartDelay spreads publisher starts over at least one second and,
+// for rates below one message per second, over a full publishing interval.
+// A non-negative override replaces that window (0 disables the delay).
+func PublisherStartDelay(publishRate float32, override time.Duration) time.Duration {
+	if override == 0 {
+		return 0
+	}
+	window := time.Second
+	if override > 0 {
+		return time.Duration(rand.Int64N(int64(override)))
+	}
+	if publishRate > 0 && publishRate < 1 {
+		interval := float64(time.Second) / float64(publishRate)
+		if interval >= float64(math.MaxInt64) {
+			window = time.Duration(math.MaxInt64)
+		} else {
+			window = time.Duration(interval)
+		}
+	}
+	return time.Duration(rand.Int64N(int64(window)))
 }
 
 func RateLimiter(publishRate float32) *rate.Limiter {

@@ -3,7 +3,6 @@ package stomp
 import (
 	"context"
 	"crypto/tls"
-	"math/rand/v2"
 	"net"
 	"net/url"
 	"strconv"
@@ -136,8 +135,12 @@ func (p *StompPublisher) Start(publisherReady chan bool, startPublishing chan bo
 	case <-p.ctx.Done():
 		return
 	case <-startPublishing:
-		// short random delay to avoid all publishers publishing at the same time
-		time.Sleep(time.Duration(rand.IntN(1000)) * time.Millisecond)
+		select {
+		case <-p.ctx.Done():
+			p.Stop("context cancelled")
+			return
+		case <-time.After(utils.PublisherStartDelay(p.Config.Rate, p.Config.PublisherStartWindow)):
+		}
 	}
 
 	log.Info("publisher started", "id", p.Id, "rate", "unlimited", "destination", p.Topic)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
-	"math/rand/v2"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -163,8 +162,12 @@ func (r *Mqtt5Requester) Start(requesterReady chan bool, startRequesting chan bo
 		r.Stop("context cancelled")
 		return
 	case <-startRequesting:
-		// short random delay to avoid all requesters publishing at the same time
-		time.Sleep(time.Duration(rand.IntN(1000)) * time.Millisecond)
+		select {
+		case <-r.ctx.Done():
+			r.Stop("context cancelled")
+			return
+		case <-time.After(utils.PublisherStartDelay(r.Config.Rate, r.Config.PublisherStartWindow)):
+		}
 	}
 
 	log.Info("requester started", "id", r.Id, "rate", r.Config.Rate, "requestTopic", r.RequestTopic, "responseTopic", r.ResponseTopic)

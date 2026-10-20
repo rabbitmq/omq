@@ -178,6 +178,7 @@ type Config struct {
 	DetectGaps                  bool
 	PrintAllMetrics             bool
 	ConsumerStartupDelay        time.Duration
+	PublisherStartWindow        time.Duration
 	RequeueWhenPriority         []int
 	DiscardWhenPriority         []int
 	RequeueRate                 int

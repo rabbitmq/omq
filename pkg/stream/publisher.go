@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"math/rand/v2"
 	"os"
 	"strconv"
 	"strings"
@@ -253,7 +252,12 @@ func (p *StreamPublisher) Start(publisherReady chan bool, startPublishing chan b
 	case <-p.ctx.Done():
 		return
 	case <-startPublishing:
-		time.Sleep(time.Duration(rand.IntN(1000)) * time.Millisecond)
+		select {
+		case <-p.ctx.Done():
+			p.Stop("context cancelled")
+			return
+		case <-time.After(utils.PublisherStartDelay(p.Config.Rate, p.Config.PublisherStartWindow)):
+		}
 	}
 
 	log.Info("publisher started", "id", p.Id, "rate", p.Config.Rate, "destination", p.Topic)
