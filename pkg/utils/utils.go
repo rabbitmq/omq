@@ -74,7 +74,14 @@ func ParseSize(sizeStr string) (int, error) {
 	return result, nil
 }
 
+// EmptyPayloadSize is the Config.Size value requesting a zero-byte payload
+// (0 is taken, as it means "not set").
+const EmptyPayloadSize = -1
+
 func MessageBody(staticSize int, sizeTemplate *template.Template, id int) []byte {
+	if staticSize == EmptyPayloadSize {
+		return []byte{}
+	}
 	size := 12
 
 	if staticSize > 0 {
@@ -82,7 +89,10 @@ func MessageBody(staticSize int, sizeTemplate *template.Template, id int) []byte
 	} else if sizeTemplate != nil {
 		sizeStr := ExecuteTemplate(sizeTemplate, id)
 		if parsedSize, err := ParseSize(sizeStr); err == nil {
-			size = parsedSize
+			if parsedSize == 0 {
+				return []byte{}
+			}
+			size = max(parsedSize, size)
 		}
 	}
 
@@ -102,6 +112,10 @@ func UpdatePayload(useMillis bool, payload *[]byte) *[]byte {
 // reuse a single clock reading for both the payload and its own latency tracking.
 func UpdatePayloadAt(now time.Time, useMillis bool, payload *[]byte) *[]byte {
 	p := *payload
+	if len(p) == 0 {
+		// explicitly empty payload, nothing to stamp
+		return payload
+	}
 	if len(p) < minLatencyPayloadLen {
 		extended := make([]byte, minLatencyPayloadLen)
 		copy(extended, p)

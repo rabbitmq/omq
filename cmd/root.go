@@ -657,7 +657,7 @@ publishers to one:
 		"Queue arguments in key=value format, comma-separated (e.g. x-single-active-consumer=true,x-max-length=1000)")
 
 	// messages
-	rootCmd.PersistentFlags().StringVarP(&sizeStr, "size", "s", "12", "Message payload size (supports units like 10mb,templates and comma-separated values like 100,1000)")
+	rootCmd.PersistentFlags().StringVarP(&sizeStr, "size", "s", "12", "Message payload size (supports units like 10mb,templates and comma-separated values like 100,1000); 0 publishes empty payloads")
 	rootCmd.PersistentFlags().Float32VarP(&cfg.Rate, "rate", "r", -1, "Messages per second (-1 = unlimited)")
 	rootCmd.PersistentFlags().IntVarP(&cfg.MaxInFlight, "max-in-flight", "c", 1, "Maximum number of in-flight messages per publisher")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.MessageDurability, "message-durability", "d", true, "Mark messages as durable")
@@ -1468,8 +1468,8 @@ func parseSizeFlag(value, flagName string) (int, *template.Template, error) {
 		if err != nil {
 			return 0, nil, fmt.Errorf("invalid size value: %v", err)
 		}
-		if size < 12 {
-			return 0, nil, fmt.Errorf("size can't be less than 12 bytes")
+		if size != 0 && size < 12 {
+			return 0, nil, fmt.Errorf("size can't be less than 12 bytes (0 for an empty payload)")
 		}
 		return 0, tmpl, nil
 	}
@@ -1477,6 +1477,9 @@ func parseSizeFlag(value, flagName string) (int, *template.Template, error) {
 	size, err := utils.ParseSize(value)
 	if err != nil {
 		return 0, nil, fmt.Errorf("invalid size value: %v", err)
+	}
+	if size == 0 {
+		return utils.EmptyPayloadSize, nil, nil
 	}
 	if size < 12 {
 		return 0, nil, fmt.Errorf("size can't be less than 12 bytes")

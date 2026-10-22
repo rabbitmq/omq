@@ -12,8 +12,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	rabbithole "github.com/michaelklishin/rabbit-hole"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -500,6 +502,61 @@ var _ = Describe("OMQ CLI", func() {
 		Entry("MQTT v3.1.1", "4", "MQTT 3-1-1"),
 		Entry("MQTT v5.0", "5", "MQTT 5-0"),
 		Entry("default to MQTT v5.0", "", "MQTT 5-0"),
+	)
+
+	DescribeTable("empty payloads (--size 0)",
+		func(versionFlag string) {
+			topic := "omq-empty-payload-" + versionFlag
+			publish := func(size string) {
+				session := omq([]string{
+					"mqtt",
+					"--uri", "mqtt://127.0.0.1:1883",
+					"--publish-to=/topic/" + topic,
+					"--consume-from=/topic/" + topic,
+					"--mqtt-publisher-version", versionFlag,
+					"--mqtt-consumer-version", versionFlag,
+					"--mqtt-retained=true",
+					"--mqtt-publisher-qos", "1",
+					"--mqtt-consumer-qos", "1",
+					"--size", size,
+					"--publishers=1",
+					"--consumers=1",
+					"--pmessages=1",
+					"--cmessages=1",
+				})
+				Eventually(session).WithTimeout(15 * time.Second).Should(gexec.Exit(0))
+			}
+			countRetainedDelivered := func() int {
+				var mu sync.Mutex
+				received := 0
+				opts := mqtt.NewClientOptions().
+					AddBroker("tcp://127.0.0.1:1883").
+					SetClientID("omq-empty-payload-subscriber-" + versionFlag).
+					SetProtocolVersion(4)
+				c := mqtt.NewClient(opts)
+				Expect(c.Connect().WaitTimeout(5 * time.Second)).To(BeTrue())
+				defer c.Disconnect(100)
+				token := c.Subscribe(topic, 1, func(_ mqtt.Client, m mqtt.Message) {
+					mu.Lock()
+					defer mu.Unlock()
+					received++
+				})
+				Expect(token.WaitTimeout(5 * time.Second)).To(BeTrue())
+				time.Sleep(time.Second)
+				mu.Lock()
+				defer mu.Unlock()
+				return received
+			}
+
+			publish("100")
+			Expect(countRetainedDelivered()).To(Equal(1), "sanity check: retained message should be delivered")
+
+			// omq must not crash when it publishes and receives an empty payload
+			publish("0")
+			Expect(countRetainedDelivered()).To(Equal(0), "an empty retained message should clear the retained value")
+		},
+		Entry("MQTT v3.1.1", "4"),
+		Entry("MQTT v5.0", "5"),
 	)
 
 	Describe("MQTT RPC", func() {

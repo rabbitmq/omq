@@ -19,6 +19,29 @@ var _ = Context("Utils", func() {
 		Expect(short[:4]).To(Equal([]byte{1, 2, 3, 4}))
 	})
 
+	It("keeps empty payloads empty", func() {
+		body := utils.MessageBody(utils.EmptyPayloadSize, nil, 1)
+		Expect(body).To(BeEmpty())
+		utils.UpdatePayload(false, &body)
+		Expect(body).To(BeEmpty())
+		_, latency := utils.CalculateEndToEndLatency(&body)
+		Expect(latency).To(BeZero())
+	})
+
+	It("supports empty payloads in size templates", func() {
+		empty, err := config.ParseTemplateValue("0")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(utils.MessageBody(0, empty, 1)).To(BeEmpty())
+
+		random, err := config.ParseTemplateValue("{{ randInt 0 2 | mul 100 }}")
+		Expect(err).ToNot(HaveOccurred())
+		sizes := map[int]bool{}
+		for range 100 {
+			sizes[len(utils.MessageBody(0, random, 1))] = true
+		}
+		Expect(sizes).To(Equal(map[int]bool{0: true, 100: true}))
+	})
+
 	DescribeTable("Latency calculation",
 		func(units string, useMillis bool) {
 			testMsg := utils.MessageBody(100, nil, 1)
