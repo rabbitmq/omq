@@ -278,12 +278,13 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 		copy(body, p.msg)
 	}
 
+	topic := topicForSeq(p.Topic, p.Config.MqttPublisher.TopicsPerPublisher, seq)
 	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
 
 	pub := &paho.Publish{
 		QoS:     byte(p.Config.MqttPublisher.QoS),
 		Retain:  retained,
-		Topic:   p.Topic,
+		Topic:   topic,
 		Payload: body,
 	}
 
@@ -345,7 +346,7 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 	metrics.MessagesPublished.Inc()
 	p.latency.Record(latency)
 	if log.IsDebug() {
-		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+		log.Debug("message sent", "id", p.Id, "destination", topic, "latency", latency)
 	}
 }
 

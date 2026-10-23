@@ -232,11 +232,12 @@ func (p *MqttPublisher) Send(seq uint64) {
 		copy(body, p.msg)
 	}
 
+	topic := topicForSeq(p.Topic, p.Config.MqttPublisher.TopicsPerPublisher, seq)
 	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
 
 	startTime := time.Now()
 	utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &body)
-	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), retained, body)
+	token := p.Connection.Publish(topic, byte(p.Config.MqttPublisher.QoS), retained, body)
 	token.Wait()
 	latency := time.Since(startTime)
 	if recyclable {
@@ -252,7 +253,7 @@ func (p *MqttPublisher) Send(seq uint64) {
 		metrics.MessagesPublished.Inc()
 		p.latency.Record(latency)
 		if log.IsDebug() {
-			log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+			log.Debug("message sent", "id", p.Id, "destination", topic, "latency", latency)
 		}
 	}
 }

@@ -136,6 +136,8 @@ func RootCmd() *cobra.Command {
 		"MQTT publisher keep alive interval, in whole seconds (0 disables keep alive)")
 	mqttPublisherFlags.StringArrayVar(&mqttUserProperties, "mqtt-user-property", []string{},
 		"MQTT v5 user property, eg. key1=val1")
+	mqttPublisherFlags.IntVar(&cfg.MqttPublisher.TopicsPerPublisher, "mqtt-topics-per-publisher", 1,
+		"Number of topics each MQTT publisher cycles through (appends /N to the topic when greater than 1)")
 	mqttPublisherFlags.BoolSliceVar(&cfg.MqttPublisher.Retained, "mqtt-retained", []bool{false},
 		"Whether published messages should be retained; accepts a list to cycle through, eg. \"true,false\"")
 
@@ -1099,6 +1101,9 @@ func defaultUri(proto string) string {
 }
 
 func sanitizeConfig(cfg *config.Config) error {
+	if cfg.MqttPublisher.TopicsPerPublisher < 1 {
+		return fmt.Errorf("--mqtt-topics-per-publisher must be at least 1")
+	}
 	if sizeStr != "" {
 		size, tmpl, err := parseSizeFlag(sizeStr, "size")
 		if err != nil {
@@ -1412,6 +1417,9 @@ func validateMqttRpcCommand(cmd *cobra.Command, cfg *config.Config) error {
 	}
 	if cmd.Flags().Changed("mqtt-retained") {
 		return fmt.Errorf("--mqtt-retained is not supported for mqtt-rpc")
+	}
+	if cmd.Flags().Changed("mqtt-topics-per-publisher") {
+		return fmt.Errorf("--mqtt-topics-per-publisher is not supported for mqtt-rpc")
 	}
 	if responseTopicHasWildcard(cfg) {
 		return fmt.Errorf("--mqtt-response-topic must not contain MQTT wildcards (+ or #)")

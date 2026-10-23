@@ -103,6 +103,7 @@ type MqttOptions struct {
 	CleanSession             bool
 	SessionExpiryInterval    time.Duration
 	SubscriptionsPerConsumer int
+	TopicsPerPublisher       int
 	UserPropertyTemplates    map[string]*template.Template
 	Retained                 []bool
 	ReceiveMaximum           uint16

@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"net/url"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -114,6 +115,15 @@ func stringsToUrls(connectionStrings []string) []*url.URL {
 		serverUrls = append(serverUrls, parsedUrl)
 	}
 	return serverUrls
+}
+
+// topicForSeq returns the topic for the given message sequence number. With more
+// than one topic per publisher, messages cycle through base/1 .. base/N.
+func topicForSeq(base string, topics int, seq uint64) string {
+	if topics <= 1 {
+		return base
+	}
+	return base + "/" + strconv.FormatUint(seq%uint64(topics)+1, 10)
 }
 
 func publisherTopic(topicTemplate *template.Template, id int) string {
