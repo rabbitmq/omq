@@ -23,24 +23,27 @@ type Mqtt5Publisher struct {
 	Id         int
 	Connection *autopaho.ConnectionManager
 	Topic      string
-	Config     config.Config
-	ctx        context.Context
-	msg        []byte
-	wg         sync.WaitGroup
-	bodyPool   sync.Pool
-	latency    *metrics.LatencyRecorder
-	statics    staticFields
+	// topic is resolved per message when the template uses the message number
+	perMessageTopic bool
+	Config          config.Config
+	ctx             context.Context
+	msg             []byte
+	wg              sync.WaitGroup
+	bodyPool        sync.Pool
+	latency         *metrics.LatencyRecorder
+	statics         staticFields
 }
 
 func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Publisher {
 	topic := publisherTopic(cfg.PublishToTemplate, id)
 	p := &Mqtt5Publisher{
-		Id:         id,
-		Connection: nil,
-		Topic:      topic,
-		Config:     cfg,
-		ctx:        ctx,
-		latency:    metrics.NewLatencyRecorder(),
+		Id:              id,
+		Connection:      nil,
+		Topic:           topic,
+		perMessageTopic: utils.UsesMessageNumber(cfg.PublishToTemplate),
+		Config:          cfg,
+		ctx:             ctx,
+		latency:         metrics.NewLatencyRecorder(),
 	}
 	p.statics = newStaticFields(cfg, id)
 	return p
@@ -278,12 +281,16 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 		copy(body, p.msg)
 	}
 
+	topic := p.Topic
+	if p.perMessageTopic {
+		topic = publisherTopicForSeq(p.Config.PublishToTemplate, p.Id, seq)
+	}
 	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
 
 	pub := &paho.Publish{
 		QoS:     byte(p.Config.MqttPublisher.QoS),
 		Retain:  retained,
-		Topic:   p.Topic,
+		Topic:   topic,
 		Payload: body,
 	}
 
@@ -345,7 +352,7 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 	metrics.MessagesPublished.Inc()
 	p.latency.Record(latency)
 	if log.IsDebug() {
-		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+		log.Debug("message sent", "id", p.Id, "destination", topic, "latency", latency)
 	}
 }
 

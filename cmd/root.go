@@ -560,6 +560,10 @@ publishers to one:
 				fmt.Printf("ERROR: %s\n", err)
 				os.Exit(1)
 			}
+			if err := validateMessageNumber(cmd, &cfg); err != nil {
+				fmt.Printf("ERROR: %s\n", err)
+				os.Exit(1)
+			}
 			if err := validateMqttRpcCommand(cmd, &cfg); err != nil {
 				fmt.Printf("ERROR: %s\n", err)
 				os.Exit(1)
@@ -603,7 +607,7 @@ publishers to one:
 	rootCmd.PersistentFlags().IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt,
 		"The number of messages to send per publisher")
 	rootCmd.PersistentFlags().StringVarP(&publishToStr, "publish-to", "t", "/queues/omq-%d",
-		"The topic/terminus to publish to (%d will be replaced with the publisher's id; supports Go templates)")
+		"The topic/terminus to publish to (%d will be replaced with the publisher's id; MQTT only: %n with the message number; supports Go templates)")
 	rootCmd.PersistentFlags().StringVar(&cfg.PublisherId, "publisher-id", "omq-publisher-%d",
 		"Client ID for AMQP and MQTT publishers (%d => consumer's id)")
 
@@ -1398,6 +1402,22 @@ func warnMqttRpcTopology(cfg config.Config) {
 		log.Info("WARNING: mqtt-rpc request topics vary by client id, but publisher and consumer counts differ; unpaired clients will time out or sit idle. Use the same count, or pin publishers onto responder topics with --publish-to 'rpc/request/{{ mod .id N }}' and --consume-from 'rpc/request/%d'",
 			"publishers", cfg.Publishers, "consumers", cfg.Consumers)
 	}
+}
+
+// validateMessageNumber rejects uses of the message number (%n, {{ .n }}) where
+// it is not supported: only the destination of MQTT publishers is resolved
+// for every message; everywhere else the value would silently stay literal.
+func validateMessageNumber(cmd *cobra.Command, cfg *config.Config) error {
+	if utils.UsesMessageNumber(cfg.ConsumeFromTemplate) {
+		return fmt.Errorf("--consume-from does not support the message number (%%n, .n)")
+	}
+	if !utils.UsesMessageNumber(cfg.PublishToTemplate) {
+		return nil
+	}
+	if cmd.Name() == "mqtt-rpc" || !strings.HasPrefix(cmd.Name(), "mqtt-") {
+		return fmt.Errorf("--publish-to supports the message number (%%n, .n) only for MQTT publishers (not %s)", cmd.Name())
+	}
+	return nil
 }
 
 func validateMqttRpcCommand(cmd *cobra.Command, cfg *config.Config) error {

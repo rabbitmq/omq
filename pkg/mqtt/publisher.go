@@ -18,23 +18,26 @@ type MqttPublisher struct {
 	Id         int
 	Connection mqtt.Client
 	Topic      string
-	Config     config.Config
-	ctx        context.Context
-	msg        []byte
-	wg         sync.WaitGroup
-	bodyPool   sync.Pool
-	latency    *metrics.LatencyRecorder
+	// topic is resolved per message when the template uses the message number
+	perMessageTopic bool
+	Config          config.Config
+	ctx             context.Context
+	msg             []byte
+	wg              sync.WaitGroup
+	bodyPool        sync.Pool
+	latency         *metrics.LatencyRecorder
 }
 
 func NewMqttPublisher(ctx context.Context, cfg config.Config, id int) *MqttPublisher {
 	topic := publisherTopic(cfg.PublishToTemplate, id)
 	return &MqttPublisher{
-		Id:         id,
-		Connection: nil,
-		Topic:      topic,
-		Config:     cfg,
-		ctx:        ctx,
-		latency:    metrics.NewLatencyRecorder(),
+		Id:              id,
+		Connection:      nil,
+		Topic:           topic,
+		perMessageTopic: utils.UsesMessageNumber(cfg.PublishToTemplate),
+		Config:          cfg,
+		ctx:             ctx,
+		latency:         metrics.NewLatencyRecorder(),
 	}
 }
 
@@ -232,11 +235,15 @@ func (p *MqttPublisher) Send(seq uint64) {
 		copy(body, p.msg)
 	}
 
+	topic := p.Topic
+	if p.perMessageTopic {
+		topic = publisherTopicForSeq(p.Config.PublishToTemplate, p.Id, seq)
+	}
 	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
 
 	startTime := time.Now()
 	utils.UpdatePayloadAt(startTime, p.Config.UseMillis, &body)
-	token := p.Connection.Publish(p.Topic, byte(p.Config.MqttPublisher.QoS), retained, body)
+	token := p.Connection.Publish(topic, byte(p.Config.MqttPublisher.QoS), retained, body)
 	token.Wait()
 	latency := time.Since(startTime)
 	if recyclable {
@@ -252,7 +259,7 @@ func (p *MqttPublisher) Send(seq uint64) {
 		metrics.MessagesPublished.Inc()
 		p.latency.Record(latency)
 		if log.IsDebug() {
-			log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+			log.Debug("message sent", "id", p.Id, "destination", topic, "latency", latency)
 		}
 	}
 }
