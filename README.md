@@ -202,6 +202,21 @@ This allows setting random or otherwise generated values. For example:
 * `--publishers 10 --publish-to '/queues/cq-{{ mod .id 2 }}'` declare 2 queues and start 5 publishers per queue
 * `--amqp-modify "x-timestamp={{ now }}"` sets the `x-timestamp` annotation to the current time
 
+#### Message number
+
+`--publish-to` of MQTT publishers (`mqtt-*` commands, except `mqtt-rpc`) can also refer to the number
+of the message being published: `%n` or `{{ .n }}`. It starts at 1 for every publisher and increases
+with every message, so the topic is resolved separately for each message. Using it in `--consume-from`,
+or with any other publisher, is an error.
+
+* `omq mqtt --publish-to 'sensor/%n' --pmessages 1000000 --mqtt-retained true --consumers 0` publishes
+  1M retained messages to 1M different topics (`sensor/1` to `sensor/1000000`) using a single connection
+* `--publish-to 'sensor/{{ mod .n 1000 }}'` cycles through 1000 topics (`sensor/1` ... `sensor/999`, `sensor/0`)
+
+The message number is local to each publisher, so with more than one publisher the topics collide
+(and, for retained messages, overwrite each other) unless the topic also contains the publisher's id,
+for example `--publishers 4 --publish-to 'sensor/%d/%n'`.
+
 ### Detecting Unorderly Messages
 
 * `--detect-out-of-order-messages` can be used to detect messages that were consumed

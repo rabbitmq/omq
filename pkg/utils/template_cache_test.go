@@ -77,3 +77,28 @@ var _ = Context("BodyArena", func() {
 		Expect(b2).To(Equal([]byte{1, 2, 3}))
 	})
 })
+
+var _ = Context("Message number in templates", func() {
+	It("detects %n and .n", func() {
+		Expect(utils.UsesMessageNumber(parse("sensor/%n"))).To(BeTrue())
+		Expect(utils.UsesMessageNumber(parse("sensor/{{ .n }}"))).To(BeTrue())
+		Expect(utils.UsesMessageNumber(parse("sensor/{{ mod .n 10 }}"))).To(BeTrue())
+		Expect(utils.UsesMessageNumber(parse("{{ if gt .n 5 }}a{{ else }}{{ .n }}{{ end }}"))).To(BeTrue())
+		Expect(utils.UsesMessageNumber(parse("sensor/%d"))).To(BeFalse())
+		Expect(utils.UsesMessageNumber(parse("sensor/{{ .id }}"))).To(BeFalse())
+		Expect(utils.UsesMessageNumber(parse("sensor/{{ .name }}"))).To(BeFalse())
+		Expect(utils.UsesMessageNumber(nil)).To(BeFalse())
+	})
+
+	It("starts counting at 1", func() {
+		Expect(utils.ExecuteTemplateN(parse("s/%d/%n"), 2, 1)).To(Equal("s/2/1"))
+		Expect(utils.ExecuteTemplateN(parse("s/{{ .id }}/{{ .n }}"), 2, 5)).To(Equal("s/2/5"))
+		Expect(utils.ExecuteTemplateN(parse("s/{{ mod .n 3 }}"), 0, 7)).To(Equal("s/1"))
+	})
+
+	It("does not leak n into templates executed without it", func() {
+		tmpl := parse("{{ .id }}-{{ .n }}")
+		utils.ExecuteTemplateN(tmpl, 1, 9)
+		Expect(utils.ExecuteTemplate(tmpl, 1)).To(Equal("1-<no value>"))
+	})
+})
