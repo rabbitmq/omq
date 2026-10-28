@@ -153,7 +153,7 @@ func (p *Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 	if p.Config.MqttPublisher.QoS == 0 {
 		// caps the wait for the UNSUBACK in Stop, regardless of its context;
 		// with QoS 1 and 2 it would also apply to every publish
-		opts.ClientConfig.PacketTimeout = flushTimeout
+		opts.PacketTimeout = flushTimeout
 	}
 	return opts
 }

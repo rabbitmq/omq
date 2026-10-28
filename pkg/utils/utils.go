@@ -415,10 +415,10 @@ func executeTemplate(tmpl *template.Template, id int, n *uint64, seq []uint64) s
 // UsesMessageNumber reports whether the template refers to the message number,
 // either as %n in its text or as {{ .n }} in an action.
 func UsesMessageNumber(tmpl *template.Template) bool {
-	if tmpl == nil || tmpl.Tree == nil || tmpl.Tree.Root == nil {
+	if tmpl == nil || tmpl.Tree == nil || tmpl.Root == nil {
 		return false
 	}
-	return nodeUsesN(tmpl.Tree.Root)
+	return nodeUsesN(tmpl.Root)
 }
 
 func nodeUsesN(node parse.Node) bool {
