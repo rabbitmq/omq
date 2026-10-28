@@ -23,24 +23,30 @@ type Mqtt5Publisher struct {
 	Id         int
 	Connection *autopaho.ConnectionManager
 	Topic      string
-	Config     config.Config
-	ctx        context.Context
-	msg        []byte
-	wg         sync.WaitGroup
-	bodyPool   sync.Pool
-	latency    *metrics.LatencyRecorder
-	statics    staticFields
+	// topic is resolved per message when the template uses the message number
+	perMessageTopic bool
+	Config          config.Config
+	ctx             context.Context
+	msg             []byte
+	wg              sync.WaitGroup
+	bodyPool        sync.Pool
+	latency         *metrics.LatencyRecorder
+	statics         staticFields
+	// ends the connection manager; independent of ctx so that Stop can still
+	// use the connection after ctx is cancelled
+	connCancel context.CancelFunc
 }
 
 func NewMqtt5Publisher(ctx context.Context, cfg config.Config, id int) *Mqtt5Publisher {
-	topic := publisherTopic(cfg.PublishToTemplate, id)
+	topic, perMessageTopic := publisherDestination(cfg, id)
 	p := &Mqtt5Publisher{
-		Id:         id,
-		Connection: nil,
-		Topic:      topic,
-		Config:     cfg,
-		ctx:        ctx,
-		latency:    metrics.NewLatencyRecorder(),
+		Id:              id,
+		Connection:      nil,
+		Topic:           topic,
+		perMessageTopic: perMessageTopic,
+		Config:          cfg,
+		ctx:             ctx,
+		latency:         metrics.NewLatencyRecorder(),
 	}
 	p.statics = newStaticFields(cfg, id)
 	return p
@@ -83,13 +89,16 @@ func newStaticFields(cfg config.Config, id int) staticFields {
 
 func (p *Mqtt5Publisher) Connect() {
 	opts := p.connectionOptions()
-	connection, err := autopaho.NewConnection(p.ctx, opts)
+	connCtx, connCancel := context.WithCancel(context.WithoutCancel(p.ctx))
+	p.connCancel = connCancel
+	connection, err := autopaho.NewConnection(connCtx, opts)
 	if err != nil {
 		log.Error("publisher connection failed", "id", p.Id, "error", err)
 	}
 	err = connection.AwaitConnection(p.ctx)
 	if err != nil {
 		// AwaitConnection only returns an error if the context is cancelled
+		connCancel()
 		return
 	}
 	p.Connection = connection
@@ -140,6 +149,11 @@ func (p *Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 				log.Error("publisher disconnected", "id", p.Id, "reasonCode", d.ReasonCode, "reasonString", d.Properties.ReasonString)
 			},
 		},
+	}
+	if p.Config.MqttPublisher.QoS == 0 {
+		// caps the wait for the UNSUBACK in Stop, regardless of its context;
+		// with QoS 1 and 2 it would also apply to every publish
+		opts.ClientConfig.PacketTimeout = flushTimeout
 	}
 	return opts
 }
@@ -278,12 +292,16 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 		copy(body, p.msg)
 	}
 
+	topic := p.Topic
+	if p.perMessageTopic {
+		topic = publisherTopicForSeq(p.Config.PublishToTemplate, p.Id, seq)
+	}
 	retained := p.Config.MqttPublisher.Retained[seq%uint64(len(p.Config.MqttPublisher.Retained))]
 
 	pub := &paho.Publish{
 		QoS:     byte(p.Config.MqttPublisher.QoS),
 		Retain:  retained,
-		Topic:   p.Topic,
+		Topic:   topic,
 		Payload: body,
 	}
 
@@ -345,7 +363,7 @@ func (p *Mqtt5Publisher) Send(seq uint64) {
 	metrics.MessagesPublished.Inc()
 	p.latency.Record(latency)
 	if log.IsDebug() {
-		log.Debug("message sent", "id", p.Id, "destination", p.Topic, "latency", latency)
+		log.Debug("message sent", "id", p.Id, "destination", topic, "latency", latency)
 	}
 }
 
@@ -353,8 +371,21 @@ func (p *Mqtt5Publisher) Stop(reason string) {
 	p.wg.Wait()
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Connection != nil {
+		if p.Config.MqttPublisher.QoS == 0 {
+			// QoS 0 has no acknowledgement, so wait for the broker to answer
+			// a request sent after the last publish: it handles packets in order.
+			flushCtx, cancelFlush := context.WithTimeout(context.Background(), flushTimeout)
+			notice := noticeSlowFlush(p.ctx)
+			_, err := p.Connection.Unsubscribe(flushCtx, &paho.Unsubscribe{Topics: []string{flushTopic}})
+			notice.Stop()
+			cancelFlush()
+			if err != nil {
+				log.Error("failed to confirm that the broker processed published messages", "id", p.Id, "error", err)
+			}
+		}
 		disconnectCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = p.Connection.Disconnect(disconnectCtx)
+		p.connCancel()
 	}
 }

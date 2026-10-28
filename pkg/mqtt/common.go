@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/url"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -116,9 +117,52 @@ func stringsToUrls(connectionStrings []string) []*url.URL {
 	return serverUrls
 }
 
+// flushTopic is unsubscribed from by QoS 0 publishers before disconnecting, as
+// a way to wait for the broker to process everything published so far.
+const (
+	flushTopic       = "omq/flush"
+	flushTimeout     = 2 * time.Minute
+	flushNoticeDelay = time.Second
+)
+
+var flushNotice sync.Once
+
+// noticeSlowFlush logs, once per process, that shutdown is waiting for the
+// broker, unless the returned timer is stopped first.
+func noticeSlowFlush(ctx context.Context) *time.Timer {
+	return time.AfterFunc(flushNoticeDelay, func() {
+		flushNotice.Do(func() {
+			msg := "waiting for the broker to process messages published with QoS 0"
+			// once omq is stopping, the signal handler exits on the next ^C
+			if ctx.Err() != nil {
+				msg += " (press ^C to exit immediately)"
+			}
+			log.Info(msg)
+		})
+	})
+}
+
+// publisherDestination returns the topic of a publisher or, when the topic
+// is resolved per message, its unresolved form for logging.
+func publisherDestination(cfg config.Config, id int) (topic string, perMessage bool) {
+	if utils.UsesMessageNumber(cfg.PublishToTemplate) {
+		return trimTopic(utils.InjectId(cfg.PublishTo, id)), true
+	}
+	return publisherTopic(cfg.PublishToTemplate, id), false
+}
+
 func publisherTopic(topicTemplate *template.Template, id int) string {
 	// Resolve the destination using the generic helper
-	topic := utils.ResolveTerminus(topicTemplate, id)
+	return trimTopic(utils.ResolveTerminus(topicTemplate, id))
+}
+
+// publisherTopicForSeq resolves a topic template that uses the message number
+// (%n or {{ .n }}) for the message with the given 0-based sequence number.
+func publisherTopicForSeq(topicTemplate *template.Template, id int, seq uint64) string {
+	return trimTopic(utils.ExecuteTemplateN(topicTemplate, id, seq+1))
+}
+
+func trimTopic(topic string) string {
 	// AMQP-1.0 and STOMP allow /exchange/amq.topic/ prefix
 	// since MQTT has no concept of exchanges, we need to remove it
 	// this should get more flexible in the future

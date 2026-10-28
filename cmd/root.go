@@ -560,6 +560,10 @@ publishers to one:
 				fmt.Printf("ERROR: %s\n", err)
 				os.Exit(1)
 			}
+			if err := validateMessageNumber(cmd, &cfg); err != nil {
+				fmt.Printf("ERROR: %s\n", err)
+				os.Exit(1)
+			}
 			if err := validateMqttRpcCommand(cmd, &cfg); err != nil {
 				fmt.Printf("ERROR: %s\n", err)
 				os.Exit(1)
@@ -603,7 +607,7 @@ publishers to one:
 	rootCmd.PersistentFlags().IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt,
 		"The number of messages to send per publisher")
 	rootCmd.PersistentFlags().StringVarP(&publishToStr, "publish-to", "t", "/queues/omq-%d",
-		"The topic/terminus to publish to (%d will be replaced with the publisher's id; supports Go templates)")
+		"The topic/terminus to publish to (%d will be replaced with the publisher's id and, for MQTT publishers, %n with the message number; supports Go templates)")
 	rootCmd.PersistentFlags().StringVar(&cfg.PublisherId, "publisher-id", "omq-publisher-%d",
 		"Client ID for AMQP and MQTT publishers (%d => consumer's id)")
 
@@ -1400,6 +1404,22 @@ func warnMqttRpcTopology(cfg config.Config) {
 	}
 }
 
+// validateMessageNumber rejects uses of the message number (%n, {{ .n }}) where
+// it is not supported: only the destination of MQTT publishers is resolved
+// for every message; everywhere else the value would silently stay literal.
+func validateMessageNumber(cmd *cobra.Command, cfg *config.Config) error {
+	if utils.UsesMessageNumber(cfg.ConsumeFromTemplate) {
+		return fmt.Errorf("--consume-from does not support the message number (%%n, .n)")
+	}
+	if !utils.UsesMessageNumber(cfg.PublishToTemplate) {
+		return nil
+	}
+	if cmd.Name() == "mqtt-rpc" || !strings.HasPrefix(cmd.Name(), "mqtt-") {
+		return fmt.Errorf("--publish-to supports the message number (%%n, .n) only for MQTT publishers (not %s)", cmd.Name())
+	}
+	return nil
+}
+
 func validateMqttRpcCommand(cmd *cobra.Command, cfg *config.Config) error {
 	if cmd.Name() != "mqtt-rpc" {
 		return nil
@@ -1563,16 +1583,17 @@ func handleInterupt(ctx context.Context, cancel context.CancelFunc) {
 	go func() {
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-		select {
-		case <-c:
+		for range c {
+			// already stopping (an earlier signal or --time): don't wait any longer
+			if ctx.Err() != nil {
+				log.Print("Received another signal, exiting immediately")
+				os.Exit(0)
+			}
 			cancel()
 			log.Print("Received SIGTERM, shutting down...")
 			// Give goroutines time to clean up gracefully (stop publishers/consumers,
 			// delete queues if --cleanup-queues is set), then force exit
-			time.Sleep(3 * time.Second)
-			os.Exit(0)
-		case <-ctx.Done():
-			return
+			time.AfterFunc(3*time.Second, func() { os.Exit(0) })
 		}
 	}()
 }

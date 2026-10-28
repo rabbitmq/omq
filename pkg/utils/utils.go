@@ -344,11 +344,21 @@ func ParseHeadersWithTemplates(headerStrings []string) (map[string]any, map[stri
 // cycling through comma-separated values; when omitted, the global
 // MessagesPublished counter is used instead.
 func ExecuteTemplate(tmpl *template.Template, id int, seq ...uint64) string {
+	return executeTemplate(tmpl, id, nil, seq)
+}
+
+// ExecuteTemplateN is like ExecuteTemplate, but additionally exposes the
+// 1-based message number n as %n and as {{ .n }}.
+func ExecuteTemplateN(tmpl *template.Template, id int, n uint64) string {
+	return executeTemplate(tmpl, id, &n, []uint64{n - 1})
+}
+
+func executeTemplate(tmpl *template.Template, id int, n *uint64, seq []uint64) string {
 	if tmpl == nil {
 		return ""
 	}
 
-	if ct := compiled(tmpl); ct.static {
+	if ct := compiled(tmpl); ct.static && n == nil {
 		r := ct.resolve(id)
 		if r.list == nil {
 			return r.value
@@ -365,6 +375,11 @@ func ExecuteTemplate(tmpl *template.Template, id int, seq ...uint64) string {
 	ec := execPool.Get().(*execContext)
 	ec.buf.Reset()
 	ec.data["id"] = id
+	if n != nil {
+		ec.data["n"] = *n
+	} else {
+		delete(ec.data, "n")
+	}
 	err := tmpl.Execute(&ec.buf, ec.data)
 	if err != nil {
 		log.Error("template execution failed", "error", err)
@@ -377,6 +392,9 @@ func ExecuteTemplate(tmpl *template.Template, id int, seq ...uint64) string {
 	if !strings.Contains(result, "{{") {
 		// Apply InjectId to handle %d
 		result = InjectId(result, id)
+		if n != nil {
+			result = strings.ReplaceAll(result, "%n", strconv.FormatUint(*n, 10))
+		}
 
 		// If the result has commas, cycle through values
 		if strings.Contains(result, ",") {
@@ -392,6 +410,70 @@ func ExecuteTemplate(tmpl *template.Template, id int, seq ...uint64) string {
 	}
 
 	return result
+}
+
+// UsesMessageNumber reports whether the template refers to the message number,
+// either as %n in its text or as {{ .n }} in an action.
+func UsesMessageNumber(tmpl *template.Template) bool {
+	if tmpl == nil || tmpl.Tree == nil || tmpl.Tree.Root == nil {
+		return false
+	}
+	return nodeUsesN(tmpl.Tree.Root)
+}
+
+func nodeUsesN(node parse.Node) bool {
+	switch n := node.(type) {
+	case *parse.TextNode:
+		return strings.Contains(string(n.Text), "%n")
+	case *parse.ListNode:
+		if n == nil {
+			return false
+		}
+		for _, child := range n.Nodes {
+			if nodeUsesN(child) {
+				return true
+			}
+		}
+	case *parse.ActionNode:
+		return nodeUsesN(n.Pipe)
+	case *parse.PipeNode:
+		if n == nil {
+			return false
+		}
+		for _, d := range n.Decl {
+			if nodeUsesN(d) {
+				return true
+			}
+		}
+		for _, c := range n.Cmds {
+			if nodeUsesN(c) {
+				return true
+			}
+		}
+	case *parse.CommandNode:
+		for _, a := range n.Args {
+			if nodeUsesN(a) {
+				return true
+			}
+		}
+	case *parse.FieldNode:
+		return len(n.Ident) > 0 && n.Ident[0] == "n"
+	case *parse.ChainNode:
+		return nodeUsesN(n.Node)
+	case *parse.IfNode:
+		return branchUsesN(&n.BranchNode)
+	case *parse.RangeNode:
+		return branchUsesN(&n.BranchNode)
+	case *parse.WithNode:
+		return branchUsesN(&n.BranchNode)
+	case *parse.TemplateNode:
+		return nodeUsesN(n.Pipe)
+	}
+	return false
+}
+
+func branchUsesN(b *parse.BranchNode) bool {
+	return nodeUsesN(b.Pipe) || nodeUsesN(b.List) || nodeUsesN(b.ElseList)
 }
 
 // StaticTemplateValue returns the value of a template that has no actions and
