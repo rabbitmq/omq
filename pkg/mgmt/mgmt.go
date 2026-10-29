@@ -62,14 +62,18 @@ func (m *Mgmt) connection() *rmq.AmqpConnection {
 			log.Error("can't parse management URI", "uri", uri, "error", err)
 			continue
 		}
-		conn, err := rmq.Dial(m.ctx, uri, &rmq.AmqpConnOptions{
+		connOptions := &rmq.AmqpConnOptions{
 			SASLType:    amqp.SASLTypeAnonymous(),
 			ContainerID: "omq-management",
-			TLSConfig: &tls.Config{
+		}
+		// rmq.Dial reports any dial error as a TLS error if TLSConfig is set
+		if u.Scheme == "amqps" {
+			connOptions.TLSConfig = &tls.Config{
 				ServerName:         u.Hostname(),
 				InsecureSkipVerify: m.insecureSkipTLSVerify,
-			},
-		})
+			}
+		}
+		conn, err := rmq.Dial(m.ctx, uri, connOptions)
 		if err == nil {
 			m.conn = conn
 			log.Debug("management connection established", "uri", uri)
