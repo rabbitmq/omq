@@ -217,6 +217,10 @@ The message number is local to each publisher, so with more than one publisher t
 (and, for retained messages, overwrite each other) unless the topic also contains the publisher's id,
 for example `--publishers 4 --publish-to 'sensor/%d/%n'`.
 
+QoS 0 has no acknowledgements, so omq may disconnect before the broker has processed the last messages.
+Add `--mqtt-publisher-flush` to make QoS 0 publishers wait for the broker before disconnecting
+(it sends an UNSUBSCRIBE for `omq/flush` as the last packet, which shows up in broker metrics).
+
 ### Detecting Unorderly Messages
 
 * `--detect-out-of-order-messages` can be used to detect messages that were consumed
