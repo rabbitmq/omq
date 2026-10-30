@@ -150,7 +150,7 @@ func (p *Mqtt5Publisher) connectionOptions() autopaho.ClientConfig {
 			},
 		},
 	}
-	if p.Config.MqttPublisher.QoS == 0 {
+	if needsFlush(p.Config) {
 		// caps the wait for the UNSUBACK in Stop, regardless of its context;
 		// with QoS 1 and 2 it would also apply to every publish
 		opts.PacketTimeout = flushTimeout
@@ -371,7 +371,7 @@ func (p *Mqtt5Publisher) Stop(reason string) {
 	p.wg.Wait()
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Connection != nil {
-		if p.Config.MqttPublisher.QoS == 0 {
+		if needsFlush(p.Config) {
 			// QoS 0 has no acknowledgement, so wait for the broker to answer
 			// a request sent after the last publish: it handles packets in order.
 			flushCtx, cancelFlush := context.WithTimeout(context.Background(), flushTimeout)

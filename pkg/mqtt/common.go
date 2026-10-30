@@ -119,6 +119,8 @@ func stringsToUrls(connectionStrings []string) []*url.URL {
 
 // flushTopic is unsubscribed from by QoS 0 publishers before disconnecting, as
 // a way to wait for the broker to process everything published so far.
+// It is opt-in (--mqtt-publisher-flush), as the UNSUBSCRIBE shows up in broker
+// metrics, which is noise with many publishers.
 const (
 	flushTopic       = "omq/flush"
 	flushTimeout     = 2 * time.Minute
@@ -126,6 +128,10 @@ const (
 )
 
 var flushNotice sync.Once
+
+func needsFlush(cfg config.Config) bool {
+	return cfg.MqttPublisher.QoS == 0 && cfg.MqttPublisher.FlushOnStop
+}
 
 // noticeSlowFlush logs, once per process, that shutdown is waiting for the
 // broker, unless the returned timer is stopped first.

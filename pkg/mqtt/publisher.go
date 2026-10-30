@@ -268,7 +268,7 @@ func (p *MqttPublisher) Stop(reason string) {
 	p.wg.Wait()
 	log.Debug("closing publisher connection", "id", p.Id, "reason", reason)
 	if p.Connection != nil {
-		if p.Config.MqttPublisher.QoS == 0 && p.Connection.IsConnected() {
+		if needsFlush(p.Config) && p.Connection.IsConnected() {
 			// QoS 0 has no acknowledgement, so wait for the broker to answer
 			// a request sent after the last publish: it handles packets in order.
 			token := p.Connection.Unsubscribe(flushTopic)

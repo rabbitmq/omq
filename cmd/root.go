@@ -134,6 +134,8 @@ func RootCmd() *cobra.Command {
 		"MQTT publisher session expiry interval")
 	mqttPublisherFlags.DurationVar(&cfg.MqttPublisher.KeepAlive, "mqtt-publisher-keep-alive", 20*time.Second,
 		"MQTT publisher keep alive interval, in whole seconds (0 disables keep alive)")
+	mqttPublisherFlags.BoolVar(&cfg.MqttPublisher.FlushOnStop, "mqtt-publisher-flush", false,
+		"QoS 0 publishers wait for the broker to process all published messages before disconnecting (sends an UNSUBSCRIBE)")
 	mqttPublisherFlags.StringArrayVar(&mqttUserProperties, "mqtt-user-property", []string{},
 		"MQTT v5 user property, eg. key1=val1")
 	mqttPublisherFlags.BoolSliceVar(&cfg.MqttPublisher.Retained, "mqtt-retained", []bool{false},
