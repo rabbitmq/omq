@@ -733,6 +733,10 @@ publishers to one:
 	rootCmd.AddCommand(mqtt_rpc)
 	rootCmd.AddCommand(versionCmd)
 
+	for _, c := range rootCmd.Commands() {
+		c.Args = noPositionalArgs
+	}
+
 	return rootCmd
 }
 
@@ -1425,6 +1429,22 @@ func validateMessageNumber(cmd *cobra.Command, cfg *config.Config) error {
 		return fmt.Errorf("--publish-to supports the message number (%%n, .n) only for MQTT publishers (not %s)", cmd.Name())
 	}
 	return nil
+}
+
+// noPositionalArgs rejects positional arguments. The usual cause is a boolean flag
+// given a separate value ("--flag false"): pflag only accepts "--flag=false", so the
+// value would otherwise be ignored silently and the flag would stay true.
+func noPositionalArgs(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	cmd.SilenceUsage = true
+	if _, err := strconv.ParseBool(args[0]); err == nil {
+		return fmt.Errorf("unexpected argument %q: omq takes no positional arguments. "+
+			"If it is the value of a boolean flag, use --flag=%s instead of --flag %s",
+			args[0], args[0], args[0])
+	}
+	return fmt.Errorf("unexpected argument %q: omq takes no positional arguments", args[0])
 }
 
 func validateMqttRetainHandling(cmd *cobra.Command, cfg *config.Config) error {
