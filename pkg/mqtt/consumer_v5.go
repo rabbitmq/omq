@@ -125,6 +125,8 @@ func (c Mqtt5Consumer) Start(consumerReady chan bool) {
 				subscriptions = append(subscriptions, paho.SubscribeOptions{
 					Topic: topic,
 					QoS:   byte(c.Config.MqttConsumer.QoS),
+					// 0 = send retained, 1 = only for new subscriptions, 2 = never
+					RetainHandling: byte(c.Config.MqttConsumer.RetainHandling),
 				})
 			}
 			subscribeWithRetry(c.ctx, cm, subscriptions, subscribed, "consumer", c.Id)

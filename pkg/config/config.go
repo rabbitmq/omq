@@ -108,6 +108,7 @@ type MqttOptions struct {
 	ReceiveMaximum           uint16
 	KeepAlive                time.Duration
 	FlushOnStop              bool
+	RetainHandling           int
 }
 
 type MqttRpcOptions struct {

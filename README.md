@@ -221,6 +221,12 @@ QoS 0 has no acknowledgements, so omq may disconnect before the broker has proce
 Add `--mqtt-publisher-flush` to make QoS 0 publishers wait for the broker before disconnecting
 (it sends an UNSUBSCRIBE for `omq/flush` as the last packet, which shows up in broker metrics).
 
+#### Retained messages on subscribe
+
+MQTT v5 consumers can control whether the broker sends retained messages when they subscribe, via
+`--mqtt-consumer-retain-handling`: `0` (default) sends them, `1` sends them only if the subscription
+did not exist before, `2` never sends them. MQTT v3 has no such option (retained messages are always sent).
+
 ### Detecting Unorderly Messages
 
 * `--detect-out-of-order-messages` can be used to detect messages that were consumed

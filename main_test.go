@@ -504,6 +504,81 @@ var _ = Describe("OMQ CLI", func() {
 		Entry("default to MQTT v5.0", "", "MQTT 5-0"),
 	)
 
+	Describe("--mqtt-consumer-retain-handling", func() {
+		const topic = "omq-retain-handling-test"
+		const consumerId = "omq-retain-handling-consumer"
+
+		retainedPublisher := func(size string) *gexec.Session {
+			return omq([]string{
+				"mqtt",
+				"--publish-to=" + topic,
+				"--mqtt-retained=true",
+				"--mqtt-publisher-qos=1",
+				"--size", size,
+				"--consumers=0",
+				"--pmessages=1",
+			})
+		}
+		consume := func(retainHandling string, extra ...string) *gexec.Session {
+			return omq(append([]string{
+				"mqtt",
+				"--consume-from=" + topic,
+				"--consumer-id=" + consumerId,
+				"--mqtt-consumer-qos=1",
+				"--mqtt-consumer-retain-handling=" + retainHandling,
+				"--publishers=0",
+				"--time=2s",
+			}, extra...))
+		}
+
+		BeforeEach(func() {
+			Eventually(retainedPublisher("100")).WithTimeout(10 * time.Second).Should(gexec.Exit(0))
+		})
+		AfterEach(func() {
+			// an empty retained message clears the retained value
+			Eventually(retainedPublisher("0")).WithTimeout(10 * time.Second).Should(gexec.Exit(0))
+			// a clean start discards the persistent session used by the "1" test
+			Eventually(consume("0", "--mqtt-consumer-clean-session=true")).WithTimeout(10 * time.Second).Should(gexec.Exit(0))
+		})
+
+		It("0 sends retained messages on every subscribe", func() {
+			for range 2 {
+				session := consume("0", "--mqtt-consumer-clean-session=false", "--mqtt-consumer-session-expiry-interval=30s")
+				Eventually(session).WithTimeout(10 * time.Second).Should(gexec.Exit(0))
+				Expect(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=1`))
+			}
+		})
+
+		It("1 sends retained messages only for a new subscription", func() {
+			persistent := []string{"--mqtt-consumer-clean-session=false", "--mqtt-consumer-session-expiry-interval=30s"}
+
+			first := consume("1", persistent...)
+			Eventually(first).WithTimeout(10 * time.Second).Should(gexec.Exit(0))
+			Expect(first.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=1`))
+
+			second := consume("1", persistent...)
+			Eventually(second).WithTimeout(10 * time.Second).Should(gexec.Exit(0))
+			Expect(second.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=0`))
+		})
+
+		It("2 never sends retained messages", func() {
+			session := consume("2")
+			Eventually(session).WithTimeout(10 * time.Second).Should(gexec.Exit(0))
+			Expect(session.Err).Should(gbytes.Say(`TOTAL CONSUMED messages=0`))
+		})
+
+		DescribeTable("rejects invalid usage",
+			func(args []string, expectedError string) {
+				session := omq(append([]string{"mqtt"}, args...))
+				Eventually(session).WithTimeout(3 * time.Second).Should(gexec.Exit(1))
+				Eventually(session.Out).Should(gbytes.Say(expectedError))
+			},
+			Entry("value out of range", []string{"--mqtt-consumer-retain-handling=3"}, "must be 0, 1 or 2"),
+			Entry("negative value", []string{"--mqtt-consumer-retain-handling=-1"}, "must be 0, 1 or 2"),
+			Entry("MQTT 3.1.1 consumer", []string{"--mqtt-consumer-version=4", "--mqtt-consumer-retain-handling=2"}, "requires --mqtt-consumer-version 5"),
+		)
+	})
+
 	DescribeTable("empty payloads (--size 0)",
 		func(versionFlag string) {
 			topic := "omq-empty-payload-" + versionFlag
@@ -640,6 +715,7 @@ var _ = Describe("OMQ CLI", func() {
 			Entry("retained requests", []string{"--mqtt-retained=true"}, "--mqtt-retained is not supported for mqtt-rpc"),
 			Entry("MQTT 3 publisher", []string{"--mqtt-publisher-version=3"}, "--mqtt-publisher-version must be 5 for mqtt-rpc"),
 			Entry("MQTT 3 consumer", []string{"--mqtt-consumer-version=3"}, "--mqtt-consumer-version must be 5 for mqtt-rpc"),
+			Entry("retain handling", []string{"--mqtt-consumer-retain-handling=2"}, "--mqtt-consumer-retain-handling is not supported for mqtt-rpc"),
 			Entry("wildcard response topic", []string{"--mqtt-response-topic=rpc/+/reply"}, "must not contain MQTT wildcards"),
 		)
 

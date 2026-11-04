@@ -119,7 +119,8 @@ func RootCmd() *cobra.Command {
 		"Number of subscriptions per MQTT consumer (appends /N to the topic; 0 = connect but don't subscribe)")
 	mqttConsumerFlags.Uint16Var(&cfg.MqttConsumer.ReceiveMaximum, "mqtt-consumer-receive-maximum", 8,
 		"MQTT v5 Receive Maximum sent in CONNECT (max concurrent QoS 1/2 in-flight publishes); also sizes an internal per-connection buffer, so large values increase memory usage significantly")
-
+	mqttConsumerFlags.IntVar(&cfg.MqttConsumer.RetainHandling, "mqtt-consumer-retain-handling", 0,
+		"MQTT v5 Retain Handling subscription option: 0 = send retained messages on subscribe, 1 = only if the subscription is new, 2 = never send retained messages (default=0)")
 	mqttConsumerFlags.DurationVar(&cfg.MqttConsumer.KeepAlive, "mqtt-consumer-keep-alive", 20*time.Second,
 		"MQTT consumer keep alive interval, in whole seconds (0 disables keep alive)")
 
@@ -563,6 +564,10 @@ publishers to one:
 				os.Exit(1)
 			}
 			if err := validateMessageNumber(cmd, &cfg); err != nil {
+				fmt.Printf("ERROR: %s\n", err)
+				os.Exit(1)
+			}
+			if err := validateMqttRetainHandling(cmd, &cfg); err != nil {
 				fmt.Printf("ERROR: %s\n", err)
 				os.Exit(1)
 			}
@@ -1422,6 +1427,19 @@ func validateMessageNumber(cmd *cobra.Command, cfg *config.Config) error {
 	return nil
 }
 
+func validateMqttRetainHandling(cmd *cobra.Command, cfg *config.Config) error {
+	if !cmd.Flags().Changed("mqtt-consumer-retain-handling") {
+		return nil
+	}
+	if cfg.MqttConsumer.RetainHandling < 0 || cfg.MqttConsumer.RetainHandling > 2 {
+		return fmt.Errorf("--mqtt-consumer-retain-handling must be 0, 1 or 2")
+	}
+	if cfg.MqttConsumer.Version != 5 {
+		return fmt.Errorf("--mqtt-consumer-retain-handling requires --mqtt-consumer-version 5")
+	}
+	return nil
+}
+
 func validateMqttRpcCommand(cmd *cobra.Command, cfg *config.Config) error {
 	if cmd.Name() != "mqtt-rpc" {
 		return nil
@@ -1434,6 +1452,9 @@ func validateMqttRpcCommand(cmd *cobra.Command, cfg *config.Config) error {
 	}
 	if cmd.Flags().Changed("mqtt-retained") {
 		return fmt.Errorf("--mqtt-retained is not supported for mqtt-rpc")
+	}
+	if cmd.Flags().Changed("mqtt-consumer-retain-handling") {
+		return fmt.Errorf("--mqtt-consumer-retain-handling is not supported for mqtt-rpc")
 	}
 	if responseTopicHasWildcard(cfg) {
 		return fmt.Errorf("--mqtt-response-topic must not contain MQTT wildcards (+ or #)")
