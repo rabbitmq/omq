@@ -1636,7 +1636,12 @@ func handleInterupt(ctx context.Context, cancel context.CancelFunc) {
 			log.Print("Received SIGTERM, shutting down...")
 			// Give goroutines time to clean up gracefully (stop publishers/consumers,
 			// delete queues if --cleanup-queues is set), then force exit
-			time.AfterFunc(3*time.Second, func() { os.Exit(0) })
+			time.AfterFunc(3*time.Second, func() {
+				// a second signal still exits immediately
+				if !utils.ShutdownIsWaiting() {
+					os.Exit(0)
+				}
+			})
 		}
 	}()
 }

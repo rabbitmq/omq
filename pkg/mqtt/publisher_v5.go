@@ -376,8 +376,10 @@ func (p *Mqtt5Publisher) Stop(reason string) {
 			// a request sent after the last publish: it handles packets in order.
 			flushCtx, cancelFlush := context.WithTimeout(context.Background(), flushTimeout)
 			notice := noticeSlowFlush(p.ctx)
+			done := utils.WaitingOnShutdown()
 			_, err := p.Connection.Unsubscribe(flushCtx, &paho.Unsubscribe{Topics: []string{flushTopic}})
 			notice.Stop()
+			done()
 			cancelFlush()
 			if err != nil {
 				log.Error("failed to confirm that the broker processed published messages", "id", p.Id, "error", err)

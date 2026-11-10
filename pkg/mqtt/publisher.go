@@ -271,10 +271,12 @@ func (p *MqttPublisher) Stop(reason string) {
 		if needsFlush(p.Config) && p.Connection.IsConnected() {
 			// QoS 0 has no acknowledgement, so wait for the broker to answer
 			// a request sent after the last publish: it handles packets in order.
+			done := utils.WaitingOnShutdown()
 			token := p.Connection.Unsubscribe(flushTopic)
 			notice := noticeSlowFlush(p.ctx)
 			flushed := token.WaitTimeout(flushTimeout)
 			notice.Stop()
+			done()
 			if !flushed {
 				log.Error("timed out waiting for the broker to process published messages", "id", p.Id)
 			}
