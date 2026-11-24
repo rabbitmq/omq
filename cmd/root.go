@@ -610,7 +610,9 @@ publishers to one:
 	rootCmd.PersistentFlags().IntVarP(&cfg.Publishers, "publishers", "x", 1,
 		"The number of publishers to start")
 	rootCmd.PersistentFlags().DurationVar(&cfg.PublisherStartWindow, "publisher-start-window", -1,
-		"Publishers start after a random delay within this window (eg. 5s; 0 to start immediately; default: max(1s, publishing interval))")
+		"Publishers start after a random delay within this window (eg. 5s; 0 to start immediately). If unset, the window is the publishing interval, but at least 1s")
+	// -1 means "unset"; hide the meaningless "(default -1ns)" pflag would print
+	rootCmd.PersistentFlags().Lookup("publisher-start-window").DefValue = "0s"
 	rootCmd.PersistentFlags().IntVarP(&cfg.PublishCount, "pmessages", "C", math.MaxInt,
 		"The number of messages to send per publisher")
 	rootCmd.PersistentFlags().StringVarP(&publishToStr, "publish-to", "t", "/queues/omq-%d",
